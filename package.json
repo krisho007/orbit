@@ -9,9 +9,18 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@auth/prisma-adapter": "^2.11.1",
+    "@prisma/client": "^6.19.0",
+    "@supabase/supabase-js": "^2.87.0",
+    "date-fns": "^4.1.0",
     "next": "16.0.7",
+    "next-auth": "^5.0.0-beta.30",
+    "openai": "^6.10.0",
+    "prisma": "^6.19.0",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "react-icons": "^5.5.0",
+    "zod": "^4.1.13"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

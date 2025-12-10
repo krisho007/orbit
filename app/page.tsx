@@ -71,6 +71,14 @@ export default async function Home() {
               </div>
             </div>
           </div>
+          
+          <div className="pt-4 border-t border-gray-200 mt-4">
+            <div className="flex justify-center gap-4 text-xs text-gray-500">
+              <a href="/privacy" className="hover:text-indigo-600 transition-colors">Privacy Policy</a>
+              <span>•</span>
+              <a href="/terms" className="hover:text-indigo-600 transition-colors">Terms of Service</a>
+            </div>
+          </div>
         </div>
       </div>
     </div>

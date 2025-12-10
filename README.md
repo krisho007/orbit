@@ -60,6 +60,7 @@ Orbit is a production-ready, multi-tenant personal CRM application that helps us
 - ✅ **Images**: Upload up to 2 images per contact (Supabase Storage)
 - ✅ **AI Assistant**: Natural language interface to create/query data
 - ✅ **Settings**: Profile management and tag customization
+- ✅ **Legal Pages**: Public privacy policy and terms of service pages
 
 ### Architecture Features
 - ✅ **Multi-tenancy**: All data scoped by userId
@@ -187,6 +188,8 @@ orbit/
 │   ├── api/
 │   │   ├── auth/               # NextAuth handlers
 │   │   └── assistant/          # AI assistant endpoint
+│   ├── privacy/                # Privacy policy (public)
+│   ├── terms/                  # Terms of service (public)
 │   ├── layout.tsx              # Root layout with PWA
 │   └── globals.css             # Tailwind styles
 ├── components/
@@ -242,21 +245,6 @@ Supported intents:
 - Create events
 - Query events
 
-## Documentation
-
-This project includes comprehensive documentation:
-
-| Document | Purpose |
-|----------|---------|
-| [`README.md`](./README.md) (this file) | Project overview and features |
-| [`GETTING_STARTED.md`](./GETTING_STARTED.md) | 👉 **Start here if you're new!** |
-| [`QUICKSTART.md`](./QUICKSTART.md) | 15-minute setup guide |
-| [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md) | Detailed Supabase configuration |
-| [`SETUP_CHECKLIST.md`](./SETUP_CHECKLIST.md) | Step-by-step verification checklist |
-| [`SUPABASE_QUICK_REFERENCE.md`](./SUPABASE_QUICK_REFERENCE.md) | Commands and URLs reference |
-| [`DEPLOYMENT.md`](./DEPLOYMENT.md) | Production deployment guide |
-| [`PROJECT_SUMMARY.md`](./PROJECT_SUMMARY.md) | Technical implementation details |
-
 ## Deployment
 
 ### Vercel (Recommended)
@@ -287,7 +275,8 @@ See [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md) for details.
 
 ## Security Features
 
-✅ All routes protected by middleware (except landing page)
+✅ All routes protected by middleware (except landing page and legal pages)
+✅ Public access to Privacy Policy and Terms of Service
 ✅ Server-side session validation
 ✅ userId scoping on all database queries
 ✅ Ownership verification before updates/deletes

@@ -99,6 +99,21 @@ export function AppShell({ session, children }: AppShellProps) {
         <main className="flex-1 pt-14 md:pt-0 pb-20 md:pb-0">
           {children}
         </main>
+        
+        {/* Footer - hidden on mobile to not interfere with bottom nav */}
+        <footer className="hidden md:block border-t border-gray-200 bg-white py-4">
+          <div className="px-8">
+            <div className="flex justify-center gap-4 text-xs text-gray-500">
+              <Link href="/privacy" className="hover:text-indigo-600 transition-colors">
+                Privacy Policy
+              </Link>
+              <span>•</span>
+              <Link href="/terms" className="hover:text-indigo-600 transition-colors">
+                Terms of Service
+              </Link>
+            </div>
+          </div>
+        </footer>
       </div>
 
       {/* Mobile Bottom Navigation */}

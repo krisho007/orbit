@@ -6,7 +6,10 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth
 
   // Public routes
-  const isPublicRoute = pathname === '/' || pathname.startsWith('/api/auth')
+  const isPublicRoute = pathname === '/' || 
+                        pathname.startsWith('/api/auth') || 
+                        pathname === '/privacy' || 
+                        pathname === '/terms'
 
   // Redirect logged in users from home to /contacts
   if (isLoggedIn && pathname === '/') {

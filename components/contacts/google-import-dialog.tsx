@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { FiDownload, FiX, FiCheckCircle, FiAlertCircle } from "react-icons/fi"
-import { importGoogleContacts } from "@/app/(app)/contacts/actions"
+import { importGoogleContactsBatch } from "@/app/(app)/contacts/actions"
 
 interface GoogleImportDialogProps {
   isOpen: boolean
@@ -16,6 +16,7 @@ export function GoogleImportDialog({ isOpen, onClose }: GoogleImportDialogProps)
   const [selectedContacts, setSelectedContacts] = useState<Set<number>>(new Set())
   const [result, setResult] = useState<{ imported: number; skipped: number; errors: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [progress, setProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 })
 
   if (!isOpen) return null
 
@@ -49,8 +50,42 @@ export function GoogleImportDialog({ isOpen, onClose }: GoogleImportDialogProps)
 
     try {
       const contactsToImport = contacts.filter((_, index) => selectedContacts.has(index))
-      const result = await importGoogleContacts(contactsToImport)
-      setResult(result)
+      const totalContacts = contactsToImport.length
+      const batchSize = 50 // Process 50 contacts at a time
+      
+      setProgress({ current: 0, total: totalContacts })
+
+      let totalImported = 0
+      let totalSkipped = 0
+      let totalErrors = 0
+
+      // Process in batches
+      for (let i = 0; i < contactsToImport.length; i += batchSize) {
+        const batch = contactsToImport.slice(i, i + batchSize)
+        
+        try {
+          const batchResult = await importGoogleContactsBatch(batch, batchSize)
+          totalImported += batchResult.imported
+          totalSkipped += batchResult.skipped
+          totalErrors += batchResult.errors
+          
+          // Update progress
+          setProgress({ 
+            current: Math.min(i + batchSize, totalContacts), 
+            total: totalContacts 
+          })
+        } catch (batchError: any) {
+          console.error("Batch import error:", batchError)
+          totalErrors += batch.length
+          // Continue with next batch instead of failing completely
+        }
+      }
+
+      setResult({ 
+        imported: totalImported, 
+        skipped: totalSkipped, 
+        errors: totalErrors 
+      })
       setStep("complete")
     } catch (err: any) {
       setError(err.message || "An error occurred during import")
@@ -84,6 +119,7 @@ export function GoogleImportDialog({ isOpen, onClose }: GoogleImportDialogProps)
     setSelectedContacts(new Set())
     setResult(null)
     setError(null)
+    setProgress({ current: 0, total: 0 })
     onClose()
   }
 
@@ -205,9 +241,25 @@ export function GoogleImportDialog({ isOpen, onClose }: GoogleImportDialogProps)
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Importing Contacts
               </h3>
-              <p className="text-gray-600 dark:text-gray-400">
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
                 Please wait while we import your selected contacts...
               </p>
+              
+              {/* Progress Bar */}
+              <div className="max-w-md mx-auto">
+                <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  <span>{progress.current} / {progress.total}</span>
+                  <span>{progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0}%</span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                  <div 
+                    className="bg-purple-600 h-full transition-all duration-300 ease-out rounded-full"
+                    style={{ 
+                      width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` 
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           )}
 

@@ -451,12 +451,13 @@ export async function importGoogleContacts(contacts: any[]) {
         continue
       }
 
-      // Check if contact already exists (by email or name)
+      // Check if contact already exists
+      // Priority: googleContactName (for re-imports) > email > current displayName
       const existing = await prisma.contact.findFirst({
         where: {
           userId: session.user.id,
           OR: [
-            { displayName: contact.displayName },
+            { googleContactName: contact.displayName }, // Match against original Google name
             ...(contact.primaryEmail ? [{ primaryEmail: contact.primaryEmail }] : []),
           ],
         },
@@ -471,6 +472,7 @@ export async function importGoogleContacts(contacts: any[]) {
       await prisma.contact.create({
         data: {
           displayName: contact.displayName,
+          googleContactName: contact.displayName, // Store original Google name
           primaryEmail: contact.primaryEmail || null,
           primaryPhone: contact.primaryPhone || null,
           company: contact.company || null,
@@ -494,6 +496,119 @@ export async function importGoogleContacts(contacts: any[]) {
     }
   }
 
+  revalidatePath("/contacts")
+  revalidatePath("/settings")
+  
+  return { imported, skipped, errors }
+}
+
+// New batch import function that processes contacts in chunks with optimized queries
+export async function importGoogleContactsBatch(contacts: any[], batchSize: number = 50) {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error("Unauthorized")
+
+  // Create or get the "Google Import" tag
+  const googleImportTag = await prisma.tag.upsert({
+    where: {
+      userId_name: {
+        userId: session.user.id,
+        name: "Google Import"
+      }
+    },
+    create: {
+      name: "Google Import",
+      color: "#4285F4", // Google blue
+      userId: session.user.id
+    },
+    update: {}
+  })
+
+  let imported = 0
+  let skipped = 0
+  let errors = 0
+
+  // Pre-filter contacts without names
+  const validContacts = contacts.filter(
+    contact => contact.displayName && contact.displayName !== "Unknown"
+  )
+  
+  skipped += contacts.length - validContacts.length
+
+  // Batch fetch all existing contacts to minimize database queries
+  // Get all emails and google names from the batch
+  const googleNames = validContacts.map(c => c.displayName).filter(Boolean)
+  const emails = validContacts.map(c => c.primaryEmail).filter(Boolean)
+
+  const existingContacts = await prisma.contact.findMany({
+    where: {
+      userId: session.user.id,
+      OR: [
+        { googleContactName: { in: googleNames } },
+        ...(emails.length > 0 ? [{ primaryEmail: { in: emails } }] : []),
+      ],
+    },
+    select: {
+      googleContactName: true,
+      primaryEmail: true,
+    }
+  })
+
+  // Create a Set for quick lookups
+  const existingGoogleNames = new Set(
+    existingContacts.map(c => c.googleContactName).filter(Boolean)
+  )
+  const existingEmails = new Set(
+    existingContacts.map(c => c.primaryEmail).filter(Boolean)
+  )
+
+  // Process contacts in the batch
+  for (const contact of validContacts) {
+    try {
+      // Check if contact already exists using our pre-fetched data
+      const alreadyExists = 
+        existingGoogleNames.has(contact.displayName) ||
+        (contact.primaryEmail && existingEmails.has(contact.primaryEmail))
+
+      if (alreadyExists) {
+        skipped++
+        continue
+      }
+
+      // Create the contact with the Google Import tag
+      await prisma.contact.create({
+        data: {
+          displayName: contact.displayName,
+          googleContactName: contact.displayName,
+          primaryEmail: contact.primaryEmail || null,
+          primaryPhone: contact.primaryPhone || null,
+          company: contact.company || null,
+          jobTitle: contact.jobTitle || null,
+          location: contact.location || null,
+          notes: contact.notes || null,
+          dateOfBirth: contact.dateOfBirth ? new Date(contact.dateOfBirth) : null,
+          userId: session.user.id,
+          tags: {
+            create: {
+              tagId: googleImportTag.id
+            }
+          }
+        },
+      })
+
+      // Add to our tracking sets to prevent duplicates within the same batch
+      existingGoogleNames.add(contact.displayName)
+      if (contact.primaryEmail) {
+        existingEmails.add(contact.primaryEmail)
+      }
+
+      imported++
+    } catch (error) {
+      console.error("Error importing contact:", contact.displayName, error)
+      errors++
+    }
+  }
+
+  // Only revalidate once per batch instead of after every contact
   revalidatePath("/contacts")
   revalidatePath("/settings")
   

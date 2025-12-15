@@ -42,15 +42,17 @@
 Add all variables from `.env.local` in Vercel:
 
 **Build & Development & Production:**
-- `DATABASE_URL`
-- `AUTH_SECRET`
-- `AUTH_GOOGLE_ID`
-- `AUTH_GOOGLE_SECRET`
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `OPENAI_API_KEY`
-- `NEXTAUTH_URL` (set to your production URL: https://yourdomain.com)
+- `DATABASE_URL` - Your Supabase PostgreSQL connection string
+- `AUTH_SECRET` - Generated with `openssl rand -base64 32`
+- `AUTH_GOOGLE_ID` - Google OAuth client ID
+- `AUTH_GOOGLE_SECRET` - Google OAuth client secret
+- `NEXT_PUBLIC_SUPABASE_URL` - **IMPORTANT**: Your Supabase URL (e.g., `https://xxxxx.supabase.co`) - NOT your Vercel URL!
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anonymous key
+- `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key
+- `OPENAI_API_KEY` - Your OpenAI API key
+- `NEXTAUTH_URL` - Your production URL (e.g., `https://yourdomain.com` or `https://your-app.vercel.app`)
+
+⚠️ **Common Error**: Make sure `NEXT_PUBLIC_SUPABASE_URL` is set to your **Supabase project URL** (starts with `https://`), NOT your Vercel deployment URL. Setting it incorrectly will cause "Invalid URL" errors.
 
 ### 3. Build Configuration
 - Framework Preset: **Next.js**
@@ -140,6 +142,18 @@ USING (bucket_id = 'orbit');
 - [ ] Consider CDN for static assets
 
 ## Troubleshooting
+
+### "Invalid URL" Error
+**Error**: `TypeError: Invalid URL` with input like `your-app.vercel.app`
+
+**Cause**: The `NEXT_PUBLIC_SUPABASE_URL` environment variable is incorrectly set to your Vercel domain instead of your Supabase URL.
+
+**Solution**:
+1. Go to Vercel Dashboard → Your Project → Settings → Environment Variables
+2. Find `NEXT_PUBLIC_SUPABASE_URL`
+3. Ensure it's set to your Supabase URL (e.g., `https://xxxxx.supabase.co`)
+4. It must start with `https://`
+5. Redeploy your app after fixing
 
 ### Authentication Issues
 - Verify `AUTH_SECRET` is set

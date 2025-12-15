@@ -84,18 +84,19 @@ model VerificationToken {
 // ============================================
 
 model Contact {
-  id            String    @id @default(cuid())
-  userId        String
-  displayName   String
-  primaryPhone  String?
-  primaryEmail  String?
-  dateOfBirth   DateTime?
-  company       String?
-  jobTitle      String?
-  location      String?
-  notes         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  userId            String
+  displayName       String
+  googleContactName String?   // Original name from Google import for re-import matching
+  primaryPhone      String?
+  primaryEmail      String?
+  dateOfBirth       DateTime?
+  company           String?
+  jobTitle          String?
+  location          String?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   user                      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   tags                      ContactTag[]
@@ -108,6 +109,7 @@ model Contact {
 
   @@index([userId])
   @@index([userId, displayName])
+  @@index([userId, googleContactName])
   @@map("contacts")
 }
 

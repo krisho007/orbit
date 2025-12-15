@@ -502,7 +502,15 @@ export async function importGoogleContacts(contacts: any[]) {
   return { imported, skipped, errors }
 }
 
-// New batch import function that processes contacts in chunks with optimized queries
+// Helper function to revalidate paths after import is complete
+export async function revalidateContactsAfterImport() {
+  "use server"
+  revalidatePath("/contacts")
+  revalidatePath("/settings")
+}
+
+// Optimized batch import function with bulk inserts for faster performance
+// Does NOT call revalidatePath - caller should call revalidateContactsAfterImport() once at the end
 export async function importGoogleContactsBatch(contacts: any[], batchSize: number = 50) {
   const session = await auth()
   if (!session?.user?.id) throw new Error("Unauthorized")
@@ -535,48 +543,69 @@ export async function importGoogleContactsBatch(contacts: any[], batchSize: numb
   skipped += contacts.length - validContacts.length
 
   // Batch fetch all existing contacts to minimize database queries
-  // Get all emails and google names from the batch
+  // Check for duplicates by: googleContactName, phone, or email
   const googleNames = validContacts.map(c => c.displayName).filter(Boolean)
   const emails = validContacts.map(c => c.primaryEmail).filter(Boolean)
+  const phones = validContacts.map(c => c.primaryPhone).filter(Boolean)
 
   const existingContacts = await prisma.contact.findMany({
     where: {
       userId: session.user.id,
       OR: [
         { googleContactName: { in: googleNames } },
+        ...(phones.length > 0 ? [{ primaryPhone: { in: phones } }] : []),
         ...(emails.length > 0 ? [{ primaryEmail: { in: emails } }] : []),
       ],
     },
     select: {
+      id: true,
       googleContactName: true,
       primaryEmail: true,
+      primaryPhone: true,
     }
   })
 
-  // Create a Set for quick lookups
+  // Create Sets for quick lookups - prioritize phone and googleName
   const existingGoogleNames = new Set(
     existingContacts.map(c => c.googleContactName).filter(Boolean)
+  )
+  const existingPhones = new Set(
+    existingContacts.map(c => c.primaryPhone).filter(Boolean)
   )
   const existingEmails = new Set(
     existingContacts.map(c => c.primaryEmail).filter(Boolean)
   )
 
-  // Process contacts in the batch
-  for (const contact of validContacts) {
-    try {
-      // Check if contact already exists using our pre-fetched data
-      const alreadyExists = 
-        existingGoogleNames.has(contact.displayName) ||
-        (contact.primaryEmail && existingEmails.has(contact.primaryEmail))
+  // Filter out duplicates
+  const contactsToCreate = validContacts.filter(contact => {
+    const alreadyExists = 
+      existingGoogleNames.has(contact.displayName) ||
+      (contact.primaryPhone && existingPhones.has(contact.primaryPhone)) ||
+      (contact.primaryEmail && existingEmails.has(contact.primaryEmail))
 
-      if (alreadyExists) {
-        skipped++
-        continue
-      }
+    if (alreadyExists) {
+      skipped++
+      return false
+    }
 
-      // Create the contact with the Google Import tag
-      await prisma.contact.create({
-        data: {
+    // Track in-memory to prevent duplicates within the same batch
+    existingGoogleNames.add(contact.displayName)
+    if (contact.primaryPhone) existingPhones.add(contact.primaryPhone)
+    if (contact.primaryEmail) existingEmails.add(contact.primaryEmail)
+
+    return true
+  })
+
+  if (contactsToCreate.length === 0) {
+    return { imported, skipped, errors }
+  }
+
+  try {
+    // Use a transaction for atomicity
+    const result = await prisma.$transaction(async (tx) => {
+      // Bulk insert contacts using createMany (much faster than individual creates)
+      const createResult = await tx.contact.createMany({
+        data: contactsToCreate.map(contact => ({
           displayName: contact.displayName,
           googleContactName: contact.displayName,
           primaryEmail: contact.primaryEmail || null,
@@ -587,30 +616,38 @@ export async function importGoogleContactsBatch(contacts: any[], batchSize: numb
           notes: contact.notes || null,
           dateOfBirth: contact.dateOfBirth ? new Date(contact.dateOfBirth) : null,
           userId: session.user.id,
-          tags: {
-            create: {
-              tagId: googleImportTag.id
-            }
-          }
-        },
+        })),
+        skipDuplicates: true, // Skip any duplicates that might have been created concurrently
       })
 
-      // Add to our tracking sets to prevent duplicates within the same batch
-      existingGoogleNames.add(contact.displayName)
-      if (contact.primaryEmail) {
-        existingEmails.add(contact.primaryEmail)
+      // Fetch the created contacts to get their IDs for tag associations
+      const createdContacts = await tx.contact.findMany({
+        where: {
+          userId: session.user.id,
+          googleContactName: { in: contactsToCreate.map(c => c.displayName) },
+        },
+        select: { id: true }
+      })
+
+      // Bulk create tag associations
+      if (createdContacts.length > 0) {
+        await tx.contactTag.createMany({
+          data: createdContacts.map(contact => ({
+            contactId: contact.id,
+            tagId: googleImportTag.id,
+          })),
+          skipDuplicates: true,
+        })
       }
 
-      imported++
-    } catch (error) {
-      console.error("Error importing contact:", contact.displayName, error)
-      errors++
-    }
-  }
+      return createResult.count
+    })
 
-  // Only revalidate once per batch instead of after every contact
-  revalidatePath("/contacts")
-  revalidatePath("/settings")
+    imported = result
+  } catch (error) {
+    console.error("Batch import error:", error)
+    errors = contactsToCreate.length
+  }
   
   return { imported, skipped, errors }
 }

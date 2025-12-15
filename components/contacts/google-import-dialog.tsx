@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { FiDownload, FiX, FiCheckCircle, FiAlertCircle } from "react-icons/fi"
-import { importGoogleContactsBatch } from "@/app/(app)/contacts/actions"
+import { importGoogleContactsBatch, revalidateContactsAfterImport } from "@/app/(app)/contacts/actions"
 
 interface GoogleImportDialogProps {
   isOpen: boolean
@@ -51,7 +51,7 @@ export function GoogleImportDialog({ isOpen, onClose }: GoogleImportDialogProps)
     try {
       const contactsToImport = contacts.filter((_, index) => selectedContacts.has(index))
       const totalContacts = contactsToImport.length
-      const batchSize = 50 // Process 50 contacts at a time
+      const batchSize = 200 // Process 200 contacts at a time (increased for better performance)
       
       setProgress({ current: 0, total: totalContacts })
 
@@ -86,6 +86,12 @@ export function GoogleImportDialog({ isOpen, onClose }: GoogleImportDialogProps)
         skipped: totalSkipped, 
         errors: totalErrors 
       })
+      
+      // Revalidate paths once at the end for better performance
+      if (totalImported > 0) {
+        await revalidateContactsAfterImport()
+      }
+      
       setStep("complete")
     } catch (err: any) {
       setError(err.message || "An error occurred during import")

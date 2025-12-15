@@ -110,6 +110,8 @@ model Contact {
   @@index([userId])
   @@index([userId, displayName])
   @@index([userId, googleContactName])
+  @@index([userId, primaryEmail])
+  @@index([userId, primaryPhone])
   @@map("contacts")
 }
 

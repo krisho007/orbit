@@ -8,29 +8,35 @@ export default async function EditContactPage({ params }: { params: Promise<{ id
   const session = await auth()
   const { id } = await params
   
-  const contact = await prisma.contact.findUnique({
-    where: { 
-      id,
-      userId: session?.user?.id
-    },
-    include: {
-      tags: {
-        include: {
-          tag: true
+  // Run queries in parallel for faster page load
+  const [contact, availableTags] = await Promise.all([
+    prisma.contact.findUnique({
+      where: { 
+        id,
+        userId: session?.user?.id
+      },
+      include: {
+        tags: {
+          include: {
+            tag: true
+          }
+        },
+        images: {
+          where: { order: 0 },
+          take: 1,
+          orderBy: { order: 'asc' }
         }
       }
-    }
-  })
+    }),
+    prisma.tag.findMany({
+      where: { userId: session?.user?.id },
+      orderBy: { name: 'asc' }
+    })
+  ])
 
   if (!contact) {
     notFound()
   }
-
-  // Fetch available tags
-  const availableTags = await prisma.tag.findMany({
-    where: { userId: session?.user?.id },
-    orderBy: { name: 'asc' }
-  })
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

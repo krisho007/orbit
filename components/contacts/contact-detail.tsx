@@ -39,6 +39,136 @@ interface ContactDetailProps {
   contact: ContactWithRelations
 }
 
+function ConversationsSection({ contact }: { contact: ContactWithRelations }) {
+  const [showAll, setShowAll] = useState(false)
+  const conversations = contact.conversationParticipants.map(p => p.conversation)
+  const displayedConversations = showAll ? conversations : conversations.slice(0, 1)
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <FiMessageSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Recent Conversations</h2>
+        </div>
+        <span className="px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-sm font-semibold rounded-lg">
+          {conversations.length}
+        </span>
+      </div>
+      {conversations.length === 0 ? (
+        <div className="text-center py-8">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 mb-3">
+            <FiMessageSquare className="h-6 w-6 text-gray-400" />
+          </div>
+          <p className="text-sm text-gray-500 dark:text-gray-400">No conversations yet</p>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-2">
+            {displayedConversations.map((conversation, index) => (
+              <Link
+                key={conversation.id}
+                href={`/conversations/${conversation.id}`}
+                className="block p-4 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-600"
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-gray-900 dark:text-gray-100">{conversation.title}</p>
+                    {index === 0 && !showAll && (
+                      <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded">
+                        Latest
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
+                    {format(new Date(conversation.happenedAt), 'MMM d, yyyy')}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{conversation.medium}</p>
+              </Link>
+            ))}
+          </div>
+          {conversations.length > 1 && (
+            <button
+              onClick={() => setShowAll(!showAll)}
+              className="mt-4 w-full py-2.5 px-4 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+            >
+              {showAll ? 'Show Less' : `Show ${conversations.length - 1} More`}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function EventsSection({ contact }: { contact: ContactWithRelations }) {
+  const [showAll, setShowAll] = useState(false)
+  const events = contact.eventParticipants.map(p => p.event)
+  const displayedEvents = showAll ? events : events.slice(0, 1)
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+            <FiCalendar className="h-5 w-5 text-green-600 dark:text-green-400" />
+          </div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Events</h2>
+        </div>
+        <span className="px-3 py-1 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-sm font-semibold rounded-lg">
+          {events.length}
+        </span>
+      </div>
+      {events.length === 0 ? (
+        <div className="text-center py-8">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 mb-3">
+            <FiCalendar className="h-6 w-6 text-gray-400" />
+          </div>
+          <p className="text-sm text-gray-500 dark:text-gray-400">No events yet</p>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-2">
+            {displayedEvents.map((event, index) => (
+              <Link
+                key={event.id}
+                href={`/events/${event.id}`}
+                className="block p-4 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-600"
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-gray-900 dark:text-gray-100">{event.title}</p>
+                    {index === 0 && !showAll && (
+                      <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs font-medium rounded">
+                        Latest
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
+                    {format(new Date(event.startAt), 'MMM d, yyyy')}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{event.eventType}</p>
+              </Link>
+            ))}
+          </div>
+          {events.length > 1 && (
+            <button
+              onClick={() => setShowAll(!showAll)}
+              className="mt-4 w-full py-2.5 px-4 text-sm font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-lg transition-colors"
+            >
+              {showAll ? 'Show Less' : `Show ${events.length - 1} More`}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 export function ContactDetail({ contact }: ContactDetailProps) {
   const router = useRouter()
   const [isDeleting, setIsDeleting] = useState(false)
@@ -64,8 +194,16 @@ export function ContactDetail({ contact }: ContactDetailProps) {
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
           <div className="flex items-start gap-6">
             {/* Avatar */}
-            <div className="w-24 h-24 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white font-bold text-4xl shadow-lg border-4 border-white/30">
-              {contact.displayName.charAt(0).toUpperCase()}
+            <div className="w-24 h-24 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white font-bold text-4xl shadow-lg border-4 border-white/30 overflow-hidden">
+              {contact.images.length > 0 && contact.images[0].imageUrl ? (
+                <img 
+                  src={contact.images[0].imageUrl} 
+                  alt={contact.displayName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span>{contact.displayName.charAt(0).toUpperCase()}</span>
+              )}
             </div>
             
             {/* Info */}
@@ -289,86 +427,10 @@ export function ContactDetail({ contact }: ContactDetailProps) {
         )}
 
         {/* Recent Conversations */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <FiMessageSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Recent Conversations</h2>
-            </div>
-            <span className="px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-sm font-semibold rounded-lg">
-              {contact.conversationParticipants.length}
-            </span>
-          </div>
-          {contact.conversationParticipants.length === 0 ? (
-            <div className="text-center py-8">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 mb-3">
-                <FiMessageSquare className="h-6 w-6 text-gray-400" />
-              </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">No conversations yet</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {contact.conversationParticipants.slice(0, 5).map(({ conversation }) => (
-                <Link
-                  key={conversation.id}
-                  href={`/conversations/${conversation.id}`}
-                  className="block p-4 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-600"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <p className="font-semibold text-gray-900 dark:text-gray-100">{conversation.title}</p>
-                    <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
-                      {format(new Date(conversation.happenedAt), 'MMM d')}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{conversation.medium}</p>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
+        <ConversationsSection contact={contact} />
 
         {/* Recent Events */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <FiCalendar className="h-5 w-5 text-green-600 dark:text-green-400" />
-              </div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Events</h2>
-            </div>
-            <span className="px-3 py-1 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-sm font-semibold rounded-lg">
-              {contact.eventParticipants.length}
-            </span>
-          </div>
-          {contact.eventParticipants.length === 0 ? (
-            <div className="text-center py-8">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 mb-3">
-                <FiCalendar className="h-6 w-6 text-gray-400" />
-              </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">No events yet</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {contact.eventParticipants.slice(0, 5).map(({ event }) => (
-                <Link
-                  key={event.id}
-                  href={`/events/${event.id}`}
-                  className="block p-4 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-600"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <p className="font-semibold text-gray-900 dark:text-gray-100">{event.title}</p>
-                    <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
-                      {format(new Date(event.startAt), 'MMM d')}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{event.eventType}</p>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
+        <EventsSection contact={contact} />
       </div>
     </div>
   )

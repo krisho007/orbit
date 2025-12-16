@@ -19,6 +19,10 @@ type Contact = {
       color: string | null
     }
   }[]
+  images: {
+    id: string
+    imageUrl: string
+  }[]
   _count: {
     conversationParticipants: number
     eventParticipants: number
@@ -159,8 +163,16 @@ export function ContactsList({ contacts }: ContactsListProps) {
               {/* Avatar & Name */}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold text-lg shadow-md">
-                    {contact.displayName.charAt(0).toUpperCase()}
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold text-lg shadow-md overflow-hidden">
+                    {contact.images.length > 0 && contact.images[0].imageUrl ? (
+                      <img 
+                        src={contact.images[0].imageUrl} 
+                        alt={contact.displayName}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span>{contact.displayName.charAt(0).toUpperCase()}</span>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate group-hover:text-purple-600 dark:group-hover:text-purple-400">

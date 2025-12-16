@@ -13,6 +13,11 @@ export default async function ContactsPage() {
           tag: true
         }
       },
+      images: {
+        where: { order: 0 }, // Only fetch the primary avatar image
+        take: 1,
+        orderBy: { order: 'asc' }
+      },
       _count: {
         select: {
           conversationParticipants: true,

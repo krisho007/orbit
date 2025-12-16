@@ -2,6 +2,7 @@
 
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { downloadAndUploadImage } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { z } from "zod"
@@ -17,7 +18,7 @@ const contactSchema = z.object({
   notes: z.string().optional(),
 })
 
-export async function createContact(formData: FormData) {
+export async function createContact(formData: FormData): Promise<{ id: string }> {
   const session = await auth()
   if (!session?.user?.id) throw new Error("Unauthorized")
 
@@ -82,7 +83,9 @@ export async function createContact(formData: FormData) {
 
   revalidatePath("/contacts")
   revalidatePath("/settings")
-  redirect(`/contacts/${contact.id}`)
+  
+  // Return the contact ID so the form can handle image upload before redirect
+  return { id: contact.id }
 }
 
 export async function updateContact(contactId: string, formData: FormData) {
@@ -511,7 +514,77 @@ export async function revalidateContactsAfterImport() {
 
 // Optimized batch import function with bulk inserts for faster performance
 // Does NOT call revalidatePath - caller should call revalidateContactsAfterImport() once at the end
-export async function importGoogleContactsBatch(contacts: any[], batchSize: number = 50) {
+/**
+ * Process Google contact photos by downloading and uploading them to Supabase
+ * This runs asynchronously after contacts are created to not block the import
+ */
+async function processGoogleContactPhotos(
+  contactsData: any[], 
+  createdContacts: { id: string; googleContactName: string | null }[]
+) {
+  // Create a map of googleContactName to contactId for quick lookup
+  const nameToIdMap = new Map(
+    createdContacts.map(c => [c.googleContactName, c.id])
+  )
+
+  // Get contact IDs that already have images (to avoid re-uploading)
+  const existingImages = await prisma.contactImage.findMany({
+    where: {
+      contactId: { in: Array.from(nameToIdMap.values()) },
+      order: 0
+    },
+    select: { contactId: true }
+  })
+  const contactsWithImages = new Set(existingImages.map(img => img.contactId))
+
+  // Process photos for contacts that have photoUrl and don't already have an image
+  const photoPromises = contactsData
+    .filter(contact => contact.photoUrl)
+    .map(async (contact) => {
+      const contactId = nameToIdMap.get(contact.displayName)
+      if (!contactId) return
+      
+      // Skip if contact already has an image (unless we're overriding)
+      if (contactsWithImages.has(contactId)) {
+        // Delete old image before uploading new one
+        const oldImage = await prisma.contactImage.findFirst({
+          where: { contactId, order: 0 }
+        })
+        if (oldImage) {
+          await prisma.contactImage.delete({ where: { id: oldImage.id } })
+        }
+      }
+
+      try {
+        // Download and upload the photo
+        const result = await downloadAndUploadImage(contact.photoUrl, contactId)
+        
+        if (result) {
+          // Create the ContactImage record
+          await prisma.contactImage.create({
+            data: {
+              contactId,
+              imageUrl: result.url,
+              publicId: result.publicId,
+              order: 0, // Primary avatar
+            }
+          })
+        }
+      } catch (error) {
+        console.error(`Failed to process photo for contact ${contact.displayName}:`, error)
+        // Continue processing other photos even if one fails
+      }
+    })
+
+  // Process all photos in parallel (but don't block the response)
+  await Promise.allSettled(photoPromises)
+}
+
+export async function importGoogleContactsBatch(
+  contacts: any[], 
+  batchSize: number = 50,
+  overrideExisting: boolean = false
+) {
   const session = await auth()
   if (!session?.user?.id) throw new Error("Unauthorized")
 
@@ -532,6 +605,7 @@ export async function importGoogleContactsBatch(contacts: any[], batchSize: numb
   })
 
   let imported = 0
+  let updated = 0
   let skipped = 0
   let errors = 0
 
@@ -576,79 +650,148 @@ export async function importGoogleContactsBatch(contacts: any[], batchSize: numb
     existingContacts.map(c => c.primaryEmail).filter(Boolean)
   )
 
-  // Filter out duplicates
-  const contactsToCreate = validContacts.filter(contact => {
-    const alreadyExists = 
-      existingGoogleNames.has(contact.displayName) ||
-      (contact.primaryPhone && existingPhones.has(contact.primaryPhone)) ||
-      (contact.primaryEmail && existingEmails.has(contact.primaryEmail))
+  // Separate contacts into create and update lists
+  const contactsToCreate: any[] = []
+  const contactsToUpdate: Array<{ existingId: string, data: any }> = []
 
-    if (alreadyExists) {
-      skipped++
-      return false
+  for (const contact of validContacts) {
+    // Find existing contact match
+    const existingContact = existingContacts.find(ec => 
+      ec.googleContactName === contact.displayName ||
+      (contact.primaryPhone && ec.primaryPhone === contact.primaryPhone) ||
+      (contact.primaryEmail && ec.primaryEmail === contact.primaryEmail)
+    )
+
+    if (existingContact) {
+      if (overrideExisting) {
+        // Add to update list
+        contactsToUpdate.push({
+          existingId: existingContact.id,
+          data: contact
+        })
+      } else {
+        // Skip this contact
+        skipped++
+      }
+    } else {
+      // New contact - add to create list
+      contactsToCreate.push(contact)
+      
+      // Track in-memory to prevent duplicates within the same batch
+      existingGoogleNames.add(contact.displayName)
+      if (contact.primaryPhone) existingPhones.add(contact.primaryPhone)
+      if (contact.primaryEmail) existingEmails.add(contact.primaryEmail)
     }
+  }
 
-    // Track in-memory to prevent duplicates within the same batch
-    existingGoogleNames.add(contact.displayName)
-    if (contact.primaryPhone) existingPhones.add(contact.primaryPhone)
-    if (contact.primaryEmail) existingEmails.add(contact.primaryEmail)
-
-    return true
-  })
-
-  if (contactsToCreate.length === 0) {
-    return { imported, skipped, errors }
+  if (contactsToCreate.length === 0 && contactsToUpdate.length === 0) {
+    return { imported, updated, skipped, errors }
   }
 
   try {
     // Use a transaction for atomicity
     const result = await prisma.$transaction(async (tx) => {
-      // Bulk insert contacts using createMany (much faster than individual creates)
-      const createResult = await tx.contact.createMany({
-        data: contactsToCreate.map(contact => ({
-          displayName: contact.displayName,
-          googleContactName: contact.displayName,
-          primaryEmail: contact.primaryEmail || null,
-          primaryPhone: contact.primaryPhone || null,
-          company: contact.company || null,
-          jobTitle: contact.jobTitle || null,
-          location: contact.location || null,
-          notes: contact.notes || null,
-          dateOfBirth: contact.dateOfBirth ? new Date(contact.dateOfBirth) : null,
-          userId: session.user.id,
-        })),
-        skipDuplicates: true, // Skip any duplicates that might have been created concurrently
-      })
+      let createdContacts: { id: string; googleContactName: string | null }[] = []
+      let updatedContactIds: string[] = []
 
-      // Fetch the created contacts to get their IDs for tag associations
-      const createdContacts = await tx.contact.findMany({
-        where: {
-          userId: session.user.id,
-          googleContactName: { in: contactsToCreate.map(c => c.displayName) },
-        },
-        select: { id: true }
-      })
-
-      // Bulk create tag associations
-      if (createdContacts.length > 0) {
-        await tx.contactTag.createMany({
-          data: createdContacts.map(contact => ({
-            contactId: contact.id,
-            tagId: googleImportTag.id,
+      // 1. Bulk insert new contacts
+      if (contactsToCreate.length > 0) {
+        const createResult = await tx.contact.createMany({
+          data: contactsToCreate.map(contact => ({
+            displayName: contact.displayName,
+            googleContactName: contact.displayName,
+            primaryEmail: contact.primaryEmail || null,
+            primaryPhone: contact.primaryPhone || null,
+            company: contact.company || null,
+            jobTitle: contact.jobTitle || null,
+            location: contact.location || null,
+            notes: contact.notes || null,
+            dateOfBirth: contact.dateOfBirth ? new Date(contact.dateOfBirth) : null,
+            userId: session.user.id,
           })),
           skipDuplicates: true,
         })
+
+        // Fetch the created contacts to get their IDs
+        createdContacts = await tx.contact.findMany({
+          where: {
+            userId: session.user.id,
+            googleContactName: { in: contactsToCreate.map(c => c.displayName) },
+          },
+          select: { id: true, googleContactName: true }
+        })
+
+        // Bulk create tag associations for new contacts
+        if (createdContacts.length > 0) {
+          await tx.contactTag.createMany({
+            data: createdContacts.map(contact => ({
+              contactId: contact.id,
+              tagId: googleImportTag.id,
+            })),
+            skipDuplicates: true,
+          })
+        }
       }
 
-      return createResult.count
+      // 2. Update existing contacts
+      if (contactsToUpdate.length > 0) {
+        for (const { existingId, data } of contactsToUpdate) {
+          await tx.contact.update({
+            where: { id: existingId },
+            data: {
+              displayName: data.displayName,
+              googleContactName: data.displayName,
+              primaryEmail: data.primaryEmail || null,
+              primaryPhone: data.primaryPhone || null,
+              company: data.company || null,
+              jobTitle: data.jobTitle || null,
+              location: data.location || null,
+              notes: data.notes || null,
+              dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
+            }
+          })
+          updatedContactIds.push(existingId)
+        }
+      }
+
+      return { 
+        createdContacts, 
+        updatedContactIds,
+        createdCount: createdContacts.length,
+        updatedCount: updatedContactIds.length
+      }
     })
 
-    imported = result
+    imported = result.createdCount
+    updated = result.updatedCount
+
+    // Handle photo uploads AFTER the transaction for new contacts
+    if (result.createdContacts.length > 0) {
+      processGoogleContactPhotos(contactsToCreate, result.createdContacts).catch(err => {
+        console.error("Error processing contact photos for new contacts:", err)
+      })
+    }
+
+    // Handle photo uploads for updated contacts
+    if (result.updatedContactIds.length > 0 && overrideExisting) {
+      const updatedContactsData = contactsToUpdate.map(cu => ({
+        id: cu.existingId,
+        googleContactName: cu.data.displayName,
+        photoUrl: cu.data.photoUrl
+      }))
+      
+      processGoogleContactPhotos(
+        contactsToUpdate.map(cu => cu.data),
+        updatedContactsData.map(uc => ({ id: uc.id, googleContactName: uc.googleContactName }))
+      ).catch(err => {
+        console.error("Error processing contact photos for updated contacts:", err)
+      })
+    }
   } catch (error) {
     console.error("Batch import error:", error)
-    errors = contactsToCreate.length
+    errors = contactsToCreate.length + contactsToUpdate.length
   }
   
-  return { imported, skipped, errors }
+  return { imported, updated, skipped, errors }
 }
 

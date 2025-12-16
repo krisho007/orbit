@@ -14,7 +14,8 @@ export function GoogleImportDialog({ isOpen, onClose }: GoogleImportDialogProps)
   const [step, setStep] = useState<"select" | "preview" | "importing" | "complete">("select")
   const [contacts, setContacts] = useState<any[]>([])
   const [selectedContacts, setSelectedContacts] = useState<Set<number>>(new Set())
-  const [result, setResult] = useState<{ imported: number; skipped: number; errors: number } | null>(null)
+  const [overrideExisting, setOverrideExisting] = useState(false)
+  const [result, setResult] = useState<{ imported: number; updated: number; skipped: number; errors: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 })
 
@@ -56,6 +57,7 @@ export function GoogleImportDialog({ isOpen, onClose }: GoogleImportDialogProps)
       setProgress({ current: 0, total: totalContacts })
 
       let totalImported = 0
+      let totalUpdated = 0
       let totalSkipped = 0
       let totalErrors = 0
 
@@ -64,8 +66,9 @@ export function GoogleImportDialog({ isOpen, onClose }: GoogleImportDialogProps)
         const batch = contactsToImport.slice(i, i + batchSize)
         
         try {
-          const batchResult = await importGoogleContactsBatch(batch, batchSize)
+          const batchResult = await importGoogleContactsBatch(batch, batchSize, overrideExisting)
           totalImported += batchResult.imported
+          totalUpdated += batchResult.updated || 0
           totalSkipped += batchResult.skipped
           totalErrors += batchResult.errors
           
@@ -82,13 +85,14 @@ export function GoogleImportDialog({ isOpen, onClose }: GoogleImportDialogProps)
       }
 
       setResult({ 
-        imported: totalImported, 
+        imported: totalImported,
+        updated: totalUpdated,
         skipped: totalSkipped, 
         errors: totalErrors 
       })
       
       // Revalidate paths once at the end for better performance
-      if (totalImported > 0) {
+      if (totalImported > 0 || totalUpdated > 0) {
         await revalidateContactsAfterImport()
       }
       
@@ -123,6 +127,7 @@ export function GoogleImportDialog({ isOpen, onClose }: GoogleImportDialogProps)
     setStep("select")
     setContacts([])
     setSelectedContacts(new Set())
+    setOverrideExisting(false)
     setResult(null)
     setError(null)
     setProgress({ current: 0, total: 0 })
@@ -203,6 +208,27 @@ export function GoogleImportDialog({ isOpen, onClose }: GoogleImportDialogProps)
                 </button>
               </div>
 
+              {/* Override Existing Contacts Option */}
+              <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={overrideExisting}
+                    onChange={(e) => setOverrideExisting(e.target.checked)}
+                    className="mt-1 h-4 w-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
+                  />
+                  <div className="flex-1">
+                    <div className="font-semibold text-gray-900 dark:text-gray-100">
+                      Override existing contacts
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      Update existing contacts with fresh data from Google, including photos. 
+                      This will add missing photos to contacts you've already imported.
+                    </div>
+                  </div>
+                </label>
+              </div>
+
               <div className="space-y-2 max-h-96 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-xl p-4">
                 {contacts.map((contact, index) => (
                   <label
@@ -278,12 +304,22 @@ export function GoogleImportDialog({ isOpen, onClose }: GoogleImportDialogProps)
                 Import Complete!
               </h3>
               <div className="space-y-2 text-gray-600 dark:text-gray-400">
-                <p className="text-lg">
-                  <span className="font-semibold text-green-600 dark:text-green-400">
-                    {result.imported}
-                  </span>{" "}
-                  contacts imported successfully
-                </p>
+                {result.imported > 0 && (
+                  <p className="text-lg">
+                    <span className="font-semibold text-green-600 dark:text-green-400">
+                      {result.imported}
+                    </span>{" "}
+                    new contacts imported
+                  </p>
+                )}
+                {result.updated > 0 && (
+                  <p className="text-lg">
+                    <span className="font-semibold text-blue-600 dark:text-blue-400">
+                      {result.updated}
+                    </span>{" "}
+                    existing contacts updated
+                  </p>
+                )}
                 {result.skipped > 0 && (
                   <p className="text-sm">
                     {result.skipped} contacts skipped (already exist or no name)

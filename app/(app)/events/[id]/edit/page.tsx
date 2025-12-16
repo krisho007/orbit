@@ -7,30 +7,32 @@ export default async function EditEventPage({ params }: { params: Promise<{ id: 
   const session = await auth()
   const { id } = await params
   
-  const event = await prisma.event.findUnique({
-    where: { 
-      id,
-      userId: session!.user.id
-    },
-    include: {
-      participants: {
-        select: { contactId: true }
+  // Run queries in parallel for faster page load
+  const [event, contacts] = await Promise.all([
+    prisma.event.findUnique({
+      where: { 
+        id,
+        userId: session!.user.id
+      },
+      include: {
+        participants: {
+          select: { contactId: true }
+        }
       }
-    }
-  })
+    }),
+    prisma.contact.findMany({
+      where: { userId: session!.user.id },
+      select: {
+        id: true,
+        displayName: true
+      },
+      orderBy: { displayName: 'asc' }
+    })
+  ])
 
   if (!event) {
     notFound()
   }
-
-  const contacts = await prisma.contact.findMany({
-    where: { userId: session!.user.id },
-    select: {
-      id: true,
-      displayName: true
-    },
-    orderBy: { displayName: 'asc' }
-  })
 
   return (
     <div className="p-4 md:p-8">

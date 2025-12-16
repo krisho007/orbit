@@ -1,14 +1,16 @@
 "use client"
 
 import { useState } from "react"
-import { createContact, updateContact } from "@/app/(app)/contacts/actions"
+import { createContact, updateContact, addContactImage, deleteContactImage } from "@/app/(app)/contacts/actions"
 import { FiSave, FiX, FiUser, FiMail, FiPhone, FiCalendar, FiBriefcase, FiMapPin, FiFileText, FiTag } from "react-icons/fi"
 import { useRouter } from "next/navigation"
 import { TagInput } from "@/components/contacts/tag-input"
-import type { Contact, ContactTag, Tag } from "@prisma/client"
+import { ImageUpload } from "@/components/contacts/image-upload"
+import type { Contact, ContactTag, Tag, ContactImage } from "@prisma/client"
 
 type ContactWithTags = Contact & {
   tags?: (ContactTag & { tag: Tag })[]
+  images?: ContactImage[]
 }
 
 type SimpleTag = {
@@ -28,21 +30,69 @@ export function ContactForm({ contact, availableTags }: ContactFormProps) {
   // Initialize selected tags from contact data
   const initialTags = contact?.tags?.map(ct => ct.tag) || []
   const [selectedTags, setSelectedTags] = useState<SimpleTag[]>(initialTags)
+  
+  // Initialize image state
+  const currentImage = contact?.images?.[0]
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleSubmit = async (formData: FormData) => {
-    // Add selected tags (full objects) to form data
-    // This allows us to create new tags on the backend
-    const tagsData = selectedTags.map(tag => ({
-      id: tag.id,
-      name: tag.name,
-      color: tag.color
-    }))
-    formData.append('tags', JSON.stringify(tagsData))
-    
-    if (contact) {
-      await updateContact(contact.id, formData)
-    } else {
-      await createContact(formData)
+    setIsSubmitting(true)
+    try {
+      // Add selected tags (full objects) to form data
+      // This allows us to create new tags on the backend
+      const tagsData = selectedTags.map(tag => ({
+        id: tag.id,
+        name: tag.name,
+        color: tag.color
+      }))
+      formData.append('tags', JSON.stringify(tagsData))
+      
+      let contactId: string
+      
+      if (contact) {
+        await updateContact(contact.id, formData)
+        contactId = contact.id
+      } else {
+        const result = await createContact(formData)
+        contactId = result.id
+      }
+
+      // Handle image upload if a new image was selected
+      if (selectedImageFile && contactId) {
+        const imageFormData = new FormData()
+        imageFormData.append('file', selectedImageFile)
+        imageFormData.append('contactId', contactId)
+
+        const response = await fetch('/api/contacts/upload-image', {
+          method: 'POST',
+          body: imageFormData
+        })
+
+        if (response.ok) {
+          const { url, publicId } = await response.json()
+          
+          // Delete old image if exists
+          if (currentImage) {
+            await deleteContactImage(currentImage.id)
+          }
+          
+          // Add new image
+          await addContactImage(contactId, url, publicId)
+        }
+      }
+
+      // Redirect after everything is done
+      router.push(`/contacts/${contactId}`)
+    } catch (error) {
+      console.error("Error submitting form:", error)
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleImageRemove = async () => {
+    if (currentImage && contact) {
+      await deleteContactImage(currentImage.id)
     }
   }
 
@@ -56,6 +106,13 @@ export function ContactForm({ contact, availableTags }: ContactFormProps) {
           </div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Personal Information</h3>
         </div>
+
+        {/* Profile Photo Upload */}
+        <ImageUpload
+          currentImageUrl={currentImage?.imageUrl}
+          onImageSelect={setSelectedImageFile}
+          onImageRemove={handleImageRemove}
+        />
 
         <div>
           <label htmlFor="displayName" className="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
@@ -231,15 +288,26 @@ export function ContactForm({ contact, availableTags }: ContactFormProps) {
       <div className="flex gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
         <button
           type="submit"
-          className="flex-1 flex items-center justify-center gap-2 px-6 py-3.5 bg-purple-600 text-white text-base font-semibold rounded-xl hover:bg-purple-700 transition-all shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40"
+          disabled={isSubmitting}
+          className="flex-1 flex items-center justify-center gap-2 px-6 py-3.5 bg-purple-600 text-white text-base font-semibold rounded-xl hover:bg-purple-700 transition-all shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <FiSave className="h-5 w-5" />
-          {contact ? 'Update Contact' : 'Create Contact'}
+          {isSubmitting ? (
+            <>
+              <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <FiSave className="h-5 w-5" />
+              {contact ? 'Update Contact' : 'Create Contact'}
+            </>
+          )}
         </button>
         <button
           type="button"
           onClick={() => router.back()}
-          className="px-6 py-3.5 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-base font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+          disabled={isSubmitting}
+          className="px-6 py-3.5 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-base font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <FiX className="h-5 w-5" />
         </button>

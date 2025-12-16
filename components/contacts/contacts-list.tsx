@@ -162,8 +162,8 @@ export function ContactsList({ contacts }: ContactsListProps) {
             >
               {/* Avatar & Name */}
               <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold text-lg shadow-md overflow-hidden">
+                <div className="flex items-start gap-3">
+                  <div className="w-12 h-12 flex-shrink-0 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold text-lg shadow-md overflow-hidden">
                     {contact.images.length > 0 && contact.images[0].imageUrl ? (
                       <img 
                         src={contact.images[0].imageUrl} 
@@ -175,11 +175,11 @@ export function ContactsList({ contacts }: ContactsListProps) {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate group-hover:text-purple-600 dark:group-hover:text-purple-400">
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 break-words group-hover:text-purple-600 dark:group-hover:text-purple-400">
                       {contact.displayName}
                     </h3>
                     {contact.jobTitle && (
-                      <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{contact.jobTitle}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 break-words">{contact.jobTitle}</p>
                     )}
                   </div>
                 </div>

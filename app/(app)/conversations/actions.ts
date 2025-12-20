@@ -8,7 +8,6 @@ import { z } from "zod"
 import { ConversationMedium } from "@prisma/client"
 
 const conversationSchema = z.object({
-  title: z.string().min(1, "Title is required"),
   content: z.string().optional(),
   medium: z.nativeEnum(ConversationMedium),
   happenedAt: z.string().min(1, "Date is required"),
@@ -24,7 +23,6 @@ export async function createConversation(formData: FormData) {
   const participantIds = formData.getAll("participantIds") as string[]
 
   const data = {
-    title: formData.get("title") as string,
     content: formData.get("content") as string || undefined,
     medium: formData.get("medium") as ConversationMedium,
     happenedAt: formData.get("happenedAt") as string,
@@ -50,7 +48,6 @@ export async function createConversation(formData: FormData) {
 
   const conversation = await prisma.conversation.create({
     data: {
-      title: validated.title,
       content: validated.content,
       medium: validated.medium,
       happenedAt: new Date(validated.happenedAt),
@@ -86,7 +83,6 @@ export async function updateConversation(conversationId: string, formData: FormD
   const participantIds = formData.getAll("participantIds") as string[]
 
   const data = {
-    title: formData.get("title") as string,
     content: formData.get("content") as string || undefined,
     medium: formData.get("medium") as ConversationMedium,
     happenedAt: formData.get("happenedAt") as string,
@@ -118,7 +114,6 @@ export async function updateConversation(conversationId: string, formData: FormD
   await prisma.conversation.update({
     where: { id: conversationId },
     data: {
-      title: validated.title,
       content: validated.content,
       medium: validated.medium,
       happenedAt: new Date(validated.happenedAt),

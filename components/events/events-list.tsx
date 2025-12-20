@@ -41,6 +41,19 @@ const eventTypeLabels: Record<EventType, string> = {
   OTHER: "Other"
 }
 
+// Generate a consistent color based on contact name
+const getContactColor = (name: string) => {
+  const colors = [
+    '#8B5CF6', '#EC4899', '#3B82F6', '#10B981', '#F59E0B', 
+    '#EF4444', '#06B6D4', '#6366F1', '#84CC16', '#F97316'
+  ]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return colors[Math.abs(hash) % colors.length]
+}
+
 export function EventsList({ initialEvents, initialCursor, totalCount }: EventsListProps) {
   const [events, setEvents] = useState<Event[]>(initialEvents)
   const [cursor, setCursor] = useState<string | null>(initialCursor)
@@ -175,7 +188,7 @@ export function EventsList({ initialEvents, initialCursor, totalCount }: EventsL
             placeholder="Search events..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900 placeholder-gray-500"
           />
           {isSearching && (
             <FiLoader className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 animate-spin" />
@@ -187,7 +200,7 @@ export function EventsList({ initialEvents, initialCursor, totalCount }: EventsL
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value as EventType | "ALL")}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent appearance-none bg-white"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent appearance-none bg-white text-gray-900"
           >
             <option value="ALL">All Types</option>
             {Object.entries(eventTypeLabels).map(([value, label]) => (
@@ -250,11 +263,21 @@ export function EventsList({ initialEvents, initialCursor, totalCount }: EventsL
 
                     {event.participants.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {event.participants.map(({ contact }) => (
-                          <span key={contact.id} className="text-sm text-gray-700">
-                            {contact.displayName}
-                          </span>
-                        )).reduce((prev, curr) => <>{prev}, {curr}</>)}
+                        {event.participants.map(({ contact }) => {
+                          const color = getContactColor(contact.displayName)
+                          return (
+                            <span 
+                              key={contact.id} 
+                              className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
+                              style={{
+                                backgroundColor: `${color}20`,
+                                color: color,
+                              }}
+                            >
+                              {contact.displayName}
+                            </span>
+                          )
+                        })}
                       </div>
                     )}
 

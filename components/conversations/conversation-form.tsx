@@ -66,21 +66,40 @@ export function ConversationForm({ contacts, events, conversation }: Conversatio
         />
       </div>
 
+      {/* Notes - Second field */}
       <div>
-        <label htmlFor="title" className="block text-sm font-semibold text-gray-900 mb-2">
-          Title *
+        <label htmlFor="content" className="block text-sm font-semibold text-gray-900 mb-2">
+          Notes
         </label>
-        <input
-          type="text"
-          id="title"
-          name="title"
-          required
-          defaultValue={conversation?.title}
-          placeholder="Enter conversation title..."
-          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+        <textarea
+          id="content"
+          name="content"
+          rows={4}
+          defaultValue={conversation?.content || ''}
+          placeholder="Add notes about this conversation..."
+          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all resize-none"
         />
       </div>
 
+      <div>
+        <label htmlFor="happenedAt" className="block text-sm font-semibold text-gray-900 mb-2">
+          Date & Time *
+        </label>
+        <input
+          type="datetime-local"
+          id="happenedAt"
+          name="happenedAt"
+          required
+          defaultValue={
+            conversation?.happenedAt 
+              ? new Date(conversation.happenedAt).toISOString().slice(0, 16)
+              : new Date().toISOString().slice(0, 16)
+          }
+          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+        />
+      </div>
+
+      {/* Medium - just before Event */}
       <div>
         <label htmlFor="medium" className="block text-sm font-semibold text-gray-900 mb-2">
           Medium *
@@ -103,24 +122,7 @@ export function ConversationForm({ contacts, events, conversation }: Conversatio
         </div>
       </div>
 
-      <div>
-        <label htmlFor="happenedAt" className="block text-sm font-semibold text-gray-900 mb-2">
-          Date & Time *
-        </label>
-        <input
-          type="datetime-local"
-          id="happenedAt"
-          name="happenedAt"
-          required
-          defaultValue={
-            conversation?.happenedAt 
-              ? new Date(conversation.happenedAt).toISOString().slice(0, 16)
-              : new Date().toISOString().slice(0, 16)
-          }
-          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-        />
-      </div>
-
+      {/* Event - after Medium */}
       <div>
         <label htmlFor="eventId" className="block text-sm font-semibold text-gray-900 mb-2">
           Link to Event (optional)
@@ -142,20 +144,6 @@ export function ConversationForm({ contacts, events, conversation }: Conversatio
           <FiCalendar className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 pointer-events-none" />
           <FiChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 pointer-events-none" />
         </div>
-      </div>
-
-      <div>
-        <label htmlFor="content" className="block text-sm font-semibold text-gray-900 mb-2">
-          Notes
-        </label>
-        <textarea
-          id="content"
-          name="content"
-          rows={4}
-          defaultValue={conversation?.content || ''}
-          placeholder="Add notes about this conversation..."
-          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all resize-none"
-        />
       </div>
 
       <div>

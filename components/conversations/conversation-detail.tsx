@@ -26,6 +26,19 @@ const mediumLabels: Record<string, string> = {
   OTHER: "Other"
 }
 
+// Generate a consistent color based on contact name
+const getContactColor = (name: string) => {
+  const colors = [
+    '#8B5CF6', '#EC4899', '#3B82F6', '#10B981', '#F59E0B', 
+    '#EF4444', '#06B6D4', '#6366F1', '#84CC16', '#F97316'
+  ]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return colors[Math.abs(hash) % colors.length]
+}
+
 export function ConversationDetail({ conversation }: ConversationDetailProps) {
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -43,12 +56,16 @@ export function ConversationDetail({ conversation }: ConversationDetailProps) {
     }
   }
 
+  // Generate display title from participants
+  const participantNames = conversation.participants.map(p => p.contact.displayName).join(", ")
+  const displayTitle = participantNames || "Conversation"
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
           <div className="flex-1">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{conversation.title}</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{displayTitle}</h1>
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <span className="inline-flex items-center px-3 py-1 rounded-full bg-indigo-100 text-indigo-800 font-medium">
                 {mediumLabels[conversation.medium]}
@@ -86,17 +103,38 @@ export function ConversationDetail({ conversation }: ConversationDetailProps) {
             <h2 className="text-lg font-semibold text-gray-900">Participants</h2>
           </div>
           <div className="flex flex-wrap gap-2">
-            {conversation.participants.map(({ contact }) => (
-              <Link
-                key={contact.id}
-                href={`/contacts/${contact.id}`}
-                className="inline-flex items-center px-3 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                {contact.displayName}
-              </Link>
-            ))}
+            {conversation.participants.map(({ contact }) => {
+              const color = getContactColor(contact.displayName)
+              return (
+                <Link
+                  key={contact.id}
+                  href={`/contacts/${contact.id}`}
+                  className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium transition-all hover:shadow-md"
+                  style={{
+                    backgroundColor: `${color}20`,
+                    color: color,
+                    border: `2px solid ${color}40`
+                  }}
+                >
+                  {contact.displayName}
+                </Link>
+              )
+            })}
           </div>
         </div>
+
+        {/* Content */}
+        {conversation.content && (
+          <div className="mb-6 pb-6 border-b border-gray-200">
+            <div className="flex items-start">
+              <FiMessageSquare className="mr-3 h-5 w-5 text-gray-400 mt-0.5" />
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold text-gray-900 mb-3">Notes</h2>
+                <p className="text-gray-700 whitespace-pre-wrap">{conversation.content}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Linked Event */}
         {conversation.event && (
@@ -111,19 +149,6 @@ export function ConversationDetail({ conversation }: ConversationDetailProps) {
             >
               {conversation.event.title}
             </Link>
-          </div>
-        )}
-
-        {/* Content */}
-        {conversation.content && (
-          <div className="mb-6 pb-6 border-b border-gray-200">
-            <div className="flex items-start">
-              <FiMessageSquare className="mr-3 h-5 w-5 text-gray-400 mt-0.5" />
-              <div className="flex-1">
-                <h2 className="text-lg font-semibold text-gray-900 mb-3">Notes</h2>
-                <p className="text-gray-700 whitespace-pre-wrap">{conversation.content}</p>
-              </div>
-            </div>
           </div>
         )}
 
@@ -145,5 +170,3 @@ export function ConversationDetail({ conversation }: ConversationDetailProps) {
     </div>
   )
 }
-
-

@@ -28,6 +28,19 @@ const eventTypeLabels: Record<string, string> = {
   OTHER: "Other"
 }
 
+// Generate a consistent color based on contact name
+const getContactColor = (name: string) => {
+  const colors = [
+    '#8B5CF6', '#EC4899', '#3B82F6', '#10B981', '#F59E0B', 
+    '#EF4444', '#06B6D4', '#6366F1', '#84CC16', '#F97316'
+  ]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return colors[Math.abs(hash) % colors.length]
+}
+
 export function EventDetail({ event }: EventDetailProps) {
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -77,6 +90,48 @@ export function EventDetail({ event }: EventDetailProps) {
           </div>
         </div>
 
+        {/* Participants */}
+        {event.participants.length > 0 && (
+          <div className="mb-6 pb-6 border-b border-gray-200">
+            <div className="flex items-center mb-3">
+              <FiUsers className="mr-2 h-5 w-5 text-gray-400" />
+              <h2 className="text-lg font-semibold text-gray-900">Participants</h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {event.participants.map(({ contact }) => {
+                const color = getContactColor(contact.displayName)
+                return (
+                  <Link
+                    key={contact.id}
+                    href={`/contacts/${contact.id}`}
+                    className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium transition-all hover:shadow-md"
+                    style={{
+                      backgroundColor: `${color}20`,
+                      color: color,
+                      border: `2px solid ${color}40`
+                    }}
+                  >
+                    {contact.displayName}
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Description/Notes */}
+        {event.description && (
+          <div className="mb-6 pb-6 border-b border-gray-200">
+            <div className="flex items-start">
+              <FiFileText className="mr-3 h-5 w-5 text-gray-400 mt-0.5" />
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold text-gray-900 mb-3">Notes</h2>
+                <p className="text-gray-700 whitespace-pre-wrap">{event.description}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Date & Time */}
         <div className="mb-6 pb-6 border-b border-gray-200">
           <div className="flex items-start">
@@ -104,40 +159,6 @@ export function EventDetail({ event }: EventDetailProps) {
           </div>
         )}
 
-        {/* Participants */}
-        {event.participants.length > 0 && (
-          <div className="mb-6 pb-6 border-b border-gray-200">
-            <div className="flex items-center mb-3">
-              <FiUsers className="mr-2 h-5 w-5 text-gray-400" />
-              <h2 className="text-lg font-semibold text-gray-900">Participants</h2>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {event.participants.map(({ contact }) => (
-                <Link
-                  key={contact.id}
-                  href={`/contacts/${contact.id}`}
-                  className="inline-flex items-center px-3 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  {contact.displayName}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Description */}
-        {event.description && (
-          <div className="mb-6 pb-6 border-b border-gray-200">
-            <div className="flex items-start">
-              <FiFileText className="mr-3 h-5 w-5 text-gray-400 mt-0.5" />
-              <div className="flex-1">
-                <h2 className="text-lg font-semibold text-gray-900 mb-3">Description</h2>
-                <p className="text-gray-700 whitespace-pre-wrap">{event.description}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Linked Conversations */}
         <div>
           <div className="flex items-center justify-between mb-4">
@@ -152,27 +173,30 @@ export function EventDetail({ event }: EventDetailProps) {
             <p className="text-sm text-gray-500">No conversations linked to this event yet.</p>
           ) : (
             <div className="space-y-3">
-              {event.conversations.map((conversation) => (
-                <Link
-                  key={conversation.id}
-                  href={`/conversations/${conversation.id}`}
-                  className="block p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-900">{conversation.title}</p>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {format(new Date(conversation.happenedAt), 'PPP')}
-                      </p>
-                      {conversation.participants.length > 0 && (
-                        <p className="text-sm text-gray-500 mt-1">
-                          With: {conversation.participants.map(p => p.contact.displayName).join(', ')}
+              {event.conversations.map((conversation) => {
+                const conversationParticipants = conversation.participants.map(p => p.contact.displayName).join(", ")
+                return (
+                  <Link
+                    key={conversation.id}
+                    href={`/conversations/${conversation.id}`}
+                    className="block p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900">{conversationParticipants || "Conversation"}</p>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {format(new Date(conversation.happenedAt), 'PPP')}
                         </p>
-                      )}
+                        {conversation.content && (
+                          <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                            {conversation.content}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                )
+              })}
             </div>
           )}
         </div>
@@ -180,5 +204,3 @@ export function EventDetail({ event }: EventDetailProps) {
     </div>
   )
 }
-
-

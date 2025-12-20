@@ -1,9 +1,11 @@
 "use client"
 
 import { createEvent, updateEvent } from "@/app/(app)/events/actions"
-import { FiSave, FiX } from "react-icons/fi"
+import { FiSave, FiX, FiChevronDown } from "react-icons/fi"
 import { useRouter } from "next/navigation"
 import { EventType, type Event } from "@prisma/client"
+import { useState } from "react"
+import { EventParticipantInput } from "./participant-input"
 
 interface EventFormProps {
   contacts: { id: string; displayName: string }[]
@@ -25,6 +27,13 @@ const eventTypeOptions: { value: EventType; label: string }[] = [
 export function EventForm({ contacts, event }: EventFormProps) {
   const router = useRouter()
 
+  // Initialize selected participants from existing event
+  const initialParticipants = event?.participants
+    ? contacts.filter(c => event.participants.some(p => p.contactId === c.id))
+    : []
+  
+  const [selectedParticipants, setSelectedParticipants] = useState(initialParticipants)
+
   const handleSubmit = async (formData: FormData) => {
     if (event) {
       await updateEvent(event.id, formData)
@@ -35,8 +44,9 @@ export function EventForm({ contacts, event }: EventFormProps) {
 
   return (
     <form action={handleSubmit} className="space-y-6">
+      {/* Title - First field */}
       <div>
-        <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="title" className="block text-sm font-semibold text-gray-900 mb-2">
           Title *
         </label>
         <input
@@ -45,32 +55,41 @@ export function EventForm({ contacts, event }: EventFormProps) {
           name="title"
           required
           defaultValue={event?.title}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+          placeholder="Enter event title..."
+          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
         />
       </div>
 
+      {/* Participants - Second field */}
       <div>
-        <label htmlFor="eventType" className="block text-sm font-medium text-gray-700 mb-1">
-          Event Type *
+        <label className="block text-sm font-semibold text-gray-900 mb-2">
+          Participants
         </label>
-        <select
-          id="eventType"
-          name="eventType"
-          required
-          defaultValue={event?.eventType}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
-        >
-          {eventTypeOptions.map(option => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <EventParticipantInput
+          contacts={contacts}
+          selectedParticipants={selectedParticipants}
+          onParticipantsChange={setSelectedParticipants}
+        />
+      </div>
+
+      {/* Description/Notes - Third field */}
+      <div>
+        <label htmlFor="description" className="block text-sm font-semibold text-gray-900 mb-2">
+          Notes
+        </label>
+        <textarea
+          id="description"
+          name="description"
+          rows={4}
+          defaultValue={event?.description || ''}
+          placeholder="Add notes about this event..."
+          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all resize-none"
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label htmlFor="startAt" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="startAt" className="block text-sm font-semibold text-gray-900 mb-2">
             Start Date & Time *
           </label>
           <input
@@ -83,12 +102,12 @@ export function EventForm({ contacts, event }: EventFormProps) {
                 ? new Date(event.startAt).toISOString().slice(0, 16)
                 : new Date().toISOString().slice(0, 16)
             }
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
           />
         </div>
 
         <div>
-          <label htmlFor="endAt" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="endAt" className="block text-sm font-semibold text-gray-900 mb-2">
             End Date & Time
           </label>
           <input
@@ -100,13 +119,13 @@ export function EventForm({ contacts, event }: EventFormProps) {
                 ? new Date(event.endAt).toISOString().slice(0, 16)
                 : ''
             }
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
           />
         </div>
       </div>
 
       <div>
-        <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="location" className="block text-sm font-semibold text-gray-900 mb-2">
           Location
         </label>
         <input
@@ -114,46 +133,38 @@ export function EventForm({ contacts, event }: EventFormProps) {
           id="location"
           name="location"
           defaultValue={event?.location || ''}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+          placeholder="Enter location..."
+          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
         />
       </div>
 
+      {/* Event Type */}
       <div>
-        <label htmlFor="participantIds" className="block text-sm font-medium text-gray-700 mb-1">
-          Participants (hold Cmd/Ctrl to select multiple)
+        <label htmlFor="eventType" className="block text-sm font-semibold text-gray-900 mb-2">
+          Event Type *
         </label>
-        <select
-          id="participantIds"
-          name="participantIds"
-          multiple
-          defaultValue={event?.participants.map(p => p.contactId)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 min-h-[120px]"
-        >
-          {contacts.map(contact => (
-            <option key={contact.id} value={contact.id}>
-              {contact.displayName}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            id="eventType"
+            name="eventType"
+            required
+            defaultValue={event?.eventType}
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-900 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all appearance-none cursor-pointer"
+          >
+            {eventTypeOptions.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <FiChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 pointer-events-none" />
+        </div>
       </div>
 
-      <div>
-        <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-          Description
-        </label>
-        <textarea
-          id="description"
-          name="description"
-          rows={4}
-          defaultValue={event?.description || ''}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
-        />
-      </div>
-
-      <div className="flex gap-3">
+      <div className="flex gap-3 pt-2">
         <button
           type="submit"
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition-colors"
         >
           <FiSave className="h-5 w-5" />
           {event ? 'Update Event' : 'Create Event'}
@@ -161,7 +172,7 @@ export function EventForm({ contacts, event }: EventFormProps) {
         <button
           type="button"
           onClick={() => router.back()}
-          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+          className="px-4 py-3 border-2 border-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
         >
           <FiX className="h-5 w-5" />
         </button>
@@ -169,5 +180,3 @@ export function EventForm({ contacts, event }: EventFormProps) {
     </form>
   )
 }
-
-

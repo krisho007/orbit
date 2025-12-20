@@ -22,10 +22,7 @@ export async function GET(request: NextRequest) {
     const whereClause: {
       userId: string
       medium?: ConversationMedium
-      OR?: Array<
-        | { title: { contains: string; mode: "insensitive" } }
-        | { content: { contains: string; mode: "insensitive" } }
-      >
+      content?: { contains: string; mode: "insensitive" }
     } = { userId: session.user.id }
 
     if (medium) {
@@ -33,10 +30,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      whereClause.OR = [
-        { title: { contains: search, mode: "insensitive" } },
-        { content: { contains: search, mode: "insensitive" } },
-      ]
+      whereClause.content = { contains: search, mode: "insensitive" }
     }
 
     const conversations = await prisma.conversation.findMany({

@@ -8,7 +8,6 @@ import { ConversationMedium } from "@prisma/client"
 
 type Conversation = {
   id: string
-  title: string
   content: string | null
   medium: ConversationMedium
   happenedAt: Date
@@ -39,6 +38,19 @@ const mediumLabels: Record<ConversationMedium, string> = {
   ONLINE_MEETING: "Online Meeting",
   IN_PERSON_MEETING: "In-Person Meeting",
   OTHER: "Other"
+}
+
+// Generate a consistent color based on contact name
+const getContactColor = (name: string) => {
+  const colors = [
+    '#8B5CF6', '#EC4899', '#3B82F6', '#10B981', '#F59E0B', 
+    '#EF4444', '#06B6D4', '#6366F1', '#84CC16', '#F97316'
+  ]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return colors[Math.abs(hash) % colors.length]
 }
 
 export function ConversationsList({ initialConversations, initialCursor, totalCount }: ConversationsListProps) {
@@ -175,7 +187,7 @@ export function ConversationsList({ initialConversations, initialCursor, totalCo
             placeholder="Search conversations..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900 placeholder-gray-500"
           />
           {isSearching && (
             <FiLoader className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 animate-spin" />
@@ -187,7 +199,7 @@ export function ConversationsList({ initialConversations, initialCursor, totalCo
           <select
             value={mediumFilter}
             onChange={(e) => setMediumFilter(e.target.value as ConversationMedium | "ALL")}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent appearance-none bg-white"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent appearance-none bg-white text-gray-900"
           >
             <option value="ALL">All Mediums</option>
             {Object.entries(mediumLabels).map(([value, label]) => (
@@ -221,55 +233,71 @@ export function ConversationsList({ initialConversations, initialCursor, totalCo
       ) : (
         <>
           <div className="space-y-4">
-            {displayConversations.map((conversation) => (
-              <Link
-                key={conversation.id}
-                href={`/conversations/${conversation.id}`}
-                className="block bg-white rounded-lg shadow hover:shadow-md transition-shadow p-5"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      {conversation.title}
-                    </h3>
-                    <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-gray-600">
-                      <span className="inline-flex items-center px-2 py-1 rounded-full bg-indigo-100 text-indigo-800 font-medium">
-                        {mediumLabels[conversation.medium]}
-                      </span>
-                      <span>{format(new Date(conversation.happenedAt), 'PPP')}</span>
+            {displayConversations.map((conversation) => {
+              // Generate display title from participants
+              const participantNames = conversation.participants.map(p => p.contact.displayName).join(", ")
+              const displayTitle = participantNames || "Conversation"
+              
+              return (
+                <Link
+                  key={conversation.id}
+                  href={`/conversations/${conversation.id}`}
+                  className="block bg-white rounded-lg shadow hover:shadow-md transition-shadow p-5"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        {displayTitle}
+                      </h3>
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-gray-600">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full bg-indigo-100 text-indigo-800 font-medium">
+                          {mediumLabels[conversation.medium]}
+                        </span>
+                        <span>{format(new Date(conversation.happenedAt), 'PPP')}</span>
+                      </div>
+
+                      {conversation.participants.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {conversation.participants.map(({ contact }) => {
+                            const color = getContactColor(contact.displayName)
+                            return (
+                              <span 
+                                key={contact.id} 
+                                className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
+                                style={{
+                                  backgroundColor: `${color}20`,
+                                  color: color,
+                                }}
+                              >
+                                {contact.displayName}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      {conversation.event && (
+                        <div className="mt-2 text-sm text-gray-500">
+                          Event: {conversation.event.title}
+                        </div>
+                      )}
+
+                      {conversation.content && (
+                        <p className="mt-3 text-gray-700 line-clamp-2">
+                          {conversation.content}
+                        </p>
+                      )}
+
+                      {conversation.followUpAt && (
+                        <div className="mt-3 text-sm text-orange-600 font-medium">
+                          Follow-up: {format(new Date(conversation.followUpAt), 'PPP')}
+                        </div>
+                      )}
                     </div>
-
-                    {conversation.participants.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {conversation.participants.map(({ contact }) => (
-                          <span key={contact.id} className="text-sm text-gray-700">
-                            {contact.displayName}
-                          </span>
-                        )).reduce((prev, curr) => <>{prev}, {curr}</>)}
-                      </div>
-                    )}
-
-                    {conversation.event && (
-                      <div className="mt-2 text-sm text-gray-500">
-                        Event: {conversation.event.title}
-                      </div>
-                    )}
-
-                    {conversation.content && (
-                      <p className="mt-3 text-gray-700 line-clamp-2">
-                        {conversation.content}
-                      </p>
-                    )}
-
-                    {conversation.followUpAt && (
-                      <div className="mt-3 text-sm text-orange-600 font-medium">
-                        Follow-up: {format(new Date(conversation.followUpAt), 'PPP')}
-                      </div>
-                    )}
                   </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              )
+            })}
           </div>
 
           {/* Load More Trigger / Loading Indicator */}

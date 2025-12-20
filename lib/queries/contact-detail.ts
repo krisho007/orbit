@@ -44,118 +44,126 @@ export type SimpleContact = {
 }
 
 /**
- * Fetch a contact with all related data using optimized queries
- * Uses fewer queries with JOINs instead of Prisma's default N+1 pattern
+ * Fetch a contact with all related data using optimized parallel queries
+ * All queries run in parallel using Promise.all for maximum speed
  */
 export async function getContactDetailOptimized(
   contactId: string,
   userId: string
 ): Promise<ContactDetailData | null> {
-  // Main contact query with direct one-to-many relations using JOINs
-  // We'll use Prisma's query builder but in a more optimized way
-  
-  // Query 1: Get main contact with simple relations (images, social links)
-  const contact = await prisma.contact.findUnique({
+  // First check if contact exists and belongs to user
+  const contactExists = await prisma.contact.findUnique({
     where: {
       id: contactId,
       userId: userId,
     },
-    include: {
-      images: {
-        orderBy: { order: 'asc' }
-      },
-      socialLinks: true,
-    }
+    select: { id: true }
   })
+
+  if (!contactExists) {
+    return null
+  }
+
+  // Run ALL queries in parallel - this is the key optimization
+  const [
+    contact,
+    tags,
+    relationshipsFrom,
+    relationshipsTo,
+    conversationParticipants,
+    eventParticipants
+  ] = await Promise.all([
+    // Query 1: Get main contact with images and social links
+    prisma.contact.findUnique({
+      where: {
+        id: contactId,
+        userId: userId,
+      },
+      include: {
+        images: {
+          orderBy: { order: 'asc' }
+        },
+        socialLinks: true,
+      }
+    }),
+
+    // Query 2: Get tags with their details
+    prisma.contactTag.findMany({
+      where: { contactId },
+      include: { tag: true }
+    }),
+
+    // Query 3: Get relationships FROM this contact
+    prisma.relationship.findMany({
+      where: { fromContactId: contactId },
+      include: {
+        toContact: {
+          select: { id: true, displayName: true, gender: true }
+        },
+        type: true
+      }
+    }),
+
+    // Query 4: Get relationships TO this contact
+    prisma.relationship.findMany({
+      where: { toContactId: contactId },
+      include: {
+        fromContact: {
+          select: { id: true, displayName: true, gender: true }
+        },
+        type: true
+      }
+    }),
+
+    // Query 5: Get recent conversations
+    prisma.conversationParticipant.findMany({
+      where: { contactId },
+      include: {
+        conversation: {
+          select: {
+            id: true,
+            title: true,
+            happenedAt: true,
+            medium: true
+          }
+        }
+      },
+      orderBy: {
+        conversation: { happenedAt: 'desc' }
+      },
+      take: 10
+    }),
+
+    // Query 6: Get recent events
+    prisma.eventParticipant.findMany({
+      where: { contactId },
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            startAt: true,
+            eventType: true
+          }
+        }
+      },
+      orderBy: {
+        event: { startAt: 'desc' }
+      },
+      take: 10
+    })
+  ])
 
   if (!contact) {
     return null
   }
 
-  // Query 2: Get tags with their details (using JOIN)
-  const tags = await prisma.contactTag.findMany({
-    where: {
-      contactId: contactId
-    },
-    include: {
-      tag: true
-    }
-  })
-
-  // Query 3: Get relationships FROM this contact (with target contact info and type)
-  const relationshipsFrom = await prisma.relationship.findMany({
-    where: {
-      fromContactId: contactId
-    },
-    include: {
-      toContact: true,
-      type: true
-    }
-  })
-
-  // Query 4: Get relationships TO this contact (with source contact info and type)
-  const relationshipsTo = await prisma.relationship.findMany({
-    where: {
-      toContactId: contactId
-    },
-    include: {
-      fromContact: true,
-      type: true
-    }
-  })
-
-  // Query 5: Get recent conversations (with conversation details, ordered)
-  const conversationParticipants = await prisma.conversationParticipant.findMany({
-    where: {
-      contactId: contactId
-    },
-    include: {
-      conversation: {
-        select: {
-          id: true,
-          title: true,
-          happenedAt: true,
-          medium: true
-        }
-      }
-    },
-    orderBy: {
-      conversation: {
-        happenedAt: 'desc'
-      }
-    },
-    take: 10
-  })
-
-  // Query 6: Get recent events (with event details, ordered)
-  const eventParticipants = await prisma.eventParticipant.findMany({
-    where: {
-      contactId: contactId
-    },
-    include: {
-      event: {
-        select: {
-          id: true,
-          title: true,
-          startAt: true,
-          eventType: true
-        }
-      }
-    },
-    orderBy: {
-      event: {
-        startAt: 'desc'
-      }
-    },
-    take: 10
-  })
-
   // Combine all results
   return {
     ...contact,
     tags,
-    relationshipsFrom,
-    relationshipsTo,
+    relationshipsFrom: relationshipsFrom as ContactDetailData['relationshipsFrom'],
+    relationshipsTo: relationshipsTo as ContactDetailData['relationshipsTo'],
     conversationParticipants,
     eventParticipants
   }
@@ -178,19 +186,10 @@ export async function getAllContactsSimple(userId: string): Promise<SimpleContac
 
 /**
  * Get all relationship types with their reverse types
+ * Note: Seeding check removed for performance - relationship types should be seeded
+ * during user onboarding or first settings page visit, not on every contact view
  */
 export async function getRelationshipTypesWithReverse(userId: string): Promise<RelationshipTypeWithReverse[]> {
-  // First ensure default types exist
-  const existingTypes = await prisma.relationshipType.findMany({
-    where: { userId }
-  })
-
-  if (existingTypes.length === 0) {
-    // Import and call the seeding function
-    const { ensureDefaultRelationshipTypes } = await import('@/app/(app)/settings/actions')
-    await ensureDefaultRelationshipTypes()
-  }
-
   return await prisma.relationshipType.findMany({
     where: { userId },
     include: {

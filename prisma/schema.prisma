@@ -33,6 +33,7 @@ model User {
   conversations         Conversation[]
   events                Event[]
   relationships         Relationship[]
+  relationshipTypes     RelationshipType[]
   
   @@map("users")
 }
@@ -83,6 +84,11 @@ model VerificationToken {
 // Core CRM Models
 // ============================================
 
+enum Gender {
+  MALE
+  FEMALE
+}
+
 model Contact {
   id                String    @id @default(cuid())
   userId            String
@@ -91,6 +97,7 @@ model Contact {
   primaryPhone      String?
   primaryEmail      String?
   dateOfBirth       DateTime?
+  gender            Gender?
   company           String?
   jobTitle          String?
   location          String?
@@ -110,8 +117,6 @@ model Contact {
   @@index([userId])
   @@index([userId, displayName])
   @@index([userId, googleContactName])
-  @@index([userId, primaryEmail])
-  @@index([userId, primaryPhone])
   @@map("contacts")
 }
 
@@ -248,38 +253,55 @@ model EventParticipant {
 }
 
 // ============================================
-// Relationship Model
+// Relationship Models
 // ============================================
 
-enum RelationType {
-  SPOUSE
-  FATHER
-  MOTHER
-  CHILD
-  SIBLING
-  FRIEND
-  COLLEAGUE
-  OTHER
+model RelationshipType {
+  id                    String   @id @default(cuid())
+  userId                String
+  name                  String   // e.g., "Father", "Son", "Spouse"
+  reverseTypeId         String?  // Points to the inverse type (Father -> Son)
+  maleReverseTypeId     String?  // Gender-specific reverse for male (Parent -> Son)
+  femaleReverseTypeId   String?  // Gender-specific reverse for female (Parent -> Daughter)
+  isSymmetric           Boolean  @default(false) // True for Spouse, Friend, Sibling
+  isSystem              Boolean  @default(false) // True for default types that can't be deleted
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reverseType           RelationshipType?  @relation("ReverseRelation", fields: [reverseTypeId], references: [id], onDelete: SetNull)
+  reverseOf             RelationshipType[] @relation("ReverseRelation")
+  maleReverseType       RelationshipType?  @relation("MaleReverseRelation", fields: [maleReverseTypeId], references: [id], onDelete: SetNull)
+  maleReverseOf         RelationshipType[] @relation("MaleReverseRelation")
+  femaleReverseType     RelationshipType?  @relation("FemaleReverseRelation", fields: [femaleReverseTypeId], references: [id], onDelete: SetNull)
+  femaleReverseOf       RelationshipType[] @relation("FemaleReverseRelation")
+  relationships         Relationship[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("relationship_types")
 }
 
 model Relationship {
-  id            String       @id @default(cuid())
+  id            String   @id @default(cuid())
   userId        String
   fromContactId String
   toContactId   String
-  type          RelationType
+  typeId        String
   notes         String?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  fromContact Contact @relation("RelationshipFrom", fields: [fromContactId], references: [id], onDelete: Cascade)
-  toContact   Contact @relation("RelationshipTo", fields: [toContactId], references: [id], onDelete: Cascade)
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromContact Contact          @relation("RelationshipFrom", fields: [fromContactId], references: [id], onDelete: Cascade)
+  toContact   Contact          @relation("RelationshipTo", fields: [toContactId], references: [id], onDelete: Cascade)
+  type        RelationshipType @relation(fields: [typeId], references: [id], onDelete: Cascade)
 
-  @@unique([fromContactId, toContactId, type])
+  @@unique([fromContactId, toContactId, typeId])
   @@index([userId])
   @@index([fromContactId])
   @@index([toContactId])
+  @@index([typeId])
   @@map("relationships")
 }
 

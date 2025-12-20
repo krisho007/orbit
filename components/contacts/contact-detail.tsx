@@ -16,17 +16,35 @@ import {
   FiLink,
   FiImage,
   FiMessageSquare,
-  FiUsers
+  FiUsers,
+  FiPlus
 } from "react-icons/fi"
-import { deleteContact } from "@/app/(app)/contacts/actions"
-import type { Contact, ContactTag, Tag, ContactImage, SocialLink, Relationship, ConversationParticipant, EventParticipant } from "@prisma/client"
+import { deleteContact, addRelationship, deleteRelationship } from "@/app/(app)/contacts/actions"
+import { AddRelationshipDialog } from "@/components/contacts/add-relationship-dialog"
+import type { Contact, ContactTag, Tag, ContactImage, SocialLink, Relationship, ConversationParticipant, EventParticipant, RelationshipType, Gender } from "@prisma/client"
+
+type RelationshipTypeWithReverse = RelationshipType & {
+  reverseType: { id: string; name: string } | null
+  maleReverseType: { id: string; name: string } | null
+  femaleReverseType: { id: string; name: string } | null
+}
+
+type RelationshipWithType = Relationship & { 
+  type: RelationshipType
+  toContact: Contact 
+}
+
+type RelationshipFromWithType = Relationship & { 
+  type: RelationshipType
+  fromContact: Contact 
+}
 
 type ContactWithRelations = Contact & {
   tags: (ContactTag & { tag: Tag })[]
   images: ContactImage[]
   socialLinks: SocialLink[]
-  relationshipsFrom: (Relationship & { toContact: Contact })[]
-  relationshipsTo: (Relationship & { fromContact: Contact })[]
+  relationshipsFrom: RelationshipWithType[]
+  relationshipsTo: RelationshipFromWithType[]
   conversationParticipants: (ConversationParticipant & { 
     conversation: { id: string, title: string, happenedAt: Date, medium: string } 
   })[]
@@ -35,8 +53,16 @@ type ContactWithRelations = Contact & {
   })[]
 }
 
+type SimpleContact = {
+  id: string
+  displayName: string
+  gender: Gender | null
+}
+
 interface ContactDetailProps {
   contact: ContactWithRelations
+  allContacts: SimpleContact[]
+  relationshipTypes: RelationshipTypeWithReverse[]
 }
 
 function ConversationsSection({ contact }: { contact: ContactWithRelations }) {
@@ -169,9 +195,10 @@ function EventsSection({ contact }: { contact: ContactWithRelations }) {
   )
 }
 
-export function ContactDetail({ contact }: ContactDetailProps) {
+export function ContactDetail({ contact, allContacts, relationshipTypes }: ContactDetailProps) {
   const router = useRouter()
   const [isDeleting, setIsDeleting] = useState(false)
+  const [showAddRelationship, setShowAddRelationship] = useState(false)
 
   const handleDelete = async () => {
     if (!confirm("Are you sure you want to delete this contact? This action cannot be undone.")) {
@@ -185,6 +212,26 @@ export function ContactDetail({ contact }: ContactDetailProps) {
       console.error("Failed to delete contact:", error)
       setIsDeleting(false)
     }
+  }
+
+  const handleAddRelationship = async (toContactId: string, typeId: string, targetGender?: Gender) => {
+    await addRelationship(contact.id, toContactId, typeId, targetGender)
+    router.refresh()
+  }
+
+  const handleDeleteRelationship = async (relationshipId: string) => {
+    if (!confirm("Delete this relationship? This will also remove the reverse relationship.")) {
+      return
+    }
+    await deleteRelationship(relationshipId)
+    router.refresh()
+  }
+
+  // Prepare current contact data for the dialog
+  const currentContactForDialog = {
+    id: contact.id,
+    displayName: contact.displayName,
+    gender: contact.gender
   }
 
   return (
@@ -382,49 +429,58 @@ export function ContactDetail({ contact }: ContactDetailProps) {
         )}
 
         {/* Relationships */}
-        {(contact.relationshipsFrom.length > 0 || contact.relationshipsTo.length > 0) && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                <FiUsers className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-              </div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Relationships</h2>
-              <span className="ml-auto text-sm text-gray-500 dark:text-gray-400">
-                {contact.relationshipsFrom.length + contact.relationshipsTo.length}
-              </span>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+              <FiUsers className="h-5 w-5 text-orange-600 dark:text-orange-400" />
             </div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Relationships</h2>
+            <span className="ml-auto text-sm text-gray-500 dark:text-gray-400">
+              {contact.relationshipsFrom.length}
+            </span>
+          </div>
+          
+          <button
+            onClick={() => setShowAddRelationship(true)}
+            className="w-full mb-4 flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-dashed border-orange-300 dark:border-orange-700 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+          >
+            <FiPlus className="h-4 w-4" />
+            Add Relationship
+          </button>
+
+          {contact.relationshipsFrom.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400">No relationships yet</p>
+            </div>
+          ) : (
             <div className="space-y-2">
               {contact.relationshipsFrom.map((rel) => (
-                <Link
+                <div
                   key={rel.id}
-                  href={`/contacts/${rel.toContact.id}`}
                   className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all group"
                 >
-                  <span className="text-gray-900 dark:text-gray-100 font-medium group-hover:text-purple-600 dark:group-hover:text-purple-400">
+                  <Link
+                    href={`/contacts/${rel.toContact.id}`}
+                    className="flex-1 text-gray-900 dark:text-gray-100 font-medium group-hover:text-purple-600 dark:group-hover:text-purple-400"
+                  >
                     {rel.toContact.displayName}
-                  </span>
-                  <span className="text-sm px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-lg">
-                    {rel.type}
-                  </span>
-                </Link>
-              ))}
-              {contact.relationshipsTo.map((rel) => (
-                <Link
-                  key={rel.id}
-                  href={`/contacts/${rel.fromContact.id}`}
-                  className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all group"
-                >
-                  <span className="text-gray-900 dark:text-gray-100 font-medium group-hover:text-purple-600 dark:group-hover:text-purple-400">
-                    {rel.fromContact.displayName}
-                  </span>
-                  <span className="text-sm px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-lg">
-                    {rel.type} ↔
-                  </span>
-                </Link>
+                  </Link>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm px-2.5 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-lg">
+                      {rel.type.name}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteRelationship(rel.id)}
+                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <FiTrash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Recent Conversations */}
         <ConversationsSection contact={contact} />
@@ -432,6 +488,16 @@ export function ContactDetail({ contact }: ContactDetailProps) {
         {/* Recent Events */}
         <EventsSection contact={contact} />
       </div>
+
+      {/* Add Relationship Dialog */}
+      <AddRelationshipDialog
+        isOpen={showAddRelationship}
+        onClose={() => setShowAddRelationship(false)}
+        currentContact={currentContactForDialog}
+        contacts={allContacts}
+        relationshipTypes={relationshipTypes}
+        onSubmit={handleAddRelationship}
+      />
     </div>
   )
 }

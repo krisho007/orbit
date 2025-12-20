@@ -6,11 +6,12 @@ import { FiSave, FiX, FiUser, FiMail, FiPhone, FiCalendar, FiBriefcase, FiMapPin
 import { useRouter } from "next/navigation"
 import { TagInput } from "@/components/contacts/tag-input"
 import { ImageUpload } from "@/components/contacts/image-upload"
-import type { Contact, ContactTag, Tag, ContactImage } from "@prisma/client"
+import type { Contact, ContactTag, Tag, ContactImage, Gender } from "@prisma/client"
 
 type ContactWithTags = Contact & {
   tags?: (ContactTag & { tag: Tag })[]
   images?: ContactImage[]
+  gender?: Gender | null
 }
 
 type SimpleTag = {
@@ -35,6 +36,9 @@ export function ContactForm({ contact, availableTags }: ContactFormProps) {
   const currentImage = contact?.images?.[0]
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  // Initialize gender state
+  const [gender, setGender] = useState<Gender | null>(contact?.gender || null)
 
   const handleSubmit = async (formData: FormData) => {
     setIsSubmitting(true)
@@ -47,6 +51,11 @@ export function ContactForm({ contact, availableTags }: ContactFormProps) {
         color: tag.color
       }))
       formData.append('tags', JSON.stringify(tagsData))
+      
+      // Add gender to form data
+      if (gender) {
+        formData.append('gender', gender)
+      }
       
       let contactId: string
       
@@ -165,20 +174,55 @@ export function ContactForm({ contact, availableTags }: ContactFormProps) {
           </div>
         </div>
 
-        <div>
-          <label htmlFor="dateOfBirth" className="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
-            <div className="flex items-center gap-2">
-              <FiCalendar className="h-4 w-4 text-gray-400" />
-              Date of Birth
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label htmlFor="dateOfBirth" className="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+              <div className="flex items-center gap-2">
+                <FiCalendar className="h-4 w-4 text-gray-400" />
+                Date of Birth
+              </div>
+            </label>
+            <input
+              type="date"
+              id="dateOfBirth"
+              name="dateOfBirth"
+              defaultValue={contact?.dateOfBirth ? new Date(contact.dateOfBirth).toISOString().split('T')[0] : ''}
+              className="w-full px-4 py-3 text-base bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 dark:text-gray-100 transition-all"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+              <div className="flex items-center gap-2">
+                <FiUser className="h-4 w-4 text-gray-400" />
+                Gender
+              </div>
+            </label>
+            <div className="flex rounded-xl border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setGender(gender === 'MALE' ? null : 'MALE')}
+                className={`flex-1 px-4 py-3 text-base font-medium transition-all ${
+                  gender === 'MALE'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
+              >
+                Male
+              </button>
+              <button
+                type="button"
+                onClick={() => setGender(gender === 'FEMALE' ? null : 'FEMALE')}
+                className={`flex-1 px-4 py-3 text-base font-medium transition-all border-l-2 border-gray-200 dark:border-gray-700 ${
+                  gender === 'FEMALE'
+                    ? 'bg-pink-500 text-white'
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
+              >
+                Female
+              </button>
             </div>
-          </label>
-          <input
-            type="date"
-            id="dateOfBirth"
-            name="dateOfBirth"
-            defaultValue={contact?.dateOfBirth ? new Date(contact.dateOfBirth).toISOString().split('T')[0] : ''}
-            className="w-full px-4 py-3 text-base bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 dark:text-gray-100 transition-all"
-          />
+          </div>
         </div>
       </div>
 

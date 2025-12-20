@@ -1,20 +1,25 @@
 import { auth, signOut } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { TagsManager } from "@/components/settings/tags-manager"
-import { FiLogOut, FiUser, FiTag } from "react-icons/fi"
+import { RelationshipTypesManager } from "@/components/settings/relationship-types-manager"
+import { getRelationshipTypes } from "@/app/(app)/settings/actions"
+import { FiLogOut, FiUser, FiTag, FiUsers } from "react-icons/fi"
 
 export default async function SettingsPage() {
   const session = await auth()
   
-  const tags = await prisma.tag.findMany({
-    where: { userId: session!.user.id },
-    include: {
-      _count: {
-        select: { contacts: true }
-      }
-    },
-    orderBy: { name: 'asc' }
-  })
+  const [tags, relationshipTypes] = await Promise.all([
+    prisma.tag.findMany({
+      where: { userId: session!.user.id },
+      include: {
+        _count: {
+          select: { contacts: true }
+        }
+      },
+      orderBy: { name: 'asc' }
+    }),
+    getRelationshipTypes()
+  ])
 
   return (
     <div className="p-4 md:p-8">
@@ -56,13 +61,27 @@ export default async function SettingsPage() {
         </div>
 
         {/* Tags Management */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
           <div className="flex items-center mb-4">
             <FiTag className="mr-2 h-5 w-5 text-gray-400" />
-            <h2 className="text-lg font-semibold text-gray-900">Manage Tags</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Manage Tags</h2>
           </div>
           
           <TagsManager tags={tags} />
+        </div>
+
+        {/* Relationship Types Management */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="flex items-center mb-4">
+            <FiUsers className="mr-2 h-5 w-5 text-gray-400" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Manage Relationship Types</h2>
+          </div>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            Define relationship types to link contacts together. Symmetric relationships (like Spouse or Friend) are the same in both directions.
+            Asymmetric relationships (like Parent/Child) can have different reverse types based on gender.
+          </p>
+          
+          <RelationshipTypesManager relationshipTypes={relationshipTypes} />
         </div>
       </div>
     </div>

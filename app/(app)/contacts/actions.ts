@@ -12,6 +12,7 @@ const contactSchema = z.object({
   primaryPhone: z.string().optional(),
   primaryEmail: z.string().email().optional().or(z.literal("")),
   dateOfBirth: z.string().optional(),
+  gender: z.enum(['MALE', 'FEMALE']).optional(),
   company: z.string().optional(),
   jobTitle: z.string().optional(),
   location: z.string().optional(),
@@ -22,11 +23,13 @@ export async function createContact(formData: FormData): Promise<{ id: string }>
   const session = await auth()
   if (!session?.user?.id) throw new Error("Unauthorized")
 
+  const genderValue = formData.get("gender") as string | null
   const data = {
     displayName: formData.get("displayName") as string,
     primaryPhone: formData.get("primaryPhone") as string || undefined,
     primaryEmail: formData.get("primaryEmail") as string || undefined,
     dateOfBirth: formData.get("dateOfBirth") as string || undefined,
+    gender: genderValue === 'MALE' || genderValue === 'FEMALE' ? genderValue : undefined,
     company: formData.get("company") as string || undefined,
     jobTitle: formData.get("jobTitle") as string || undefined,
     location: formData.get("location") as string || undefined,
@@ -70,6 +73,7 @@ export async function createContact(formData: FormData): Promise<{ id: string }>
     data: {
       ...validated,
       dateOfBirth: validated.dateOfBirth ? new Date(validated.dateOfBirth) : null,
+      gender: validated.gender || null,
       userId: session.user.id,
       tags: processedTagIds.length > 0 ? {
         create: processedTagIds.map((tagId: string) => ({
@@ -102,11 +106,13 @@ export async function updateContact(contactId: string, formData: FormData) {
     throw new Error("Contact not found")
   }
 
+  const genderValue = formData.get("gender") as string | null
   const data = {
     displayName: formData.get("displayName") as string,
     primaryPhone: formData.get("primaryPhone") as string || undefined,
     primaryEmail: formData.get("primaryEmail") as string || undefined,
     dateOfBirth: formData.get("dateOfBirth") as string || undefined,
+    gender: genderValue === 'MALE' || genderValue === 'FEMALE' ? genderValue : undefined,
     company: formData.get("company") as string || undefined,
     jobTitle: formData.get("jobTitle") as string || undefined,
     location: formData.get("location") as string || undefined,
@@ -165,6 +171,7 @@ export async function updateContact(contactId: string, formData: FormData) {
     data: {
       ...validated,
       dateOfBirth: validated.dateOfBirth ? new Date(validated.dateOfBirth) : null,
+      gender: validated.gender || null,
     },
   })
 
@@ -323,11 +330,17 @@ export async function deleteContactImage(imageId: string) {
   revalidatePath(`/contacts/${image.contactId}`)
 }
 
-export async function addRelationship(fromContactId: string, toContactId: string, type: string, notes?: string) {
+export async function addRelationship(
+  fromContactId: string, 
+  toContactId: string, 
+  typeId: string, 
+  targetGender?: 'MALE' | 'FEMALE',
+  notes?: string
+) {
   const session = await auth()
   if (!session?.user?.id) throw new Error("Unauthorized")
 
-  // Verify ownership of both contacts
+  // Verify ownership of both contacts and get their data
   const contacts = await prisma.contact.findMany({
     where: {
       id: { in: [fromContactId, toContactId] },
@@ -339,15 +352,83 @@ export async function addRelationship(fromContactId: string, toContactId: string
     throw new Error("Invalid contacts")
   }
 
+  const toContact = contacts.find(c => c.id === toContactId)!
+
+  // Get the relationship type with its reverse types
+  const relationshipType = await prisma.relationshipType.findUnique({
+    where: { id: typeId },
+    include: {
+      reverseType: true,
+      maleReverseType: true,
+      femaleReverseType: true,
+    }
+  })
+
+  if (!relationshipType || relationshipType.userId !== session.user.id) {
+    throw new Error("Invalid relationship type")
+  }
+
+  // Update target contact's gender if provided and different
+  const effectiveGender = targetGender || toContact.gender
+  if (targetGender && targetGender !== toContact.gender) {
+    await prisma.contact.update({
+      where: { id: toContactId },
+      data: { gender: targetGender }
+    })
+  }
+
+  // Create the primary relationship
   await prisma.relationship.create({
     data: {
       fromContactId,
       toContactId,
-      type: type as any,
+      typeId,
       notes: notes || null,
       userId: session.user.id
     }
   })
+
+  // Determine the reverse type
+  let reverseTypeId: string | null = null
+  
+  if (relationshipType.isSymmetric) {
+    // For symmetric relationships, use the same type
+    reverseTypeId = typeId
+  } else {
+    // For asymmetric, check gender-specific reverses first
+    if (effectiveGender === 'MALE' && relationshipType.maleReverseTypeId) {
+      reverseTypeId = relationshipType.maleReverseTypeId
+    } else if (effectiveGender === 'FEMALE' && relationshipType.femaleReverseTypeId) {
+      reverseTypeId = relationshipType.femaleReverseTypeId
+    } else if (relationshipType.reverseTypeId) {
+      reverseTypeId = relationshipType.reverseTypeId
+    }
+  }
+
+  // Create the reverse relationship if we have a reverse type
+  if (reverseTypeId) {
+    // Check if reverse relationship already exists
+    const existingReverse = await prisma.relationship.findFirst({
+      where: {
+        fromContactId: toContactId,
+        toContactId: fromContactId,
+        typeId: reverseTypeId,
+        userId: session.user.id
+      }
+    })
+
+    if (!existingReverse) {
+      await prisma.relationship.create({
+        data: {
+          fromContactId: toContactId,
+          toContactId: fromContactId,
+          typeId: reverseTypeId,
+          notes: notes || null,
+          userId: session.user.id
+        }
+      })
+    }
+  }
 
   revalidatePath(`/contacts/${fromContactId}`)
   revalidatePath(`/contacts/${toContactId}`)
@@ -359,19 +440,65 @@ export async function deleteRelationship(relationshipId: string) {
 
   const relationship = await prisma.relationship.findUnique({
     where: { id: relationshipId },
-    select: { userId: true, fromContactId: true, toContactId: true }
+    include: {
+      type: {
+        include: {
+          reverseType: true,
+          maleReverseType: true,
+          femaleReverseType: true,
+        }
+      }
+    }
   })
 
   if (!relationship || relationship.userId !== session.user.id) {
     throw new Error("Relationship not found")
   }
 
+  // Find and delete the reverse relationship
+  const reverseTypeIds: string[] = []
+  if (relationship.type.isSymmetric) {
+    reverseTypeIds.push(relationship.typeId)
+  } else {
+    if (relationship.type.reverseTypeId) reverseTypeIds.push(relationship.type.reverseTypeId)
+    if (relationship.type.maleReverseTypeId) reverseTypeIds.push(relationship.type.maleReverseTypeId)
+    if (relationship.type.femaleReverseTypeId) reverseTypeIds.push(relationship.type.femaleReverseTypeId)
+  }
+
+  if (reverseTypeIds.length > 0) {
+    await prisma.relationship.deleteMany({
+      where: {
+        fromContactId: relationship.toContactId,
+        toContactId: relationship.fromContactId,
+        typeId: { in: reverseTypeIds },
+        userId: session.user.id
+      }
+    })
+  }
+
+  // Delete the primary relationship
   await prisma.relationship.delete({
     where: { id: relationshipId }
   })
 
   revalidatePath(`/contacts/${relationship.fromContactId}`)
   revalidatePath(`/contacts/${relationship.toContactId}`)
+}
+
+// Helper function to get all contacts for relationship dialog
+export async function getContactsForRelationship() {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error("Unauthorized")
+
+  return await prisma.contact.findMany({
+    where: { userId: session.user.id },
+    select: {
+      id: true,
+      displayName: true,
+      gender: true,
+    },
+    orderBy: { displayName: 'asc' }
+  })
 }
 
 export async function addSocialLink(contactId: string, platform: string, url: string) {

@@ -11,22 +11,36 @@ import type {
   ContactImage, 
   SocialLink, 
   Relationship, 
+  RelationshipType,
   ConversationParticipant, 
-  EventParticipant 
+  EventParticipant,
+  Gender
 } from '@prisma/client'
+
+export type RelationshipTypeWithReverse = RelationshipType & {
+  reverseType: { id: string; name: string } | null
+  maleReverseType: { id: string; name: string } | null
+  femaleReverseType: { id: string; name: string } | null
+}
 
 export type ContactDetailData = Contact & {
   tags: (ContactTag & { tag: Tag })[]
   images: ContactImage[]
   socialLinks: SocialLink[]
-  relationshipsFrom: (Relationship & { toContact: Contact })[]
-  relationshipsTo: (Relationship & { fromContact: Contact })[]
+  relationshipsFrom: (Relationship & { type: RelationshipType, toContact: Contact })[]
+  relationshipsTo: (Relationship & { type: RelationshipType, fromContact: Contact })[]
   conversationParticipants: (ConversationParticipant & { 
     conversation: { id: string, title: string, happenedAt: Date, medium: string } 
   })[]
   eventParticipants: (EventParticipant & { 
     event: { id: string, title: string, startAt: Date, eventType: string } 
   })[]
+}
+
+export type SimpleContact = {
+  id: string
+  displayName: string
+  gender: Gender | null
 }
 
 /**
@@ -68,23 +82,25 @@ export async function getContactDetailOptimized(
     }
   })
 
-  // Query 3: Get relationships FROM this contact (with target contact info)
+  // Query 3: Get relationships FROM this contact (with target contact info and type)
   const relationshipsFrom = await prisma.relationship.findMany({
     where: {
       fromContactId: contactId
     },
     include: {
-      toContact: true
+      toContact: true,
+      type: true
     }
   })
 
-  // Query 4: Get relationships TO this contact (with source contact info)
+  // Query 4: Get relationships TO this contact (with source contact info and type)
   const relationshipsTo = await prisma.relationship.findMany({
     where: {
       toContactId: contactId
     },
     include: {
-      fromContact: true
+      fromContact: true,
+      type: true
     }
   })
 
@@ -143,5 +159,52 @@ export async function getContactDetailOptimized(
     conversationParticipants,
     eventParticipants
   }
+}
+
+/**
+ * Get all contacts for the relationship dialog
+ */
+export async function getAllContactsSimple(userId: string): Promise<SimpleContact[]> {
+  return await prisma.contact.findMany({
+    where: { userId },
+    select: {
+      id: true,
+      displayName: true,
+      gender: true,
+    },
+    orderBy: { displayName: 'asc' }
+  })
+}
+
+/**
+ * Get all relationship types with their reverse types
+ */
+export async function getRelationshipTypesWithReverse(userId: string): Promise<RelationshipTypeWithReverse[]> {
+  // First ensure default types exist
+  const existingTypes = await prisma.relationshipType.findMany({
+    where: { userId }
+  })
+
+  if (existingTypes.length === 0) {
+    // Import and call the seeding function
+    const { ensureDefaultRelationshipTypes } = await import('@/app/(app)/settings/actions')
+    await ensureDefaultRelationshipTypes()
+  }
+
+  return await prisma.relationshipType.findMany({
+    where: { userId },
+    include: {
+      reverseType: {
+        select: { id: true, name: true }
+      },
+      maleReverseType: {
+        select: { id: true, name: true }
+      },
+      femaleReverseType: {
+        select: { id: true, name: true }
+      }
+    },
+    orderBy: { name: 'asc' }
+  })
 }
 

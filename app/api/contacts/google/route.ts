@@ -121,8 +121,8 @@ export async function GET() {
       
     } while (nextPageToken) // Continue until no more pages
     
-    // Transform Google contacts to our format
-    const contacts = allContacts.map((person: any) => {
+    // Transform Google contacts to our format and download photos
+    const contacts = await Promise.all(allContacts.map(async (person: any) => {
       const name = person.names?.[0]?.displayName || "Unknown"
       const email = person.emailAddresses?.[0]?.value || null
       const phone = person.phoneNumbers?.[0]?.value || null
@@ -133,10 +133,30 @@ export async function GET() {
       const location = address ? [address.city, address.region, address.country].filter(Boolean).join(", ") : null
       const bio = person.biographies?.[0]?.value || null
       const birthday = person.birthdays?.[0]
-      const dateOfBirth = birthday?.date ? 
-        `${birthday.date.year || "1900"}-${String(birthday.date.month || 1).padStart(2, "0")}-${String(birthday.date.day || 1).padStart(2, "0")}` : 
+      const dateOfBirth = birthday?.date ?
+        `${birthday.date.year || "1900"}-${String(birthday.date.month || 1).padStart(2, "0")}-${String(birthday.date.day || 1).padStart(2, "0")}` :
         null
       const photoUrl = person.photos?.[0]?.url || null
+
+      // Download photo as base64 while we have the access token
+      let photoBase64: string | null = null
+      let photoContentType: string | null = null
+      if (photoUrl) {
+        try {
+          const photoResponse = await fetch(photoUrl, {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          })
+          if (photoResponse.ok) {
+            const arrayBuffer = await photoResponse.arrayBuffer()
+            photoBase64 = Buffer.from(arrayBuffer).toString('base64')
+            photoContentType = photoResponse.headers.get('content-type') || 'image/jpeg'
+          }
+        } catch (err) {
+          console.error(`Failed to download photo for ${name}:`, err)
+        }
+      }
 
       return {
         displayName: name,
@@ -148,8 +168,10 @@ export async function GET() {
         notes: bio,
         dateOfBirth,
         photoUrl,
+        photoBase64,
+        photoContentType,
       }
-    })
+    }))
 
     return NextResponse.json({ contacts })
   } catch (error) {

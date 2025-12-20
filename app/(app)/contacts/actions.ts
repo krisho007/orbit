@@ -2,7 +2,7 @@
 
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-import { downloadAndUploadImage } from "@/lib/supabase"
+import { uploadBase64Image } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { z } from "zod"
@@ -519,7 +519,7 @@ export async function revalidateContactsAfterImport() {
  * This runs asynchronously after contacts are created to not block the import
  */
 async function processGoogleContactPhotos(
-  contactsData: any[], 
+  contactsData: any[],
   createdContacts: { id: string; googleContactName: string | null }[]
 ) {
   // Create a map of googleContactName to contactId for quick lookup
@@ -537,16 +537,15 @@ async function processGoogleContactPhotos(
   })
   const contactsWithImages = new Set(existingImages.map(img => img.contactId))
 
-  // Process photos for contacts that have photoUrl and don't already have an image
+  // Process photos for contacts that have base64 photo data
   const photoPromises = contactsData
-    .filter(contact => contact.photoUrl)
+    .filter(contact => contact.photoBase64 && contact.photoContentType)
     .map(async (contact) => {
       const contactId = nameToIdMap.get(contact.displayName)
       if (!contactId) return
-      
-      // Skip if contact already has an image (unless we're overriding)
+
+      // If contact already has an image, delete it first
       if (contactsWithImages.has(contactId)) {
-        // Delete old image before uploading new one
         const oldImage = await prisma.contactImage.findFirst({
           where: { contactId, order: 0 }
         })
@@ -556,9 +555,13 @@ async function processGoogleContactPhotos(
       }
 
       try {
-        // Download and upload the photo
-        const result = await downloadAndUploadImage(contact.photoUrl, contactId)
-        
+        // Upload the base64 photo data
+        const result = await uploadBase64Image(
+          contact.photoBase64,
+          contact.photoContentType,
+          contactId
+        )
+
         if (result) {
           // Create the ContactImage record
           await prisma.contactImage.create({
@@ -689,7 +692,7 @@ export async function importGoogleContactsBatch(
   }
 
   try {
-    // Use a transaction for atomicity
+    // Use a transaction for atomicity with extended timeout for large imports
     const result = await prisma.$transaction(async (tx) => {
       let createdContacts: { id: string; googleContactName: string | null }[] = []
       let updatedContactIds: string[] = []
@@ -733,10 +736,10 @@ export async function importGoogleContactsBatch(
         }
       }
 
-      // 2. Update existing contacts
+      // 2. Update existing contacts - run in parallel for better performance
       if (contactsToUpdate.length > 0) {
-        for (const { existingId, data } of contactsToUpdate) {
-          await tx.contact.update({
+        const updatePromises = contactsToUpdate.map(({ existingId, data }) =>
+          tx.contact.update({
             where: { id: existingId },
             data: {
               displayName: data.displayName,
@@ -750,16 +753,19 @@ export async function importGoogleContactsBatch(
               dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
             }
           })
-          updatedContactIds.push(existingId)
-        }
+        )
+        await Promise.all(updatePromises)
+        updatedContactIds = contactsToUpdate.map(cu => cu.existingId)
       }
 
-      return { 
-        createdContacts, 
+      return {
+        createdContacts,
         updatedContactIds,
         createdCount: createdContacts.length,
         updatedCount: updatedContactIds.length
       }
+    }, {
+      timeout: 60000, // 60 seconds timeout for large imports
     })
 
     imported = result.createdCount

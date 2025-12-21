@@ -79,7 +79,6 @@ export async function POST(req: Request) {
           parameters: {
             type: "object",
             properties: {
-              title: { type: "string", description: "Title/summary of the conversation" },
               participantNames: {
                 type: "array",
                 items: { type: "string" },
@@ -89,7 +88,7 @@ export async function POST(req: Request) {
               content: { type: "string", description: "Notes about the conversation" },
               happenedAt: { type: "string", description: "When it happened in ISO date format" }
             },
-            required: ["title", "participantNames", "medium"]
+            required: ["participantNames", "medium"]
           }
         }
       },
@@ -204,7 +203,6 @@ Be conversational and friendly.`
           
           const conversation = await prisma.conversation.create({
             data: {
-              title: args.title,
               content: args.content || null,
               medium: medium as any,
               happenedAt: args.happenedAt ? new Date(args.happenedAt) : new Date(),

@@ -5,6 +5,29 @@ import { FiSend, FiLoader } from "react-icons/fi"
 import Link from "next/link"
 import { format } from "date-fns"
 
+// Format conversation medium for display
+function formatMedium(medium: string): string {
+  const mediumMap: Record<string, string> = {
+    PHONE_CALL: 'Phone Call',
+    WHATSAPP: 'WhatsApp',
+    EMAIL: 'Email',
+    CHANCE_ENCOUNTER: 'Chance Encounter',
+    ONLINE_MEETING: 'Online Meeting',
+    IN_PERSON_MEETING: 'In-Person Meeting',
+    OTHER: 'Other'
+  }
+  return mediumMap[medium] || medium
+}
+
+// Get display text for a conversation (participant names or medium)
+function getConversationDisplay(conv: any): string {
+  if (conv.participants && conv.participants.length > 0) {
+    const names = conv.participants.map((p: any) => p.contact.displayName).join(', ')
+    return `${formatMedium(conv.medium)} with ${names}`
+  }
+  return formatMedium(conv.medium)
+}
+
 type Message = {
   role: "user" | "assistant"
   content: string
@@ -91,10 +114,7 @@ export function AssistantChat() {
                           href={`/conversations/${action.data.id}`}
                           className="block p-3 bg-white text-gray-900 rounded border border-gray-200 hover:bg-gray-50 transition-colors"
                         >
-                          <p className="font-medium">✅ Created conversation: {action.data.title}</p>
-                          <p className="text-sm text-gray-600 mt-1">
-                            With: {action.data.participants.map((p: any) => p.contact.displayName).join(', ')}
-                          </p>
+                          <p className="font-medium">✅ Created conversation: {getConversationDisplay(action.data)}</p>
                         </Link>
                       )}
                       
@@ -105,7 +125,7 @@ export function AssistantChat() {
                             {action.data.slice(0, 5).map((conv: any) => (
                               <li key={conv.id}>
                                 <Link href={`/conversations/${conv.id}`} className="text-indigo-600 hover:underline">
-                                  {conv.title} ({format(new Date(conv.happenedAt), 'MMM d, yyyy')})
+                                  {getConversationDisplay(conv)} ({format(new Date(conv.happenedAt), 'MMM d, yyyy')})
                                 </Link>
                               </li>
                             ))}

@@ -30,7 +30,7 @@ export type ContactDetailData = Contact & {
   relationshipsFrom: (Relationship & { type: RelationshipType, toContact: Contact })[]
   relationshipsTo: (Relationship & { type: RelationshipType, fromContact: Contact })[]
   conversationParticipants: (ConversationParticipant & { 
-    conversation: { id: string, title: string, happenedAt: Date, medium: string } 
+    conversation: { id: string, happenedAt: Date, medium: string } 
   })[]
   eventParticipants: (EventParticipant & { 
     event: { id: string, title: string, startAt: Date, eventType: string } 
@@ -122,7 +122,6 @@ export async function getContactDetailOptimized(
         conversation: {
           select: {
             id: true,
-            title: true,
             happenedAt: true,
             medium: true
           }

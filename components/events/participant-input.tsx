@@ -245,3 +245,4 @@ export function EventParticipantInput({ contacts, selectedParticipants, onPartic
   )
 }
 
+

@@ -46,7 +46,7 @@ type ContactWithRelations = Contact & {
   relationshipsFrom: RelationshipWithType[]
   relationshipsTo: RelationshipFromWithType[]
   conversationParticipants: (ConversationParticipant & { 
-    conversation: { id: string, title: string, happenedAt: Date, medium: string } 
+    conversation: { id: string, happenedAt: Date, medium: string } 
   })[]
   eventParticipants: (EventParticipant & { 
     event: { id: string, title: string, startAt: Date, eventType: string } 
@@ -57,6 +57,20 @@ type SimpleContact = {
   id: string
   displayName: string
   gender: Gender | null
+}
+
+// Format conversation medium for display
+function formatMedium(medium: string): string {
+  const mediumMap: Record<string, string> = {
+    PHONE_CALL: 'Phone Call',
+    WHATSAPP: 'WhatsApp',
+    EMAIL: 'Email',
+    CHANCE_ENCOUNTER: 'Chance Encounter',
+    ONLINE_MEETING: 'Online Meeting',
+    IN_PERSON_MEETING: 'In-Person Meeting',
+    OTHER: 'Other'
+  }
+  return mediumMap[medium] || medium
 }
 
 interface ContactDetailProps {
@@ -101,7 +115,7 @@ function ConversationsSection({ contact }: { contact: ContactWithRelations }) {
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <p className="font-semibold text-gray-900 dark:text-gray-100">{conversation.title}</p>
+                    <p className="font-semibold text-gray-900 dark:text-gray-100">{formatMedium(conversation.medium)}</p>
                     {index === 0 && !showAll && (
                       <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded">
                         Latest
@@ -112,7 +126,6 @@ function ConversationsSection({ contact }: { contact: ContactWithRelations }) {
                     {format(new Date(conversation.happenedAt), 'MMM d, yyyy')}
                   </span>
                 </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{conversation.medium}</p>
               </Link>
             ))}
           </div>

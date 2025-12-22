@@ -2,6 +2,7 @@ import { auth, signIn } from "@/auth"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { FiUsers, FiMessageSquare, FiCalendar, FiCheck, FiGithub, FiArrowRight } from "react-icons/fi"
+import { LINKS } from "@/lib/constants"
 
 export default async function Home() {
   const session = await auth()
@@ -70,7 +71,7 @@ export default async function Home() {
               </button>
             </form>
             <a
-              href="https://github.com/kamma/orbit"
+              href={LINKS.github}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-6 py-4 text-gray-700 dark:text-gray-300 font-medium hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
@@ -283,7 +284,7 @@ export default async function Home() {
             </p>
             
             <a
-              href="https://github.com/kamma/orbit"
+              href={LINKS.github}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-3 px-8 py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-lg font-semibold rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all"
@@ -312,7 +313,7 @@ export default async function Home() {
                 Terms of Service
               </Link>
               <a
-                href="https://github.com/kamma/orbit"
+                href={LINKS.github}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"

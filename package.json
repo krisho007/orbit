@@ -10,16 +10,18 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.1",
+    "@ai-sdk/react": "^3.0.3",
     "@auth/prisma-adapter": "^2.11.1",
     "@prisma/client": "^6.19.0",
     "@supabase/supabase-js": "^2.87.0",
+    "ai": "^6.0.3",
     "date-fns": "^4.1.0",
     "next": "16.0.7",
     "next-auth": "^5.0.0-beta.30",
-    "openai": "^6.10.0",
     "prisma": "^6.19.0",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "react-icons": "^5.5.0",
     "zod": "^4.1.13"
   },

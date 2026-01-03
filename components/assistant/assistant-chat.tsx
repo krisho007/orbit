@@ -1,6 +1,6 @@
 "use client"
 
-import { useChat } from "@ai-sdk/react"
+import { useChat, UIMessage } from "@ai-sdk/react"
 import { DefaultChatTransport } from "ai"
 import { useState } from "react"
 import { FiSend, FiLoader, FiSquare } from "react-icons/fi"
@@ -24,18 +24,17 @@ function formatMedium(medium: string): string {
 export function AssistantChat() {
   const [input, setInput] = useState("")
   
+  const welcomeMessage: UIMessage = {
+    id: "welcome",
+    role: "assistant",
+    parts: [{ type: "text", text: "Hi! I'm your Orbit assistant. I can help you log conversations, create events, and search your data. Try saying something like 'I had a call with John yesterday' or 'What meetings do I have with Sarah?'" }]
+  }
+
   const { messages, sendMessage, status, stop } = useChat({
     transport: new DefaultChatTransport({
       api: "/api/assistant",
     }),
-    initialMessages: [
-      {
-        id: "welcome",
-        role: "assistant",
-        content: "Hi! I'm your Orbit assistant. I can help you log conversations, create events, and search your data. Try saying something like 'I had a call with John yesterday' or 'What meetings do I have with Sarah?'",
-        parts: [{ type: "text", text: "Hi! I'm your Orbit assistant. I can help you log conversations, create events, and search your data. Try saying something like 'I had a call with John yesterday' or 'What meetings do I have with Sarah?'" }]
-      }
-    ]
+    messages: [welcomeMessage]
   })
 
   const isLoading = status === "streaming" || status === "submitted"
@@ -70,10 +69,11 @@ export function AssistantChat() {
                   )
                 }
 
-                // Tool result parts
-                if (part.type === 'tool-invocation' && part.state === 'result') {
-                  const result = part.result as any
-                  
+                // Tool result parts - check if it's a tool part with output available
+                const isToolPart = part.type.startsWith('tool-')
+                if (isToolPart && (part as any).state === 'output-available') {
+                  const result = (part as any).output as any
+
                   if (!result || !result.type) return null
 
                   return (

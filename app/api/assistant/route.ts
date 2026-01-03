@@ -87,7 +87,7 @@ export async function POST(req: Request) {
   const tools = {
     create_conversation: tool({
       description: "Create a new conversation record with participants",
-      parameters: z.object({
+      inputSchema: z.object({
         participantNames: z.string().describe("Comma-separated names of people in the conversation (e.g., 'John, Sarah')"),
         medium: z.string().describe("How the conversation happened (e.g., 'phone call', 'WhatsApp', 'email')"),
         content: z.string().optional().describe("Notes about the conversation"),
@@ -141,7 +141,7 @@ export async function POST(req: Request) {
 
     query_conversations: tool({
       description: "Search and retrieve conversations",
-      parameters: z.object({
+      inputSchema: z.object({
         participantName: z.string().optional().describe("Name of participant to filter by"),
         medium: z.string().optional().describe("Medium to filter by"),
         limit: z.number().optional().describe("Number of results to return, defaults to 10")
@@ -189,7 +189,7 @@ export async function POST(req: Request) {
 
     create_event: tool({
       description: "Create a new event with participants",
-      parameters: z.object({
+      inputSchema: z.object({
         title: z.string().describe("Event title"),
         participantNames: z.string().optional().describe("Comma-separated names of people attending (e.g., 'John, Sarah')"),
         startAt: z.string().describe("Start date/time in ISO format"),
@@ -241,7 +241,7 @@ export async function POST(req: Request) {
 
     query_events: tool({
       description: "Search and retrieve events",
-      parameters: z.object({
+      inputSchema: z.object({
         participantName: z.string().optional().describe("Name of participant to filter by"),
         limit: z.number().optional().describe("Number of results to return, defaults to 10")
       }),
@@ -284,7 +284,7 @@ export async function POST(req: Request) {
 
     create_contact: tool({
       description: "Create a new contact with their details",
-      parameters: z.object({
+      inputSchema: z.object({
         displayName: z.string().describe("The contact's full name"),
         primaryPhone: z.string().optional().describe("Phone number"),
         primaryEmail: z.string().optional().describe("Email address"),
@@ -317,7 +317,7 @@ export async function POST(req: Request) {
 
     update_contact: tool({
       description: "Update an existing contact's information including phone number, email, etc.",
-      parameters: z.object({
+      inputSchema: z.object({
         contactName: z.string().describe("Name of the contact to update"),
         primaryPhone: z.string().optional().describe("New phone number"),
         primaryEmail: z.string().optional().describe("New email address"),
@@ -359,7 +359,7 @@ export async function POST(req: Request) {
 
     query_contacts: tool({
       description: "Search and retrieve contacts by name, company, or other attributes",
-      parameters: z.object({
+      inputSchema: z.object({
         searchTerm: z.string().optional().describe("Name, company, or other term to search for"),
         limit: z.number().optional().describe("Number of results to return, defaults to 10")
       }),
@@ -403,7 +403,7 @@ export async function POST(req: Request) {
 
     get_contact_details: tool({
       description: "Get full details of a specific contact including phone number, email, and all other information",
-      parameters: z.object({
+      inputSchema: z.object({
         contactName: z.string().describe("Name of the contact to look up")
       }),
       execute: async ({ contactName }) => {

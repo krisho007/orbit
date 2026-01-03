@@ -1,5 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { findBestContactMatch, searchContactsFuzzy } from "@/lib/queries/fuzzy-search"
 import {
   streamText,
   tool,
@@ -12,38 +13,6 @@ import { z } from "zod"
 
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30
-
-// Fuzzy match contact by name
-async function findContactByName(userId: string, name: string) {
-  const contacts = await prisma.contact.findMany({
-    where: { userId },
-    select: { id: true, displayName: true }
-  })
-
-  // Simple fuzzy matching - find best match
-  const normalized = name.toLowerCase().trim()
-  let bestMatch = null
-  let bestScore = 0
-
-  for (const contact of contacts) {
-    const contactName = contact.displayName.toLowerCase()
-    if (contactName === normalized) {
-      return contact // Exact match
-    }
-    if (contactName.includes(normalized) || normalized.includes(contactName)) {
-      const score = Math.max(
-        contactName.length / normalized.length,
-        normalized.length / contactName.length
-      )
-      if (score > bestScore) {
-        bestScore = score
-        bestMatch = contact
-      }
-    }
-  }
-
-  return bestScore > 0.5 ? bestMatch : null
-}
 
 // Map natural language to ConversationMedium
 function mapMedium(text: string): string {
@@ -97,7 +66,7 @@ export async function POST(req: Request) {
         const names = parseNames(participantNames)
         const participantIds = []
         for (const name of names) {
-          const contact = await findContactByName(userId, name)
+          const contact = await findBestContactMatch(userId, name)
           if (contact) {
             participantIds.push(contact.id)
           }
@@ -150,7 +119,7 @@ export async function POST(req: Request) {
         const where: any = { userId: userId }
         
         if (participantName) {
-          const contact = await findContactByName(userId, participantName)
+          const contact = await findBestContactMatch(userId, participantName)
           if (contact) {
             where.participants = {
               some: { contactId: contact.id }
@@ -202,7 +171,7 @@ export async function POST(req: Request) {
         if (participantNames) {
           const names = parseNames(participantNames)
           for (const name of names) {
-            const contact = await findContactByName(userId, name)
+            const contact = await findBestContactMatch(userId, name)
             if (contact) {
               participantIds.push(contact.id)
             }
@@ -249,7 +218,7 @@ export async function POST(req: Request) {
         const where: any = { userId: userId }
         
         if (participantName) {
-          const contact = await findContactByName(userId, participantName)
+          const contact = await findBestContactMatch(userId, participantName)
           if (contact) {
             where.participants = {
               some: { contactId: contact.id }
@@ -327,7 +296,7 @@ export async function POST(req: Request) {
         notes: z.string().optional().describe("New notes about the contact")
       }),
       execute: async ({ contactName, primaryPhone, primaryEmail, company, jobTitle, location, notes }) => {
-        const contact = await findContactByName(userId, contactName)
+        const contact = await findBestContactMatch(userId, contactName)
         
         if (!contact) {
           return {
@@ -358,33 +327,66 @@ export async function POST(req: Request) {
     }),
 
     query_contacts: tool({
-      description: "Search and retrieve contacts by name, company, or other attributes",
+      description: "Search and retrieve contacts by name, company, or other attributes using fuzzy matching",
       inputSchema: z.object({
         searchTerm: z.string().optional().describe("Name, company, or other term to search for"),
         limit: z.number().optional().describe("Number of results to return, defaults to 10")
       }),
       execute: async ({ searchTerm, limit }) => {
-        const where: any = { userId: userId }
-        
+        const takeLimit = limit || 10
+
         if (searchTerm) {
-          const term = searchTerm.toLowerCase()
-          where.OR = [
-            { displayName: { contains: term, mode: 'insensitive' } },
-            { company: { contains: term, mode: 'insensitive' } },
-            { primaryEmail: { contains: term, mode: 'insensitive' } },
-            { notes: { contains: term, mode: 'insensitive' } }
-          ]
+          // Use fuzzy search for better matching
+          const { contactIds } = await searchContactsFuzzy(userId, searchTerm, { limit: takeLimit })
+
+          if (contactIds.length === 0) {
+            return {
+              type: "contacts_found",
+              count: 0,
+              contacts: []
+            }
+          }
+
+          const contacts = await prisma.contact.findMany({
+            where: {
+              id: { in: contactIds },
+              userId: userId
+            },
+            include: {
+              tags: {
+                include: { tag: true }
+              }
+            }
+          })
+
+          // Sort by fuzzy search order (best matches first)
+          const sortedContacts = contactIds.map(id =>
+            contacts.find(c => c.id === id)
+          ).filter(Boolean)
+
+          return {
+            type: "contacts_found",
+            count: sortedContacts.length,
+            contacts: sortedContacts.map(c => ({
+              id: c!.id,
+              displayName: c!.displayName,
+              company: c!.company,
+              primaryEmail: c!.primaryEmail,
+              primaryPhone: c!.primaryPhone
+            }))
+          }
         }
 
+        // No search term - return all contacts
         const contacts = await prisma.contact.findMany({
-          where,
+          where: { userId: userId },
           include: {
             tags: {
               include: { tag: true }
             }
           },
           orderBy: { displayName: 'asc' },
-          take: limit || 10
+          take: takeLimit
         })
 
         return {
@@ -407,7 +409,7 @@ export async function POST(req: Request) {
         contactName: z.string().describe("Name of the contact to look up")
       }),
       execute: async ({ contactName }) => {
-        const contact = await findContactByName(userId, contactName)
+        const contact = await findBestContactMatch(userId, contactName)
         
         if (!contact) {
           return {

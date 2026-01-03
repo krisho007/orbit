@@ -1,5 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { searchContactsFuzzy } from "@/lib/queries/fuzzy-search"
 import { NextRequest, NextResponse } from "next/server"
 
 const PAGE_SIZE = 20
@@ -16,19 +17,61 @@ export async function GET(request: NextRequest) {
     const cursor = searchParams.get("cursor")
     const search = searchParams.get("search") || ""
 
-    // Build where clause with optional search
-    const whereClause: { userId: string; OR?: { displayName?: { contains: string; mode: "insensitive" }; company?: { contains: string; mode: "insensitive" }; primaryEmail?: { contains: string; mode: "insensitive" } }[] } = { userId: session.user.id }
-
+    // Use fuzzy search when search term is provided
     if (search) {
-      whereClause.OR = [
-        { displayName: { contains: search, mode: "insensitive" } },
-        { company: { contains: search, mode: "insensitive" } },
-        { primaryEmail: { contains: search, mode: "insensitive" } },
-      ]
+      const { contactIds, hasMore } = await searchContactsFuzzy(
+        session.user.id,
+        search,
+        { limit: PAGE_SIZE }
+      )
+
+      if (contactIds.length === 0) {
+        return NextResponse.json({
+          contacts: [],
+          nextCursor: null,
+          stats: null,
+        })
+      }
+
+      // Fetch full contact data for matched IDs
+      const contacts = await prisma.contact.findMany({
+        where: {
+          id: { in: contactIds },
+          userId: session.user.id
+        },
+        include: {
+          tags: {
+            include: { tag: true }
+          },
+          images: {
+            where: { order: 0 },
+            take: 1,
+            orderBy: { order: 'asc' }
+          },
+          _count: {
+            select: {
+              conversationParticipants: true,
+              eventParticipants: true
+            }
+          }
+        }
+      })
+
+      // Sort by fuzzy search order (best matches first)
+      const sortedContacts = contactIds.map(id =>
+        contacts.find(c => c.id === id)
+      ).filter(Boolean)
+
+      return NextResponse.json({
+        contacts: sortedContacts,
+        nextCursor: hasMore ? sortedContacts[sortedContacts.length - 1]?.id : null,
+        stats: null,
+      })
     }
 
+    // Non-search: regular paginated list
     const contacts = await prisma.contact.findMany({
-      where: whereClause,
+      where: { userId: session.user.id },
       include: {
         tags: {
           include: {
@@ -67,7 +110,7 @@ export async function GET(request: NextRequest) {
     let totalConversations: number | null = null
     let totalEvents: number | null = null
 
-    if (!cursor && !search) {
+    if (!cursor) {
       const stats = await prisma.$transaction([
         prisma.contact.count({ where: { userId: session.user.id } }),
         prisma.conversationParticipant.count({
@@ -85,7 +128,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       contacts,
       nextCursor,
-      stats: !cursor && !search ? {
+      stats: !cursor ? {
         totalCount,
         totalConversations,
         totalEvents,

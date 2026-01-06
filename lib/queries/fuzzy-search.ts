@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 
 /**
  * Result type for fuzzy contact search - minimal fields for assistant
@@ -244,7 +245,7 @@ async function fallbackSearch(
   // Check if search term could be a phone number
   const phoneSearchDigits = normalizePhoneForSearch(searchTerm)
 
-  const conditions: Parameters<typeof prisma.contact.findMany>[0]['where'][] = [
+  const conditions: Prisma.ContactWhereInput[] = [
     { displayName: { contains: searchTerm, mode: 'insensitive' } },
     { company: { contains: searchTerm, mode: 'insensitive' } },
   ]

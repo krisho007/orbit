@@ -212,6 +212,7 @@ enum EventType {
   ANNIVERSARY
   CONFERENCE
   SOCIAL
+  FAMILY_EVENT
   OTHER
 }
 

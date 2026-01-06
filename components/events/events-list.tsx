@@ -38,6 +38,7 @@ const eventTypeLabels: Record<EventType, string> = {
   ANNIVERSARY: "Anniversary",
   CONFERENCE: "Conference",
   SOCIAL: "Social",
+  FAMILY_EVENT: "Family Event",
   OTHER: "Other"
 }
 

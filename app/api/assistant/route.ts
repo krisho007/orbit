@@ -26,6 +26,19 @@ function mapMedium(text: string): string {
   return 'OTHER'
 }
 
+// Map natural language to EventType
+function mapEventType(text: string): string {
+  const lower = text.toLowerCase()
+  if (lower.includes('meeting')) return 'MEETING'
+  if (lower.includes('call')) return 'CALL'
+  if (lower.includes('birthday')) return 'BIRTHDAY'
+  if (lower.includes('anniversary')) return 'ANNIVERSARY'
+  if (lower.includes('conference')) return 'CONFERENCE'
+  if (lower.includes('social')) return 'SOCIAL'
+  if (lower.includes('family')) return 'FAMILY_EVENT'
+  return 'OTHER'
+}
+
 // Parse comma-separated names into array
 function parseNames(namesString: string): string[] {
   return namesString.split(',').map(n => n.trim()).filter(n => n.length > 0)
@@ -164,9 +177,10 @@ export async function POST(req: Request) {
         startAt: z.string().describe("Start date/time in ISO format"),
         endAt: z.string().optional().describe("End date/time in ISO format"),
         location: z.string().optional().describe("Event location"),
-        description: z.string().optional().describe("Event description")
+        description: z.string().optional().describe("Event description"),
+        eventType: z.string().optional().describe("Type of event (e.g., 'meeting', 'call', 'birthday', 'anniversary', 'conference', 'social', 'family event')")
       }),
-      execute: async ({ title, participantNames, startAt, endAt, location, description }) => {
+      execute: async ({ title, participantNames, startAt, endAt, location, description, eventType }) => {
         const participantIds = []
         if (participantNames) {
           const names = parseNames(participantNames)
@@ -178,11 +192,13 @@ export async function POST(req: Request) {
           }
         }
 
+        const mappedEventType = mapEventType(eventType || 'meeting')
+
         const event = await prisma.event.create({
           data: {
             title,
             description: description || null,
-            eventType: 'MEETING',
+            eventType: mappedEventType as any,
             startAt: new Date(startAt),
             endAt: endAt ? new Date(endAt) : null,
             location: location || null,
@@ -202,6 +218,7 @@ export async function POST(req: Request) {
           type: "event_created",
           id: event.id,
           title: event.title,
+          eventType: event.eventType,
           startAt: event.startAt,
           participants: event.participants.map(p => p.contact.displayName)
         }
@@ -468,9 +485,14 @@ export async function POST(req: Request) {
     })
   }
 
+  const now = new Date()
+  const today = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) // e.g., "Monday, January 6, 2026"
+
   const result = streamText({
     model: google("gemini-2.0-flash"),
     system: `You are a helpful assistant for Orbit, a personal CRM app. Help users manage their contacts, conversations, and events.
+
+Today's date is ${today}.
 
 You can:
 - Create new contacts with their name, phone number, email, company, job title, location, and notes
@@ -482,6 +504,7 @@ You can:
 
 When users describe interactions or meetings, extract the relevant information and use the appropriate functions.
 When users ask about contact information like phone numbers, use the get_contact_details tool to retrieve it.
+When users mention relative dates like "today", "tomorrow", "yesterday", "next week", etc., convert them to actual dates based on today's date. If no date is mentioned, assume it's for today.
 Be conversational and friendly.`,
     messages: await convertToModelMessages(messages),
     tools,

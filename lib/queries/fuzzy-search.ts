@@ -4,7 +4,6 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { Prisma } from '@prisma/client'
 
 /**
  * Result type for fuzzy contact search - minimal fields for assistant
@@ -107,11 +106,22 @@ export async function findBestContactMatch(
 }
 
 /**
- * Extended fuzzy search for UI - searches displayName and company
+ * Extracts digits from a string for phone matching
+ * Returns null if fewer than 2 digits
+ */
+function normalizePhoneForSearch(input: string): string | null {
+  const digitsOnly = input.replace(/\D/g, '')
+  // Need at least 2 digits to be considered a phone search
+  if (digitsOnly.length < 2) return null
+  return digitsOnly
+}
+
+/**
+ * Extended fuzzy search for UI - searches displayName, company, and phone number
  * Returns contacts with their IDs sorted by similarity
  *
  * @param userId - User ID for multi-tenancy
- * @param searchTerm - Search term
+ * @param searchTerm - Search term (name, company, or phone number - last 8 digits)
  * @param options - Configuration options
  */
 export async function searchContactsFuzzy(
@@ -133,9 +143,53 @@ export async function searchContactsFuzzy(
     return { contactIds: [], hasMore: false }
   }
 
+  // Check if this could be a phone number search (at least 3 digits)
+  const phoneSearchDigits = normalizePhoneForSearch(normalizedTerm)
+
   try {
-    // Search both displayName and company using similarity + word_similarity
-    // word_similarity handles partial word matches like "Keshava Ananda" -> "Keshav Anand"
+    if (phoneSearchDigits) {
+      // Search name/company (fuzzy) AND phone number (contains match on digits)
+      const results = await prisma.$queryRaw<{ id: string, similarity: number }[]>`
+        SELECT
+          id,
+          GREATEST(
+            similarity("displayName", ${normalizedTerm}),
+            word_similarity(${normalizedTerm}, "displayName"),
+            COALESCE(similarity(company, ${normalizedTerm}), 0),
+            COALESCE(word_similarity(${normalizedTerm}, company), 0),
+            CASE
+              WHEN "primaryPhone" IS NOT NULL
+                AND regexp_replace("primaryPhone", '[^0-9]', '', 'g') LIKE '%' || ${phoneSearchDigits} || '%'
+              THEN 1.0
+              ELSE 0
+            END
+          ) as similarity
+        FROM contacts
+        WHERE
+          "userId" = ${userId}
+          AND (
+            similarity("displayName", ${normalizedTerm}) > ${threshold}
+            OR word_similarity(${normalizedTerm}, "displayName") > ${threshold}
+            OR similarity(company, ${normalizedTerm}) > ${threshold}
+            OR word_similarity(${normalizedTerm}, company) > ${threshold}
+            OR (
+              "primaryPhone" IS NOT NULL
+              AND regexp_replace("primaryPhone", '[^0-9]', '', 'g') LIKE '%' || ${phoneSearchDigits} || '%'
+            )
+          )
+        ORDER BY similarity DESC
+        LIMIT ${limit + 1}
+      `
+
+      const hasMore = results.length > limit
+      const contactIds = hasMore
+        ? results.slice(0, -1).map(r => r.id)
+        : results.map(r => r.id)
+
+      return { contactIds, hasMore }
+    }
+
+    // Standard search (name and company only - no digits in search term)
     const results = await prisma.$queryRaw<{ id: string, similarity: number }[]>`
       SELECT
         id,
@@ -187,13 +241,23 @@ async function fallbackSearch(
   searchTerm: string,
   limit: number
 ): Promise<FuzzyContactMatch[]> {
+  // Check if search term could be a phone number
+  const phoneSearchDigits = normalizePhoneForSearch(searchTerm)
+
+  const conditions: Parameters<typeof prisma.contact.findMany>[0]['where'][] = [
+    { displayName: { contains: searchTerm, mode: 'insensitive' } },
+    { company: { contains: searchTerm, mode: 'insensitive' } },
+  ]
+
+  // Add phone search if we have digits
+  if (phoneSearchDigits) {
+    conditions.push({ primaryPhone: { contains: phoneSearchDigits } })
+  }
+
   const contacts = await prisma.contact.findMany({
     where: {
       userId,
-      OR: [
-        { displayName: { contains: searchTerm, mode: 'insensitive' } },
-        { company: { contains: searchTerm, mode: 'insensitive' } },
-      ]
+      OR: conditions
     },
     select: {
       id: true,

@@ -26,7 +26,7 @@ model User {
 
   accounts      Account[]
   sessions      Session[]
-  
+
   // User's own data
   contacts              Contact[]
   tags                  Tag[]
@@ -34,7 +34,8 @@ model User {
   events                Event[]
   relationships         Relationship[]
   relationshipTypes     RelationshipType[]
-  
+  mobileTokens          MobileToken[]
+
   @@map("users")
 }
 
@@ -335,4 +336,25 @@ model ContactImage {
 
   @@index([contactId])
   @@map("contact_images")
+}
+
+// ============================================
+// Mobile App Authentication
+// ============================================
+
+model MobileToken {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique // SHA-256 hash of the actual token
+  deviceName String?
+  platform   String   // "android" or "ios"
+  lastUsedAt DateTime @default(now())
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("mobile_tokens")
 }

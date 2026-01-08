@@ -13,6 +13,8 @@
     "@ai-sdk/google": "^3.0.1",
     "@ai-sdk/react": "^3.0.3",
     "@auth/prisma-adapter": "^2.11.1",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/preferences": "^8.0.0",
     "@prisma/client": "^6.19.0",
     "@supabase/supabase-js": "^2.87.0",
     "ai": "^6.0.3",

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma),
+  trustHost: true, // Required for OAuth callbacks from WebViews/Capacitor
   providers: [
     Google({
       clientId: process.env.AUTH_GOOGLE_ID,
@@ -19,13 +20,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, account }) {
-      if (account) {
-        token.accessToken = account.access_token
-        token.refreshToken = account.refresh_token
-      }
-      return token
-    },
     session({ session, user }) {
       session.user.id = user.id
       return session

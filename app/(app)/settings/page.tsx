@@ -2,13 +2,15 @@ import { auth, signOut } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { TagsManager } from "@/components/settings/tags-manager"
 import { RelationshipTypesManager } from "@/components/settings/relationship-types-manager"
+import { MobileTokensManager } from "@/components/settings/mobile-tokens-manager"
 import { getRelationshipTypes } from "@/app/(app)/settings/actions"
-import { FiLogOut, FiUser, FiTag, FiUsers } from "react-icons/fi"
+import { listMobileTokens } from "@/lib/auth/mobile-token"
+import { FiLogOut, FiUser, FiTag, FiUsers, FiSmartphone } from "react-icons/fi"
 
 export default async function SettingsPage() {
   const session = await auth()
   
-  const [tags, relationshipTypes] = await Promise.all([
+  const [tags, relationshipTypes, mobileTokens] = await Promise.all([
     prisma.tag.findMany({
       where: { userId: session!.user.id },
       include: {
@@ -18,7 +20,8 @@ export default async function SettingsPage() {
       },
       orderBy: { name: 'asc' }
     }),
-    getRelationshipTypes()
+    getRelationshipTypes(),
+    listMobileTokens(session!.user.id)
   ])
 
   return (
@@ -58,6 +61,23 @@ export default async function SettingsPage() {
               </button>
             </form>
           </div>
+        </div>
+
+        {/* Mobile App / Caller ID */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+          <div className="flex items-center mb-4">
+            <FiSmartphone className="mr-2 h-5 w-5 text-gray-400" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Mobile App & Caller ID</h2>
+          </div>
+
+          <MobileTokensManager
+            tokens={mobileTokens.map(t => ({
+              ...t,
+              lastUsedAt: t.lastUsedAt.toISOString(),
+              expiresAt: t.expiresAt.toISOString(),
+              createdAt: t.createdAt.toISOString(),
+            }))}
+          />
         </div>
 
         {/* Tags Management */}

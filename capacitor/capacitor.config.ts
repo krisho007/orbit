@@ -9,6 +9,8 @@ const config: CapacitorConfig = {
   server: {
     // Production Orbit URL
     url: "https://orbit-xi-five.vercel.app",
+    // Allow navigation to external URLs for OAuth
+    allowNavigation: ["accounts.google.com", "*.google.com"],
   },
   plugins: {
     SplashScreen: {
@@ -18,7 +20,8 @@ const config: CapacitorConfig = {
     },
   },
   android: {
-    // Production uses HTTPS only
+    // Deep link scheme for OAuth callbacks
+    // Handles: orbit://auth/*
   },
 }
 

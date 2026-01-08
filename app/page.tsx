@@ -1,8 +1,14 @@
 import { auth, signIn } from "@/auth"
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { FiUsers, FiMessageSquare, FiCalendar, FiCheck, FiGithub, FiArrowRight } from "react-icons/fi"
+import { FiUsers, FiMessageSquare, FiCalendar, FiCheck, FiGithub } from "react-icons/fi"
 import { LINKS } from "@/lib/constants"
+import {
+  NavSignInButton,
+  HeroSignInButton,
+  FreeGetStartedButton,
+  ProGetStartedButton,
+} from "@/components/mobile/sign-in-forms"
 
 export default async function Home() {
   const session = await auth()
@@ -18,19 +24,12 @@ export default async function Home() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <h1 className="text-2xl font-bold text-indigo-600">Orbit</h1>
-            <form
-              action={async () => {
+            <NavSignInButton
+              signInAction={async () => {
                 "use server"
                 await signIn("google", { redirectTo: "/contacts" })
               }}
-            >
-              <button
-                type="submit"
-                className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-              >
-                Sign In
-              </button>
-            </form>
+            />
           </div>
         </div>
       </nav>
@@ -56,20 +55,12 @@ export default async function Home() {
           </p>
           
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up-delay-2">
-            <form
-              action={async () => {
+            <HeroSignInButton
+              signInAction={async () => {
                 "use server"
                 await signIn("google", { redirectTo: "/contacts" })
               }}
-            >
-              <button
-                type="submit"
-                className="inline-flex items-center gap-2 px-8 py-4 bg-purple-600 text-white text-lg font-semibold rounded-xl hover:bg-purple-700 transition-all shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40"
-              >
-                Get Started Free
-                <FiArrowRight className="h-5 w-5" />
-              </button>
-            </form>
+            />
             <a
               href={LINKS.github}
               target="_blank"
@@ -186,19 +177,12 @@ export default async function Home() {
                 </li>
               </ul>
               
-              <form
-                action={async () => {
+              <FreeGetStartedButton
+                signInAction={async () => {
                   "use server"
                   await signIn("google", { redirectTo: "/contacts" })
                 }}
-              >
-                <button
-                  type="submit"
-                  className="w-full py-3 px-6 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
-                >
-                  Get Started
-                </button>
-              </form>
+              />
             </div>
             
             {/* Pro Tier */}
@@ -247,19 +231,12 @@ export default async function Home() {
                   </li>
                 </ul>
                 
-                <form
-                  action={async () => {
+                <ProGetStartedButton
+                  signInAction={async () => {
                     "use server"
                     await signIn("google", { redirectTo: "/contacts" })
                   }}
-                >
-                  <button
-                    type="submit"
-                    className="w-full py-3 px-6 bg-purple-600 text-white font-semibold rounded-xl hover:bg-purple-700 transition-all shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40"
-                  >
-                    Get Started
-                  </button>
-                </form>
+                />
               </div>
             </div>
           </div>

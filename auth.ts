@@ -17,10 +17,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           prompt: "consent",
         },
       },
-      // Disable OAuth checks for WebView/Capacitor compatibility
-      // WebView cookies don't survive the OAuth redirect flow
-      // Security is maintained by Google's own OAuth security + HTTPS
-      checks: [],
+      // PKCE enabled for security - mobile uses system browser which preserves cookies
     }),
   ],
   callbacks: {

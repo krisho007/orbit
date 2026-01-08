@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import Link from "next/link"
-import { FiPlus, FiSearch, FiMail, FiPhone, FiUser, FiBriefcase, FiMessageSquare, FiCalendar, FiDownload, FiLoader } from "react-icons/fi"
+import { FiPlus, FiSearch, FiMail, FiPhone, FiUser, FiBriefcase, FiMessageSquare, FiCalendar, FiDownload, FiLoader, FiChevronDown, FiChevronUp } from "react-icons/fi"
 import { GoogleImportDialog } from "./google-import-dialog"
 
 type Contact = {
@@ -47,8 +47,23 @@ export function ContactsList({ initialContacts, initialCursor, stats }: Contacts
   const [isLoading, setIsLoading] = useState(false)
   const [searchResults, setSearchResults] = useState<Contact[] | null>(null)
   const [isSearching, setIsSearching] = useState(false)
+  const [expandedContacts, setExpandedContacts] = useState<Set<string>>(new Set())
   const loadMoreRef = useRef<HTMLDivElement>(null)
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const toggleExpanded = (contactId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setExpandedContacts(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(contactId)) {
+        newSet.delete(contactId)
+      } else {
+        newSet.add(contactId)
+      }
+      return newSet
+    })
+  }
 
   // Fetch more contacts
   const fetchMoreContacts = useCallback(async () => {
@@ -136,89 +151,87 @@ export function ContactsList({ initialContacts, initialCursor, stats }: Contacts
   const displayContacts = searchQuery ? (searchResults || []) : contacts
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Contacts</h1>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">Contacts</h1>
+            <p className="hidden sm:block mt-1 text-sm text-gray-500 dark:text-gray-400">
               Manage your professional network and relationships
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-2 sm:gap-3">
             <button
               onClick={() => setIsImportDialogOpen(true)}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm hover:shadow-md font-medium"
+              className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm hover:shadow-md font-medium text-sm sm:text-base"
             >
-              <FiDownload className="h-5 w-5" />
-              Import from Google
+              <FiDownload className="h-4 w-4 sm:h-5 sm:w-5" />
+              <span className="hidden sm:inline">Import from Google</span>
+              <span className="sm:hidden">Import</span>
             </button>
             <Link
               href="/contacts/new"
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all shadow-sm hover:shadow-md font-medium"
+              className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all shadow-sm hover:shadow-md font-medium text-sm sm:text-base"
             >
-              <FiPlus className="h-5 w-5" />
-              Add Contact
+              <FiPlus className="h-4 w-4 sm:h-5 sm:w-5" />
+              <span className="hidden sm:inline">Add Contact</span>
+              <span className="sm:hidden">Add</span>
             </Link>
           </div>
         </div>
       </div>
 
       {/* Search Bar */}
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         <div className="relative">
-          <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+          <FiSearch className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 sm:h-5 sm:w-5" />
           <input
             type="text"
-            placeholder="Search by name, company, or email..."
+            placeholder="Search contacts..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent shadow-sm text-gray-900 dark:text-gray-100 placeholder-gray-400"
+            className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent shadow-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 text-sm sm:text-base"
           />
           {isSearching && (
-            <FiLoader className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 animate-spin" />
+            <FiLoader className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
           )}
         </div>
       </div>
 
-      {/* Stats Summary */}
+      {/* Stats Summary - Compact on mobile */}
       {!searchQuery && stats.totalCount > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Contacts</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">{stats.totalCount}</p>
-              </div>
-              <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-3 sm:p-5">
+            <div className="flex items-center sm:justify-between gap-2 sm:gap-0">
+              <div className="hidden sm:block p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                 <FiUser className="h-6 w-6 text-purple-600 dark:text-purple-400" />
               </div>
+              <div className="text-center sm:text-left flex-1 sm:flex-none">
+                <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.totalCount}</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Contacts</p>
+              </div>
             </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Conversations</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">
-                  {stats.totalConversations}
-                </p>
-              </div>
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <div className="bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-3 sm:p-5">
+            <div className="flex items-center sm:justify-between gap-2 sm:gap-0">
+              <div className="hidden sm:block p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                 <FiMessageSquare className="h-6 w-6 text-blue-600 dark:text-blue-400" />
               </div>
+              <div className="text-center sm:text-left flex-1 sm:flex-none">
+                <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.totalConversations}</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Chats</p>
+              </div>
             </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Events</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">
-                  {stats.totalEvents}
-                </p>
-              </div>
-              <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+          <div className="bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-3 sm:p-5">
+            <div className="flex items-center sm:justify-between gap-2 sm:gap-0">
+              <div className="hidden sm:block p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
                 <FiCalendar className="h-6 w-6 text-green-600 dark:text-green-400" />
+              </div>
+              <div className="text-center sm:text-left flex-1 sm:flex-none">
+                <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.totalEvents}</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Events</p>
               </div>
             </div>
           </div>
@@ -249,98 +262,160 @@ export function ContactsList({ initialContacts, initialCursor, stats }: Contacts
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {displayContacts.map((contact) => (
-              <Link
-                key={contact.id}
-                href={`/contacts/${contact.id}`}
-                className="group bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-lg border border-gray-100 dark:border-gray-700 p-6 card-hover"
-              >
-                {/* Avatar & Name */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-12 h-12 flex-shrink-0 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold text-lg shadow-md overflow-hidden">
-                      {contact.images.length > 0 && contact.images[0].imageUrl ? (
-                        <img
-                          src={contact.images[0].imageUrl}
-                          alt={contact.displayName}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span>{contact.displayName.charAt(0).toUpperCase()}</span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 break-words group-hover:text-purple-600 dark:group-hover:text-purple-400">
+          <div className="flex flex-col gap-2">
+            {displayContacts.map((contact) => {
+              const isExpanded = expandedContacts.has(contact.id)
+              return (
+                <div
+                  key={contact.id}
+                  className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden"
+                >
+                  {/* Compact Row */}
+                  <div className="flex items-center gap-3 p-3">
+                    {/* Avatar */}
+                    <Link href={`/contacts/${contact.id}`} className="flex-shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold text-sm shadow-sm overflow-hidden hover:ring-2 hover:ring-purple-400 transition-all">
+                        {contact.images.length > 0 && contact.images[0].imageUrl ? (
+                          <img
+                            src={contact.images[0].imageUrl}
+                            alt={contact.displayName}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span>{contact.displayName.charAt(0).toUpperCase()}</span>
+                        )}
+                      </div>
+                    </Link>
+
+                    {/* Name & Company */}
+                    <Link href={`/contacts/${contact.id}`} className="flex-1 min-w-0 hover:text-purple-600 dark:hover:text-purple-400 transition-colors">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
                         {contact.displayName}
                       </h3>
-                      {contact.jobTitle && (
-                        <p className="text-xs text-gray-600 dark:text-gray-400 break-words">{contact.jobTitle}</p>
+                      {contact.company && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{contact.company}</p>
+                      )}
+                    </Link>
+
+                    {/* Quick Stats */}
+                    <div className="hidden sm:flex items-center gap-3 text-xs text-gray-400">
+                      {contact._count.conversationParticipants > 0 && (
+                        <div className="flex items-center gap-1">
+                          <FiMessageSquare className="h-3.5 w-3.5" />
+                          <span>{contact._count.conversationParticipants}</span>
+                        </div>
+                      )}
+                      {contact._count.eventParticipants > 0 && (
+                        <div className="flex items-center gap-1">
+                          <FiCalendar className="h-3.5 w-3.5" />
+                          <span>{contact._count.eventParticipants}</span>
+                        </div>
                       )}
                     </div>
-                  </div>
-                </div>
 
-                {/* Company */}
-                {contact.company && (
-                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-400 mb-3">
-                    <FiBriefcase className="mr-2 h-4 w-4 flex-shrink-0 text-gray-400" />
-                    <span className="truncate">{contact.company}</span>
-                  </div>
-                )}
-
-                {/* Contact Info */}
-                <div className="space-y-2 mb-4">
-                  {contact.primaryEmail && (
-                    <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-                      <FiMail className="mr-2 h-4 w-4 flex-shrink-0 text-gray-400" />
-                      <span className="truncate">{contact.primaryEmail}</span>
-                    </div>
-                  )}
-                  {contact.primaryPhone && (
-                    <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-                      <FiPhone className="mr-2 h-4 w-4 flex-shrink-0 text-gray-400" />
-                      <span className="truncate">{contact.primaryPhone}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Tags */}
-                {contact.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-4">
-                    {contact.tags.slice(0, 3).map(({ tag }) => (
-                      <span
-                        key={tag.id}
-                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                        style={{
-                          backgroundColor: tag.color ? `${tag.color}15` : '#EDE9FE',
-                          color: tag.color || '#7C3AED'
-                        }}
-                      >
-                        {tag.name}
-                      </span>
-                    ))}
-                    {contact.tags.length > 3 && (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-                        +{contact.tags.length - 3}
-                      </span>
+                    {/* Tags Preview (compact) */}
+                    {contact.tags.length > 0 && (
+                      <div className="hidden md:flex items-center gap-1">
+                        {contact.tags.slice(0, 2).map(({ tag }) => (
+                          <span
+                            key={tag.id}
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                            style={{
+                              backgroundColor: tag.color ? `${tag.color}15` : '#EDE9FE',
+                              color: tag.color || '#7C3AED'
+                            }}
+                          >
+                            {tag.name}
+                          </span>
+                        ))}
+                        {contact.tags.length > 2 && (
+                          <span className="text-xs text-gray-400">+{contact.tags.length - 2}</span>
+                        )}
+                      </div>
                     )}
-                  </div>
-                )}
 
-                {/* Stats */}
-                <div className="pt-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between text-xs">
-                  <div className="flex items-center text-gray-500 dark:text-gray-400">
-                    <FiMessageSquare className="mr-1.5 h-3.5 w-3.5" />
-                    <span>{contact._count.conversationParticipants}</span>
+                    {/* Expand Button */}
+                    <button
+                      onClick={(e) => toggleExpanded(contact.id, e)}
+                      className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                      aria-label={isExpanded ? "Collapse details" : "Expand details"}
+                    >
+                      {isExpanded ? (
+                        <FiChevronUp className="h-4 w-4" />
+                      ) : (
+                        <FiChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
                   </div>
-                  <div className="flex items-center text-gray-500 dark:text-gray-400">
-                    <FiCalendar className="mr-1.5 h-3.5 w-3.5" />
-                    <span>{contact._count.eventParticipants}</span>
-                  </div>
+
+                  {/* Expanded Details */}
+                  {isExpanded && (
+                    <div className="px-3 pb-3 pt-0 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                      <div className="pt-3 space-y-2">
+                        {/* Job Title */}
+                        {contact.jobTitle && (
+                          <p className="text-xs text-gray-600 dark:text-gray-400">{contact.jobTitle}</p>
+                        )}
+                        
+                        {/* Contact Info */}
+                        {contact.primaryEmail && (
+                          <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                            <FiMail className="mr-2 h-4 w-4 flex-shrink-0 text-gray-400" />
+                            <span className="truncate">{contact.primaryEmail}</span>
+                          </div>
+                        )}
+                        {contact.primaryPhone && (
+                          <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                            <FiPhone className="mr-2 h-4 w-4 flex-shrink-0 text-gray-400" />
+                            <span className="truncate">{contact.primaryPhone}</span>
+                          </div>
+                        )}
+
+                        {/* All Tags (mobile) */}
+                        {contact.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {contact.tags.map(({ tag }) => (
+                              <span
+                                key={tag.id}
+                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                                style={{
+                                  backgroundColor: tag.color ? `${tag.color}15` : '#EDE9FE',
+                                  color: tag.color || '#7C3AED'
+                                }}
+                              >
+                                {tag.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Stats (mobile) */}
+                        <div className="flex items-center gap-4 pt-2 text-xs text-gray-500 dark:text-gray-400 sm:hidden">
+                          <div className="flex items-center gap-1">
+                            <FiMessageSquare className="h-3.5 w-3.5" />
+                            <span>{contact._count.conversationParticipants} conversations</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <FiCalendar className="h-3.5 w-3.5" />
+                            <span>{contact._count.eventParticipants} events</span>
+                          </div>
+                        </div>
+
+                        {/* View Profile Link */}
+                        <div className="pt-2">
+                          <Link
+                            href={`/contacts/${contact.id}`}
+                            className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-medium"
+                          >
+                            View full profile →
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </Link>
-            ))}
+              )
+            })}
           </div>
 
           {/* Load More Trigger / Loading Indicator */}

@@ -27,7 +27,12 @@ export function MobileAuthProvider({ children }: MobileAuthProviderProps) {
     // Detect if we're running in a Capacitor WebView
     const checkCapacitor = () => {
       // Check for Capacitor global
-      if (typeof window !== "undefined" && (window as any).Capacitor) {
+      const hasCapacitor = typeof window !== "undefined" && (window as any).Capacitor
+      console.log("[MobileAuth] Capacitor detected:", hasCapacitor)
+
+      if (hasCapacitor) {
+        const platform = (window as any).Capacitor?.getPlatform?.() || "unknown"
+        console.log("[MobileAuth] Platform:", platform)
         setIsCapacitor(true)
         setupDeepLinkHandler()
       }
@@ -77,20 +82,23 @@ export function MobileAuthProvider({ children }: MobileAuthProviderProps) {
   }, [])
 
   const openMobileOAuth = useCallback(async () => {
+    console.log("[MobileAuth] Opening OAuth in system browser")
     try {
       const { Browser } = await import("@capacitor/browser")
 
-      const callbackUrl = encodeURIComponent("/api/auth/mobile/callback")
-      const oauthUrl = `${window.location.origin}/api/auth/signin/google?callbackUrl=${callbackUrl}`
+      // Use the mobile OAuth initiation endpoint which handles the redirect properly
+      const oauthUrl = `${window.location.origin}/api/auth/mobile/initiate`
+      console.log("[MobileAuth] OAuth URL:", oauthUrl)
 
       await Browser.open({
         url: oauthUrl,
         presentationStyle: "popover",
       })
+      console.log("[MobileAuth] Browser opened successfully")
     } catch (e) {
-      console.error("Error opening OAuth browser:", e)
+      console.error("[MobileAuth] Error opening OAuth browser:", e)
       // Fallback to regular navigation
-      window.location.href = "/api/auth/signin/google"
+      window.location.href = "/api/auth/mobile/initiate"
     }
   }, [])
 

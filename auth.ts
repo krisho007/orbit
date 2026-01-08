@@ -17,6 +17,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           prompt: "consent",
         },
       },
+      // Use state-based checks instead of PKCE for WebView/Capacitor compatibility
+      // PKCE cookies don't survive the OAuth redirect in WebViews
+      checks: ["state"],
     }),
   ],
   callbacks: {

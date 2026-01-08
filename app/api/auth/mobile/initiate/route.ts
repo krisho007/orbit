@@ -2,16 +2,18 @@
  * Mobile OAuth Initiation
  *
  * This endpoint initiates the Google OAuth flow for mobile apps.
- * It uses server-side signIn() to properly start the OAuth flow,
- * which then redirects to Google and back to our mobile callback.
+ * It redirects to the Auth.js CSRF-protected signin endpoint.
  */
 
-import { signIn } from "@/auth"
+import { NextResponse } from "next/server"
 
-export async function GET() {
-  // Initiate OAuth with the mobile callback as the redirect target
-  // This properly starts the OAuth flow server-side
-  return signIn("google", {
-    redirectTo: "/api/auth/mobile/callback",
-  })
+export async function GET(request: Request) {
+  const baseUrl = new URL(request.url).origin
+
+  // Redirect to the signin page with provider and callback
+  // The signin page handles CSRF protection
+  const callbackUrl = encodeURIComponent(`${baseUrl}/api/auth/mobile/callback`)
+  const signinUrl = `${baseUrl}/api/auth/signin?callbackUrl=${callbackUrl}`
+
+  return NextResponse.redirect(signinUrl)
 }

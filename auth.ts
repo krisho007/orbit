@@ -17,7 +17,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           prompt: "consent",
         },
       },
-      // PKCE enabled for security - mobile uses system browser which preserves cookies
+      // Disable PKCE for WebView compatibility until Capacitor detection is fixed
+      checks: [],
     }),
   ],
   callbacks: {

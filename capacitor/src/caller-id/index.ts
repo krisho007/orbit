@@ -32,8 +32,13 @@ interface OverlayPlugin {
     displayName: string
     company?: string
     imageUrl?: string
+    phoneNumber?: string
   }): Promise<void>
   hide(): Promise<void>
+  addListener(
+    eventName: "overlayTapped",
+    callback: (data: { phoneNumber: string }) => void
+  ): Promise<{ remove: () => void }>
 }
 
 // Register native plugins
@@ -43,6 +48,8 @@ const Overlay = registerPlugin<OverlayPlugin>("Overlay")
 export class CallerIdManager {
   private isListening = false
   private listenerRemove: (() => void) | null = null
+  private overlayListenerRemove: (() => void) | null = null
+  private currentPhoneNumber: string | null = null
 
   /**
    * Initialize the caller ID manager
@@ -63,9 +70,38 @@ export class CallerIdManager {
       return false
     }
 
+    // Listen for overlay taps
+    await this.setupOverlayTapListener()
+
     // Start listening for calls
     await this.startListening()
     return true
+  }
+
+  /**
+   * Set up listener for overlay tap events
+   */
+  private async setupOverlayTapListener(): Promise<void> {
+    try {
+      const listener = await Overlay.addListener("overlayTapped", (data) => {
+        console.log("Overlay tapped, phone:", data.phoneNumber)
+        this.navigateToCallPage(data.phoneNumber)
+      })
+      this.overlayListenerRemove = listener.remove
+    } catch (error) {
+      console.error("Error setting up overlay tap listener:", error)
+    }
+  }
+
+  /**
+   * Navigate to the call page with full contact details
+   */
+  private navigateToCallPage(phoneNumber: string): void {
+    if (!phoneNumber) return
+
+    // Navigate the WebView to the call page
+    const callPageUrl = `/call?phone=${encodeURIComponent(phoneNumber)}`
+    window.location.href = callPageUrl
   }
 
   /**
@@ -163,12 +199,15 @@ export class CallerIdManager {
    */
   private async handleIncomingCall(phoneNumber: string): Promise<void> {
     try {
+      // Store current phone number for navigation
+      this.currentPhoneNumber = phoneNumber
+
       // Look up the contact
       const result = await apiClient.lookupPhone(phoneNumber)
 
       if (result.found && result.contact) {
         // Show the overlay with contact info
-        await this.showOverlay(result.contact)
+        await this.showOverlay(result.contact, phoneNumber)
       }
     } catch (error) {
       console.error("Error handling incoming call:", error)
@@ -178,12 +217,16 @@ export class CallerIdManager {
   /**
    * Show the caller ID overlay
    */
-  private async showOverlay(contact: CallerIdContact): Promise<void> {
+  private async showOverlay(
+    contact: CallerIdContact,
+    phoneNumber: string
+  ): Promise<void> {
     try {
       await Overlay.show({
         displayName: contact.displayName,
         company: contact.company || undefined,
         imageUrl: contact.imageUrl || undefined,
+        phoneNumber: phoneNumber,
       })
 
       // Auto-hide after 15 seconds if call not answered
@@ -212,6 +255,11 @@ export class CallerIdManager {
   async destroy(): Promise<void> {
     await this.stopListening()
     await this.hideOverlay()
+    if (this.overlayListenerRemove) {
+      this.overlayListenerRemove()
+      this.overlayListenerRemove = null
+    }
+    this.currentPhoneNumber = null
   }
 }
 

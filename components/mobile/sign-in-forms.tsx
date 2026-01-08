@@ -2,15 +2,35 @@
 
 import { useMobileAuth } from "./mobile-auth-provider"
 import { FiArrowRight } from "react-icons/fi"
+import { useEffect, useState } from "react"
 
 interface SignInFormProps {
   signInAction: () => Promise<void>
 }
 
-export function NavSignInButton({ signInAction }: SignInFormProps) {
+// Check if we're in any kind of mobile WebView or Capacitor
+function useIsMobileWebView() {
+  const [isMobile, setIsMobile] = useState(false)
   const { isCapacitor, openMobileOAuth } = useMobileAuth()
 
-  if (isCapacitor) {
+  useEffect(() => {
+    // Check for Capacitor or Android WebView
+    const hasCapacitor = !!(window as any).Capacitor
+    const isAndroidWebView = /wv/.test(navigator.userAgent) || /Android.*AppleWebKit/.test(navigator.userAgent)
+    const isIOSWebView = /(iPhone|iPod|iPad).*AppleWebKit(?!.*Safari)/i.test(navigator.userAgent)
+
+    console.log("[SignIn] Capacitor:", hasCapacitor, "Android WebView:", isAndroidWebView, "iOS WebView:", isIOSWebView)
+
+    setIsMobile(hasCapacitor || isAndroidWebView || isIOSWebView)
+  }, [])
+
+  return { isMobile: isMobile || isCapacitor, openMobileOAuth }
+}
+
+export function NavSignInButton({ signInAction }: SignInFormProps) {
+  const { isMobile, openMobileOAuth } = useIsMobileWebView()
+
+  if (isMobile) {
     return (
       <button
         type="button"
@@ -35,9 +55,9 @@ export function NavSignInButton({ signInAction }: SignInFormProps) {
 }
 
 export function HeroSignInButton({ signInAction }: SignInFormProps) {
-  const { isCapacitor, openMobileOAuth } = useMobileAuth()
+  const { isMobile, openMobileOAuth } = useIsMobileWebView()
 
-  if (isCapacitor) {
+  if (isMobile) {
     return (
       <button
         type="button"
@@ -64,9 +84,9 @@ export function HeroSignInButton({ signInAction }: SignInFormProps) {
 }
 
 export function FreeGetStartedButton({ signInAction }: SignInFormProps) {
-  const { isCapacitor, openMobileOAuth } = useMobileAuth()
+  const { isMobile, openMobileOAuth } = useIsMobileWebView()
 
-  if (isCapacitor) {
+  if (isMobile) {
     return (
       <button
         type="button"
@@ -91,9 +111,9 @@ export function FreeGetStartedButton({ signInAction }: SignInFormProps) {
 }
 
 export function ProGetStartedButton({ signInAction }: SignInFormProps) {
-  const { isCapacitor, openMobileOAuth } = useMobileAuth()
+  const { isMobile, openMobileOAuth } = useIsMobileWebView()
 
-  if (isCapacitor) {
+  if (isMobile) {
     return (
       <button
         type="button"

@@ -3,7 +3,12 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import Link from "next/link"
 import { FiPlus, FiSearch, FiMail, FiPhone, FiUser, FiBriefcase, FiMessageSquare, FiCalendar, FiDownload, FiLoader, FiChevronDown, FiChevronUp } from "react-icons/fi"
+import { FaWhatsapp } from "react-icons/fa"
 import { GoogleImportDialog } from "./google-import-dialog"
+
+function sanitizePhoneNumber(phone: string): string {
+  return phone.replace(/\D/g, '')
+}
 
 type Contact = {
   id: string
@@ -164,19 +169,19 @@ export function ContactsList({ initialContacts, initialCursor, stats }: Contacts
           <div className="flex gap-2 sm:gap-3">
             <button
               onClick={() => setIsImportDialogOpen(true)}
-              className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm hover:shadow-md font-medium text-sm sm:text-base"
+              className="inline-flex items-center justify-center gap-1.5 sm:gap-2 p-2.5 sm:px-5 sm:py-2.5 min-w-[44px] min-h-[44px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm hover:shadow-md font-medium text-sm sm:text-base"
+              aria-label="Import from Google"
             >
-              <FiDownload className="h-4 w-4 sm:h-5 sm:w-5" />
+              <FiDownload className="h-5 w-5" />
               <span className="hidden sm:inline">Import from Google</span>
-              <span className="sm:hidden">Import</span>
             </button>
             <Link
               href="/contacts/new"
-              className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all shadow-sm hover:shadow-md font-medium text-sm sm:text-base"
+              className="inline-flex items-center justify-center gap-1.5 sm:gap-2 p-2.5 sm:px-5 sm:py-2.5 min-w-[44px] min-h-[44px] bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all shadow-sm hover:shadow-md font-medium text-sm sm:text-base"
+              aria-label="Add Contact"
             >
-              <FiPlus className="h-4 w-4 sm:h-5 sm:w-5" />
+              <FiPlus className="h-5 w-5" />
               <span className="hidden sm:inline">Add Contact</span>
-              <span className="sm:hidden">Add</span>
             </Link>
           </div>
         </div>
@@ -191,7 +196,7 @@ export function ContactsList({ initialContacts, initialCursor, stats }: Contacts
             placeholder="Search contacts..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent shadow-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 text-sm sm:text-base"
+            className="w-full pl-10 sm:pl-12 pr-4 py-3 min-h-[44px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent shadow-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 text-sm sm:text-base"
           />
           {isSearching && (
             <FiLoader className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
@@ -297,6 +302,30 @@ export function ContactsList({ initialContacts, initialCursor, stats }: Contacts
                       )}
                     </Link>
 
+                    {/* Quick Action Buttons - Call & WhatsApp */}
+                    {contact.primaryPhone && (
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <a
+                          href={`tel:${contact.primaryPhone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center justify-center w-10 h-10 sm:w-9 sm:h-9 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors shadow-sm"
+                          aria-label={`Call ${contact.displayName}`}
+                        >
+                          <FiPhone className="h-4 w-4" />
+                        </a>
+                        <a
+                          href={`https://wa.me/${sanitizePhoneNumber(contact.primaryPhone)}`}
+                          onClick={(e) => e.stopPropagation()}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center w-10 h-10 sm:w-9 sm:h-9 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors shadow-sm"
+                          aria-label={`WhatsApp ${contact.displayName}`}
+                        >
+                          <FaWhatsapp className="h-4 w-4" />
+                        </a>
+                      </div>
+                    )}
+
                     {/* Quick Stats */}
                     <div className="hidden sm:flex items-center gap-3 text-xs text-gray-400">
                       {contact._count.conversationParticipants > 0 && (
@@ -337,7 +366,7 @@ export function ContactsList({ initialContacts, initialCursor, stats }: Contacts
                     {/* Expand Button */}
                     <button
                       onClick={(e) => toggleExpanded(contact.id, e)}
-                      className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                      className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                       aria-label={isExpanded ? "Collapse details" : "Expand details"}
                     >
                       {isExpanded ? (

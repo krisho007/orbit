@@ -131,3 +131,20 @@ body {
   border-radius: 1rem;
   z-index: -1;
 }
+
+/* Safe area insets for notched/cutout phones */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.fixed-safe-top {
+  top: env(safe-area-inset-top, 0px);
+}
+
+.fixed-safe-bottom {
+  bottom: env(safe-area-inset-bottom, 0px);
+}

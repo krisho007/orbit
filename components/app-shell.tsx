@@ -85,8 +85,8 @@ export function AppShell({ session, children }: AppShellProps) {
       </aside>
 
       {/* Mobile Top Bar */}
-      <div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-10">
-        <div className="flex items-center justify-between px-4 h-14">
+      <div className="md:hidden fixed left-0 right-0 bg-white border-b border-gray-200 z-10 fixed-safe-top">
+        <div className="flex items-center justify-between px-4 h-14 safe-area-top">
           <h1 className="text-xl font-bold text-indigo-600">Orbit</h1>
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-700">{session.user?.name}</span>
@@ -117,8 +117,8 @@ export function AppShell({ session, children }: AppShellProps) {
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10">
-        <div className="grid grid-cols-5 h-16">
+      <nav className="md:hidden fixed left-0 right-0 bg-white border-t border-gray-200 z-10 fixed-safe-bottom">
+        <div className="grid grid-cols-5 h-16 safe-area-bottom">
           {navItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname.startsWith(item.href)
@@ -128,7 +128,7 @@ export function AppShell({ session, children }: AppShellProps) {
                 key={item.href}
                 href={item.href}
                 className={`
-                  flex flex-col items-center justify-center space-y-1
+                  flex flex-col items-center justify-center space-y-1 min-h-[44px] min-w-[44px]
                   ${isActive ? 'text-indigo-600' : 'text-gray-500'}
                 `}
               >

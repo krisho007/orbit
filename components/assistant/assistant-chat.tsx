@@ -27,7 +27,7 @@ export function AssistantChat() {
   const welcomeMessage: UIMessage = {
     id: "welcome",
     role: "assistant",
-    parts: [{ type: "text", text: "Hi! I'm your Orbit assistant. I can help you log conversations, create events, and search your data. Try saying something like 'I had a call with John yesterday' or 'What meetings do I have with Sarah?'" }]
+    parts: [{ type: "text", text: "Hi! I can help you log conversations, create events, and search contacts. Try: \"I called John yesterday\" or \"Find meetings with Sarah\"" }]
   }
 
   const { messages, sendMessage, status, stop } = useChat({
@@ -50,10 +50,10 @@ export function AssistantChat() {
   return (
     <div className="flex-1 flex flex-col bg-white rounded-lg shadow overflow-hidden">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-3 sm:space-y-4">
         {messages.map((message) => (
           <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] rounded-lg p-4 ${
+            <div className={`max-w-[85%] sm:max-w-[80%] rounded-lg p-3 sm:p-4 ${
               message.role === 'user' 
                 ? 'bg-indigo-600 text-white' 
                 : 'bg-gray-100 text-gray-900'
@@ -205,7 +205,7 @@ export function AssistantChat() {
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="border-t border-gray-200 p-4">
+      <form onSubmit={handleSubmit} className="border-t border-gray-200 p-3 sm:p-4">
         <div className="flex gap-2">
           <input
             type="text"
@@ -213,13 +213,14 @@ export function AssistantChat() {
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type a message..."
             disabled={isLoading}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 bg-white text-gray-900 placeholder-gray-500"
+            className="flex-1 px-3 sm:px-4 py-3 min-h-[48px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 bg-white text-gray-900 placeholder-gray-500 text-base"
           />
           {isLoading ? (
             <button
               type="button"
               onClick={stop}
-              className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              className="flex items-center justify-center w-12 h-12 min-w-[48px] bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex-shrink-0"
+              aria-label="Stop"
             >
               <FiSquare className="h-5 w-5" />
             </button>
@@ -227,7 +228,8 @@ export function AssistantChat() {
             <button
               type="submit"
               disabled={!input.trim()}
-              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center justify-center w-12 h-12 min-w-[48px] bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+              aria-label="Send"
             >
               <FiSend className="h-5 w-5" />
             </button>

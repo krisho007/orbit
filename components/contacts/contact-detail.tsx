@@ -4,13 +4,13 @@ import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
-import { 
-  FiEdit, 
-  FiTrash2, 
-  FiMail, 
-  FiPhone, 
-  FiBriefcase, 
-  FiMapPin, 
+import {
+  FiEdit,
+  FiTrash2,
+  FiMail,
+  FiPhone,
+  FiBriefcase,
+  FiMapPin,
   FiCalendar,
   FiFileText,
   FiLink,
@@ -19,6 +19,11 @@ import {
   FiUsers,
   FiPlus
 } from "react-icons/fi"
+import { FaWhatsapp } from "react-icons/fa"
+
+function sanitizePhoneNumber(phone: string): string {
+  return phone.replace(/\D/g, '')
+}
 import { deleteContact, addRelationship, deleteRelationship } from "@/app/(app)/contacts/actions"
 import { AddRelationshipDialog } from "@/components/contacts/add-relationship-dialog"
 import type { Contact, ContactTag, Tag, ContactImage, SocialLink, Relationship, ConversationParticipant, EventParticipant, RelationshipType, Gender } from "@prisma/client"
@@ -283,6 +288,29 @@ export function ContactDetail({ contact, allContacts, relationshipTypes }: Conta
           
           {/* Actions */}
           <div className="flex gap-2 sm:gap-3">
+            {/* Call & WhatsApp - shown when phone exists */}
+            {contact.primaryPhone && (
+              <>
+                <a
+                  href={`tel:${contact.primaryPhone}`}
+                  className="flex items-center justify-center gap-2 p-2.5 sm:px-5 sm:py-2.5 min-w-[44px] min-h-[44px] bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all shadow-md font-medium"
+                  aria-label={`Call ${contact.displayName}`}
+                >
+                  <FiPhone className="h-5 w-5 sm:h-4 sm:w-4" />
+                  <span className="hidden sm:inline">Call</span>
+                </a>
+                <a
+                  href={`https://wa.me/${sanitizePhoneNumber(contact.primaryPhone)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 p-2.5 sm:px-5 sm:py-2.5 min-w-[44px] min-h-[44px] bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all shadow-md font-medium"
+                  aria-label={`WhatsApp ${contact.displayName}`}
+                >
+                  <FaWhatsapp className="h-5 w-5 sm:h-4 sm:w-4" />
+                  <span className="hidden sm:inline">WhatsApp</span>
+                </a>
+              </>
+            )}
             <Link
               href={`/contacts/${contact.id}/edit`}
               className="flex items-center justify-center gap-2 p-2.5 sm:px-5 sm:py-2.5 min-w-[44px] min-h-[44px] bg-white text-purple-600 rounded-lg hover:bg-gray-50 transition-all shadow-md font-medium"

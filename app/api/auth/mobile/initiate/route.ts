@@ -8,7 +8,13 @@
 import { NextResponse } from "next/server"
 
 export async function GET(request: Request) {
-  const baseUrl = new URL(request.url).origin
+  let baseUrl = new URL(request.url).origin
+
+  // For Android emulator development: 10.0.2.2 maps to host's localhost
+  // But the OAuth browser runs on the host, so use localhost for callbacks
+  if (baseUrl.includes("10.0.2.2")) {
+    baseUrl = baseUrl.replace("10.0.2.2", "localhost")
+  }
 
   // Redirect to the signin page with provider and callback
   // The signin page handles CSRF protection

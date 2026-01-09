@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { FiTrash2, FiSmartphone, FiCheck, FiAlertCircle } from "react-icons/fi"
+import { callerIdManager } from "@/lib/caller-id/manager"
 
 type MobileToken = {
   id: string
@@ -96,6 +97,15 @@ export function MobileTokensManager({ tokens: initialTokens }: MobileTokensManag
       if (!stored) {
         throw new Error("Failed to save token to device")
       }
+
+      // Request permissions and initialize caller ID
+      const hasPermissions = await callerIdManager.requestPermissions()
+      if (!hasPermissions) {
+        console.log("Permissions not granted - caller ID setup incomplete")
+      }
+
+      // Initialize the caller ID manager to start listening
+      await callerIdManager.initialize()
 
       setIsEnabled(true)
       setSuccess(true)

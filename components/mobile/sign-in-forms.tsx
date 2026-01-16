@@ -16,7 +16,8 @@ function useIsMobileWebView() {
   useEffect(() => {
     // Check for Capacitor or Android WebView
     const hasCapacitor = !!(window as any).Capacitor
-    const isAndroidWebView = /wv/.test(navigator.userAgent) || /Android.*AppleWebKit/.test(navigator.userAgent)
+    // More specific WebView detection - "; wv)" is the standard Android WebView marker
+    const isAndroidWebView = /; wv\)/.test(navigator.userAgent)
     const isIOSWebView = /(iPhone|iPod|iPad).*AppleWebKit(?!.*Safari)/i.test(navigator.userAgent)
 
     console.log("[SignIn] Capacitor:", hasCapacitor, "Android WebView:", isAndroidWebView, "iOS WebView:", isIOSWebView)

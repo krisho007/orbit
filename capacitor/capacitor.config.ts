@@ -8,7 +8,7 @@ const config: CapacitorConfig = {
   webDir: "www",
   server: {
     // Production Orbit URL
-    url: "https://orbit-xi-five.vercel.app",
+    url: "https://myorbit360.com",
     // url: "http://10.0.2.2:3000",  // 10.0.2.2 = host machine from Android emulator
     cleartext: true,
     // Allow navigation to external URLs for OAuth

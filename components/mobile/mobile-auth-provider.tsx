@@ -78,7 +78,7 @@ export function MobileAuthProvider({ children }: MobileAuthProviderProps) {
       }
     }
 
-    // Detect if we're running in a Capacitor WebView
+    // Detect if we're running in a Capacitor WebView (not plain web)
     const checkCapacitor = () => {
       // Check for Capacitor global
       const hasCapacitor = typeof window !== "undefined" && (window as any).Capacitor
@@ -87,9 +87,13 @@ export function MobileAuthProvider({ children }: MobileAuthProviderProps) {
       if (hasCapacitor) {
         const platform = (window as any).Capacitor?.getPlatform?.() || "unknown"
         console.log("[MobileAuth] Platform:", platform)
-        setIsCapacitor(true)
-        setupDeepLinkHandler()
-        initializeCallerId()
+        const isNative = platform !== "web"
+        setIsCapacitor(isNative)
+
+        if (isNative) {
+          setupDeepLinkHandler()
+          initializeCallerId()
+        }
       }
     }
 
@@ -111,7 +115,7 @@ export function MobileAuthProvider({ children }: MobileAuthProviderProps) {
       if (origin.includes("10.0.2.2")) {
         origin = origin.replace("10.0.2.2", "localhost")
       }
-      const oauthUrl = `${origin}/api/auth/mobile/initiate`
+      const oauthUrl = `${origin}/api/auth/mobile/initiate?mobile=1`
       console.log("[MobileAuth] OAuth URL:", oauthUrl)
 
       await Browser.open({
@@ -122,7 +126,7 @@ export function MobileAuthProvider({ children }: MobileAuthProviderProps) {
     } catch (e) {
       console.error("[MobileAuth] Error opening OAuth browser:", e)
       // Fallback to regular navigation
-      window.location.href = "/api/auth/mobile/initiate"
+      window.location.href = "/api/auth/mobile/initiate?mobile=1"
     }
   }, [])
 

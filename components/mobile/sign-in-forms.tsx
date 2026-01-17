@@ -2,30 +2,23 @@
 
 import { useMobileAuth } from "./mobile-auth-provider"
 import { FiArrowRight } from "react-icons/fi"
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 
 interface SignInFormProps {
   signInAction: () => Promise<void>
 }
 
-// Check if we're in any kind of mobile WebView or Capacitor
+// Check if we're running in Capacitor (true mobile app environment)
 function useIsMobileWebView() {
-  const [isMobile, setIsMobile] = useState(false)
   const { isCapacitor, openMobileOAuth } = useMobileAuth()
 
   useEffect(() => {
-    // Check for Capacitor or Android WebView
+    // Restrict mobile OAuth flow to actual Capacitor environments
     const hasCapacitor = !!(window as any).Capacitor
-    // More specific WebView detection - "; wv)" is the standard Android WebView marker
-    const isAndroidWebView = /; wv\)/.test(navigator.userAgent)
-    const isIOSWebView = /(iPhone|iPod|iPad).*AppleWebKit(?!.*Safari)/i.test(navigator.userAgent)
-
-    console.log("[SignIn] Capacitor:", hasCapacitor, "Android WebView:", isAndroidWebView, "iOS WebView:", isIOSWebView)
-
-    setIsMobile(hasCapacitor || isAndroidWebView || isIOSWebView)
+    console.log("[SignIn] Capacitor:", hasCapacitor)
   }, [])
 
-  return { isMobile: isMobile || isCapacitor, openMobileOAuth }
+  return { isMobile: isCapacitor, openMobileOAuth }
 }
 
 export function NavSignInButton({ signInAction }: SignInFormProps) {

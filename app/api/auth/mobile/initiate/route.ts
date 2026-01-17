@@ -8,12 +8,20 @@
 import { NextResponse } from "next/server"
 
 export async function GET(request: Request) {
-  let baseUrl = new URL(request.url).origin
+  const requestUrl = new URL(request.url)
+  let baseUrl = requestUrl.origin
 
   // For Android emulator development: 10.0.2.2 maps to host's localhost
   // But the OAuth browser runs on the host, so use localhost for callbacks
   if (baseUrl.includes("10.0.2.2")) {
     baseUrl = baseUrl.replace("10.0.2.2", "localhost")
+  }
+
+  const isMobile = requestUrl.searchParams.get("mobile") === "1"
+  if (!isMobile) {
+    const webCallbackUrl = encodeURIComponent(`${baseUrl}/contacts`)
+    const signinUrl = `${baseUrl}/api/auth/signin?callbackUrl=${webCallbackUrl}`
+    return NextResponse.redirect(signinUrl)
   }
 
   // Redirect to the signin page with provider and callback

@@ -181,9 +181,7 @@ export async function refreshImageSignedUrl(publicId: string): Promise<string | 
     if (error || !data) {
       console.error(`Failed to refresh signed URL: ${error?.message}`)
       return null
-    }
-
-    return data.signedUrl
+    }    return data.signedUrl
   } catch (error) {
     console.error('Error refreshing signed URL:', error)
     return null

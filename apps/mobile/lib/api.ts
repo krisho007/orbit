@@ -1,6 +1,11 @@
 import { supabase } from "./supabase";
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3001";
+// In production (fly.io), API and Web are same origin, so use empty string
+// In development, point to local API server
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 
+  (typeof window !== "undefined" && window.location?.hostname !== "localhost" 
+    ? "" // Same origin in production
+    : "http://localhost:3001");
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";

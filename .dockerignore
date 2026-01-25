@@ -1,0 +1,25 @@
+# Root level dockerignore
+node_modules
+.git
+*.md
+.env
+.env.*
+*.log
+.DS_Store
+
+# Ignore old Next.js app during Docker build
+app/
+components/
+lib/
+prisma/
+public/
+auth.ts
+middleware.ts
+next.config.ts
+next-env.d.ts
+postcss.config.mjs
+tsconfig.json
+capacitor/
+
+# Keep apps folder
+!apps/

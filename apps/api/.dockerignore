@@ -1,0 +1,9 @@
+node_modules
+.git
+.gitignore
+*.md
+.env
+.env.*
+drizzle
+*.log
+.DS_Store

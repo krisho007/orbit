@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { HTTPException } from "hono/http-exception";
+import { serveStatic } from "hono/bun";
 
 // Import routes
 import contactsRouter from "./routes/contacts";
@@ -61,8 +62,20 @@ app.onError((err, c) => {
   return c.json({ error: "Internal server error" }, 500);
 });
 
-// 404 handler
+// Serve Expo Web static files (after API routes)
+// This serves the web UI for all non-API routes
+app.use("*", serveStatic({ root: "./public" }));
+
+// SPA fallback - serve index.html for client-side routing
+app.use("*", serveStatic({ root: "./public", path: "index.html" }));
+
+// 404 handler (only for API routes that don't exist)
 app.notFound((c) => {
+  // If it's an API request, return JSON error
+  if (c.req.path.startsWith("/api/")) {
+    return c.json({ error: "Not found" }, 404);
+  }
+  // For other routes, the static file handler above should catch them
   return c.json({ error: "Not found" }, 404);
 });
 

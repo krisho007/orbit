@@ -174,6 +174,17 @@ export const tagsApi = {
   delete: (id: string) => api.delete(`/api/tags/${id}`),
 };
 
+// Assistant
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export const assistantApi = {
+  chat: (messages: ChatMessage[]) =>
+    api.post<ChatMessage>("/api/assistant", { messages }),
+};
+
 // ============================================
 // Types
 // ============================================

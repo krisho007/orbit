@@ -35,6 +35,8 @@ app.get("/", async (c) => {
   const search = c.req.query("search") || "";
   const limit = parseInt(c.req.query("limit") || String(PAGE_SIZE));
 
+  console.log("[Contacts] Fetching for userId:", userId);
+
   try {
     let contactsList;
 

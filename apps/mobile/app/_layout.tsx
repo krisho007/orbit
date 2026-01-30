@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider, useAuth } from "../lib/auth";
 import { View, ActivityIndicator } from "react-native";
+import { GluestackUIProvider } from "../components/ui/gluestack-ui-provider";
 
 function RootLayoutNav() {
   const { user, isLoading } = useAuth();
@@ -27,7 +28,7 @@ function RootLayoutNav() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
+      <View className="flex-1 items-center justify-center bg-background-0">
         <ActivityIndicator size="large" color="#4F46E5" />
       </View>
     );
@@ -39,10 +40,12 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthProvider>
-        <StatusBar style="auto" />
-        <RootLayoutNav />
-      </AuthProvider>
+      <GluestackUIProvider mode="system">
+        <AuthProvider>
+          <StatusBar style="auto" />
+          <RootLayoutNav />
+        </AuthProvider>
+      </GluestackUIProvider>
     </GestureHandlerRootView>
   );
 }

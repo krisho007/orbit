@@ -2,6 +2,8 @@
 import { createMiddleware } from "hono/factory";
 import { createClient, User } from "@supabase/supabase-js";
 import { HTTPException } from "hono/http-exception";
+import { db, users } from "../db";
+import { eq } from "drizzle-orm";
 
 // Extend Hono context with user
 declare module "hono" {
@@ -21,6 +23,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 /**
  * Auth middleware that verifies Supabase JWT tokens
  * Extracts user from the Authorization header and sets it in context
+ * 
+ * Important: This middleware resolves the user by email to support
+ * both Supabase Auth (UUIDs) and NextAuth (CUIDs) user IDs.
  */
 export const authMiddleware = createMiddleware(async (c, next) => {
   const authHeader = c.req.header("Authorization");
@@ -50,13 +55,43 @@ export const authMiddleware = createMiddleware(async (c, next) => {
       throw new HTTPException(401, { message: "Invalid or expired token" });
     }
 
-    if (!user) {
+    if (!user || !user.email) {
       throw new HTTPException(401, { message: "User not found" });
+    }
+
+    // Look up the user by email in our database to get the correct userId
+    // This supports both Supabase Auth (UUID) and NextAuth (CUID) users
+    let userId = user.id;
+    
+    const [dbUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, user.email))
+      .limit(1);
+
+    if (dbUser) {
+      // Use the existing user's ID (CUID from NextAuth)
+      userId = dbUser.id;
+    } else {
+      // Create a new user record with Supabase's UUID
+      const [newUser] = await db
+        .insert(users)
+        .values({
+          id: user.id,
+          email: user.email,
+          name: user.user_metadata?.full_name || user.user_metadata?.name || null,
+          image: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
+        })
+        .returning({ id: users.id });
+      
+      if (newUser) {
+        userId = newUser.id;
+      }
     }
 
     // Set user in context for route handlers
     c.set("user", user);
-    c.set("userId", user.id);
+    c.set("userId", userId);
 
     await next();
   } catch (err) {

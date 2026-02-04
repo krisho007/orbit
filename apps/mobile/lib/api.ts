@@ -1,11 +1,9 @@
 import { supabase } from "./supabase";
 
-// In production (fly.io), API and Web are same origin, so use empty string
-// In development, point to local API server
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 
-  (typeof window !== "undefined" && window.location?.hostname !== "localhost" 
-    ? "" // Same origin in production
-    : "http://localhost:3001");
+// Prefer explicit env for native builds; on web use relative URLs by default
+const API_URL =
+  process.env.EXPO_PUBLIC_API_URL ||
+  (typeof window !== "undefined" ? "" : "http://localhost:3001");
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -40,7 +38,10 @@ class ApiClient {
     path: string,
     params?: Record<string, string | number | boolean | undefined>
   ): string {
-    const url = new URL(path, this.baseUrl);
+    const hasBaseUrl = this.baseUrl && this.baseUrl.length > 0;
+    const url = hasBaseUrl
+      ? new URL(path, this.baseUrl)
+      : new URL(path, window.location.origin);
 
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
@@ -50,7 +51,7 @@ class ApiClient {
       });
     }
 
-    return url.toString();
+    return hasBaseUrl ? url.toString() : url.pathname + url.search;
   }
 
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {

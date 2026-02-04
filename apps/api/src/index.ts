@@ -30,17 +30,18 @@ app.use(
 );
 
 // Health check endpoint
-app.get("/", (c) => {
+app.get("/health", (c) => {
+  return c.json({ status: "ok" });
+});
+
+// API info endpoint (kept off "/" so web UI can serve there)
+app.get("/api", (c) => {
   return c.json({
     name: "Orbit API",
     version: "1.0.0",
     status: "healthy",
     timestamp: new Date().toISOString(),
   });
-});
-
-app.get("/health", (c) => {
-  return c.json({ status: "ok" });
 });
 
 // API Routes
@@ -72,7 +73,7 @@ app.use("*", serveStatic({ root: "./public", path: "index.html" }));
 // 404 handler (only for API routes that don't exist)
 app.notFound((c) => {
   // If it's an API request, return JSON error
-  if (c.req.path.startsWith("/api/")) {
+  if (c.req.path === "/api" || c.req.path.startsWith("/api/")) {
     return c.json({ error: "Not found" }, 404);
   }
   // For other routes, the static file handler above should catch them

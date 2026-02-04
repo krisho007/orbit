@@ -3,6 +3,7 @@
     "name": "Orbit",
     "slug": "orbit",
     "version": "1.0.0",
+    "owner": "kkammaje",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -23,7 +24,9 @@
         "backgroundColor": "#4F46E5"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.orbit.app"
+      "package": "com.orbit.app",
+      "versionCode": 1,
+      "permissions": []
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -35,6 +38,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "e9e8244c-7f55-4a44-b3bc-ff1e48da1b74"
+      },
+      "router": {}
     }
   }
 }

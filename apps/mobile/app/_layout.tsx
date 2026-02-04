@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../lib/auth";
 import { View, ActivityIndicator } from "react-native";
 import { GluestackUIProvider } from "../components/ui/gluestack-ui-provider";
@@ -39,13 +40,15 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <GluestackUIProvider mode="system">
-        <AuthProvider>
-          <StatusBar style="auto" />
-          <RootLayoutNav />
-        </AuthProvider>
-      </GluestackUIProvider>
-    </GestureHandlerRootView>
+    <SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <GluestackUIProvider mode="system">
+          <AuthProvider>
+            <StatusBar style="auto" />
+            <RootLayoutNav />
+          </AuthProvider>
+        </GluestackUIProvider>
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }

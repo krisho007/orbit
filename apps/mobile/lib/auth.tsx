@@ -1,12 +1,33 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
-import { Platform } from "react-native";
+import { Platform, Alert } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
+import * as AuthSession from "expo-auth-session";
+import Constants from "expo-constants";
 import { supabase } from "./supabase";
 
-// Required for expo-web-browser
+// Required for expo-web-browser to handle redirect properly
 WebBrowser.maybeCompleteAuthSession();
+
+// Check if running in Expo Go
+const isExpoGo = Constants.appOwnership === "expo";
+
+// Get the correct redirect URL based on environment
+const getRedirectUrl = () => {
+  // For development builds and production, use the app scheme
+  // IMPORTANT: Do not use preferLocalhost for OAuth - it breaks the redirect
+  const redirectUrl = AuthSession.makeRedirectUri({
+    scheme: "orbit",
+    path: "auth/callback",
+  });
+  console.log("[Auth] Generated redirect URL:", redirectUrl);
+  console.log("[Auth] Running in Expo Go:", isExpoGo);
+  return redirectUrl;
+};
+
+// The redirect URL that will be used - computed once
+const redirectTo = getRedirectUrl();
 
 type AuthContextType = {
   user: User | null;
@@ -36,6 +57,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
+    const handleDeepLink = async (url: string) => {
+      console.log("[Auth] Handling deep link:", url);
+      try {
+        const parsedUrl = new URL(url);
+        const code = parsedUrl.searchParams.get("code");
+        
+        if (code) {
+          console.log("[Auth] Found code in deep link, exchanging...");
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          
+          if (error) {
+            console.error("[Auth] Deep link code exchange failed:", error.message);
+          } else {
+            console.log("[Auth] Deep link code exchange successful:", data.session?.user?.email);
+          }
+        }
+      } catch (err) {
+        console.error("[Auth] Error handling deep link:", err);
+      }
+    };
+
     const initSession = async () => {
       try {
         // On web, manually handle PKCE code exchange since detectSessionInUrl is disabled
@@ -64,6 +106,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Clean up URL
             window.history.replaceState({}, document.title, window.location.pathname);
           }
+        } else {
+          // On native, check if we were opened with a URL containing a code
+          const initialUrl = await Linking.getInitialURL();
+          if (initialUrl) {
+            await handleDeepLink(initialUrl);
+          }
         }
 
         // Get the current session
@@ -83,6 +131,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initSession();
 
+    // Listen for deep links on native
+    let linkingSubscription: { remove: () => void } | null = null;
+    if (Platform.OS !== "web") {
+      linkingSubscription = Linking.addEventListener("url", (event) => {
+        handleDeepLink(event.url);
+      });
+    }
+
     // Listen for auth changes
     const {
       data: { subscription },
@@ -96,6 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       isMounted = false;
       subscription.unsubscribe();
+      linkingSubscription?.remove();
     };
   }, []);
 
@@ -122,12 +179,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (error) throw error;
       } else {
         // For native (iOS/Android), use expo-web-browser
-        const redirectUrl = Linking.createURL("/(auth)/callback");
+        // IMPORTANT: Expo Go does NOT support OAuth redirects!
+        // You must use a development build for OAuth to work.
+        
+        if (isExpoGo) {
+          Alert.alert(
+            "Development Build Required",
+            "OAuth sign-in doesn't work in Expo Go. Please run:\n\nnpx expo run:android\n\nto create a development build that supports Google Sign-In.",
+            [{ text: "OK" }]
+          );
+          return;
+        }
+        
+        console.log("[Auth] Native OAuth redirect URL:", redirectTo);
         
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: "google",
           options: {
-            redirectTo: redirectUrl,
+            redirectTo: redirectTo,
             skipBrowserRedirect: true,
             queryParams: {
               access_type: "offline",
@@ -138,23 +207,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (error) throw error;
 
+        console.log("[Auth] Opening browser for OAuth...");
+        console.log("[Auth] OAuth URL:", data.url);
+        
         // Open the OAuth URL in an in-app browser
         const result = await WebBrowser.openAuthSessionAsync(
           data.url,
-          redirectUrl
+          redirectTo,
+          {
+            showInRecents: true,
+          }
         );
 
+        console.log("[Auth] Browser result:", result.type, JSON.stringify(result));
+
         if (result.type === "success") {
-          const { data: exchangeData, error: exchangeError } =
-            await supabase.auth.exchangeCodeForSession(result.url);
+          const url = result.url;
+          console.log("[Auth] Callback URL:", url);
+          
+          // Parse the URL to extract tokens or code
+          const parsedUrl = new URL(url);
+          
+          // Check for access_token (implicit flow) in hash fragment
+          // The hash comes as part of the URL in format: scheme://path#access_token=...
+          const hashParams = new URLSearchParams(url.split('#')[1] || '');
+          const accessToken = hashParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token');
+          
+          // Also check query params for code (PKCE flow)
+          const code = parsedUrl.searchParams.get("code");
+          
+          console.log("[Auth] Has access_token:", !!accessToken);
+          console.log("[Auth] Has code:", !!code);
+          
+          if (accessToken && refreshToken) {
+            // Implicit flow - set session directly
+            console.log("[Auth] Using implicit flow with tokens");
+            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            
+            if (sessionError) {
+              console.error("[Auth] Set session error:", sessionError.message);
+              throw sessionError;
+            }
+            
+            console.log("[Auth] OAuth successful:", sessionData.session?.user.email);
+          } else if (code) {
+            // PKCE flow - exchange code for session
+            console.log("[Auth] Using PKCE flow with code");
+            const { data: exchangeData, error: exchangeError } =
+              await supabase.auth.exchangeCodeForSession(code);
 
-          if (exchangeError) {
-            throw exchangeError;
-          }
+            if (exchangeError) {
+              console.error("[Auth] Exchange error:", exchangeError.message);
+              throw exchangeError;
+            }
 
-          if (!exchangeData.session) {
-            throw new Error("No session returned from OAuth exchange.");
+            if (!exchangeData.session) {
+              throw new Error("No session returned from OAuth exchange.");
+            }
+            
+            console.log("[Auth] OAuth successful:", exchangeData.session.user.email);
+          } else {
+            console.error("[Auth] No tokens or code found in callback URL");
+            console.error("[Auth] URL was:", url);
+            throw new Error("No authorization data in callback URL");
           }
+        } else if (result.type === "cancel") {
+          console.log("[Auth] User cancelled OAuth");
         }
       }
     } catch (error) {

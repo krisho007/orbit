@@ -11,9 +11,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { contactsApi, Contact } from "../../lib/api";
+import { useAuth } from "../../lib/auth";
 
 export default function ContactsScreen() {
   const router = useRouter();
+  const { session } = useAuth();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -57,11 +59,16 @@ export default function ContactsScreen() {
   );
 
   useEffect(() => {
+    // Only load contacts when we have a valid session
+    if (!session) {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setContacts([]);
     setNextCursor(null);
     loadContacts(true);
-  }, [search]);
+  }, [search, session]);
 
   const handleRefresh = () => {
     loadContacts(true);

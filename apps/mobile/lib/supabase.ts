@@ -35,12 +35,14 @@ const webStorage = {
 const storage = Platform.OS === "web" ? webStorage : AsyncStorage;
 
 // Disable detectSessionInUrl - we'll handle the code exchange manually
+// Use implicit flow for native (returns tokens directly in URL hash, no PKCE verifier needed)
+// Use PKCE for web (more secure in browser environment)
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false, // Disable auto-detection to prevent race conditions
-    flowType: "pkce",
+    flowType: Platform.OS === "web" ? "pkce" : "implicit",
   },
 });

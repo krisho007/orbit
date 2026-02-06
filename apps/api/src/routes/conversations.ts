@@ -6,6 +6,8 @@ import {
   db,
   conversations,
   conversationParticipants,
+  reminderParticipants,
+  reminders,
   contacts,
   events,
 } from "../db";
@@ -38,6 +40,115 @@ const createConversationSchema = z.object({
 });
 
 const updateConversationSchema = createConversationSchema.partial();
+
+async function verifyOwnedParticipantIds(userId: string, participantIds: string[]) {
+  const uniqueIds = [...new Set(participantIds)];
+  if (uniqueIds.length === 0) return { ok: false, ids: uniqueIds, missing: participantIds };
+
+  const ownedContacts = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(eq(contacts.userId, userId), inArray(contacts.id, uniqueIds)));
+
+  const ownedIds = new Set(ownedContacts.map((row) => row.id));
+  const missing = uniqueIds.filter((id) => !ownedIds.has(id));
+  return { ok: missing.length === 0, ids: uniqueIds, missing };
+}
+
+async function buildAutoReminderTitle(participantIds: string[]) {
+  if (participantIds.length === 0) return "Follow up";
+
+  const participantNames = await db
+    .select({ displayName: contacts.displayName })
+    .from(contacts)
+    .where(inArray(contacts.id, participantIds));
+
+  const names = participantNames.map((row) => row.displayName).filter(Boolean);
+  if (names.length === 0) return "Follow up";
+  if (names.length === 1) return `Follow up with ${names[0]}`;
+  if (names.length === 2) return `Follow up with ${names[0]} and ${names[1]}`;
+  return `Follow up with ${names[0]} and ${names.length - 1} others`;
+}
+
+async function syncConversationFollowUpReminder(
+  userId: string,
+  conversationId: string,
+  followUpAt: Date | null,
+  participantIds: string[],
+  content?: string | null
+) {
+  const uniqueParticipantIds = [...new Set(participantIds)];
+  const title = await buildAutoReminderTitle(uniqueParticipantIds);
+
+  const [existingAutoReminder] = await db
+    .select()
+    .from(reminders)
+    .where(
+      and(
+        eq(reminders.userId, userId),
+        eq(reminders.conversationId, conversationId),
+        eq(reminders.isAutoFromConversation, true)
+      )
+    )
+    .orderBy(desc(reminders.createdAt))
+    .limit(1);
+
+  if (!followUpAt) {
+    if (existingAutoReminder) {
+      await db
+        .update(reminders)
+        .set({
+          status: "CANCELED",
+          updatedAt: new Date(),
+        })
+        .where(eq(reminders.id, existingAutoReminder.id));
+    }
+    return;
+  }
+
+  let reminderId = existingAutoReminder?.id;
+
+  if (existingAutoReminder) {
+    await db
+      .update(reminders)
+      .set({
+        title,
+        notes: content || null,
+        dueAt: followUpAt,
+        status: "OPEN",
+        updatedAt: new Date(),
+      })
+      .where(eq(reminders.id, existingAutoReminder.id));
+  } else {
+    const [newReminder] = await db
+      .insert(reminders)
+      .values({
+        userId,
+        title,
+        notes: content || null,
+        dueAt: followUpAt,
+        status: "OPEN",
+        conversationId,
+        isAutoFromConversation: true,
+      })
+      .returning({ id: reminders.id });
+    reminderId = newReminder?.id;
+  }
+
+  if (!reminderId) {
+    return;
+  }
+
+  await db.delete(reminderParticipants).where(eq(reminderParticipants.reminderId, reminderId));
+  if (uniqueParticipantIds.length > 0) {
+    await db.insert(reminderParticipants).values(
+      uniqueParticipantIds.map((contactId) => ({
+        reminderId,
+        contactId,
+      }))
+    );
+  }
+}
 
 // GET /api/conversations/by-contacts - List conversations involving all provided contacts
 app.get("/by-contacts", async (c) => {
@@ -338,6 +449,11 @@ app.post("/", async (c) => {
   const data = validation.data;
 
   try {
+    const participantOwnership = await verifyOwnedParticipantIds(userId, data.participantIds);
+    if (!participantOwnership.ok) {
+      return c.json({ error: `Contacts not found: ${participantOwnership.missing.join(", ")}` }, 404);
+    }
+
     const [newConversation] = await db
       .insert(conversations)
       .values({
@@ -355,14 +471,23 @@ app.post("/", async (c) => {
     }
 
     // Add participants
-    if (data.participantIds.length > 0) {
+    const uniqueParticipantIds = participantOwnership.ids;
+    if (uniqueParticipantIds.length > 0) {
       await db.insert(conversationParticipants).values(
-        data.participantIds.map((contactId) => ({
+        uniqueParticipantIds.map((contactId) => ({
           conversationId: newConversation.id,
           contactId,
         }))
       );
     }
+
+    await syncConversationFollowUpReminder(
+      userId,
+      newConversation.id,
+      newConversation.followUpAt,
+      uniqueParticipantIds,
+      newConversation.content
+    );
 
     return c.json(newConversation, 201);
   } catch (error) {
@@ -395,6 +520,14 @@ app.put("/:id", async (c) => {
       return c.json({ error: "Conversation not found" }, 404);
     }
 
+    if (data.participantIds !== undefined) {
+      const participantOwnership = await verifyOwnedParticipantIds(userId, data.participantIds);
+      if (!participantOwnership.ok) {
+        return c.json({ error: `Contacts not found: ${participantOwnership.missing.join(", ")}` }, 404);
+      }
+      data.participantIds = participantOwnership.ids;
+    }
+
     // Build update object
     const updateData: any = { updatedAt: new Date() };
     if (data.content !== undefined) updateData.content = data.content || null;
@@ -412,20 +545,38 @@ app.put("/:id", async (c) => {
       .returning();
 
     // Update participants if provided
+    let participantIdsForReminder: string[] | null = null;
     if (data.participantIds !== undefined) {
+      participantIdsForReminder = [...new Set(data.participantIds)];
       await db
         .delete(conversationParticipants)
         .where(eq(conversationParticipants.conversationId, conversationId));
 
-      if (data.participantIds.length > 0) {
+      if (participantIdsForReminder.length > 0) {
         await db.insert(conversationParticipants).values(
-          data.participantIds.map((contactId) => ({
+          participantIdsForReminder.map((contactId) => ({
             conversationId,
             contactId,
           }))
         );
       }
     }
+
+    if (!participantIdsForReminder) {
+      const existingParticipants = await db
+        .select({ contactId: conversationParticipants.contactId })
+        .from(conversationParticipants)
+        .where(eq(conversationParticipants.conversationId, conversationId));
+      participantIdsForReminder = existingParticipants.map((row) => row.contactId);
+    }
+
+    await syncConversationFollowUpReminder(
+      userId,
+      conversationId,
+      updatedConversation?.followUpAt || null,
+      participantIdsForReminder,
+      updatedConversation?.content || null
+    );
 
     return c.json(updatedConversation);
   } catch (error) {
@@ -449,6 +600,21 @@ app.delete("/:id", async (c) => {
     if (!existing || existing.userId !== userId) {
       return c.json({ error: "Conversation not found" }, 404);
     }
+
+    await db
+      .update(reminders)
+      .set({
+        status: "CANCELED",
+        conversationId: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(reminders.userId, userId),
+          eq(reminders.conversationId, conversationId),
+          eq(reminders.isAutoFromConversation, true)
+        )
+      );
 
     await db.delete(conversations).where(eq(conversations.id, conversationId));
 

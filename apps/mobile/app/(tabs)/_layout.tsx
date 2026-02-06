@@ -5,6 +5,7 @@ import {
   Users,
   MessageCircle,
   CalendarDays,
+  Bell,
   Sparkles,
   Settings as SettingsIcon,
 } from "lucide-react-native";
@@ -93,6 +94,15 @@ export default function TabsLayout() {
           title: "Events",
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} icon={CalendarDays} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="reminders"
+        options={{
+          title: "Reminders",
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} icon={Bell} />
           ),
         }}
       />

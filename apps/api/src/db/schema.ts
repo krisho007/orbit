@@ -41,6 +41,20 @@ export const eventTypeEnum = pgEnum("EventType", [
   "OTHER",
 ]);
 
+export const reminderStatusEnum = pgEnum("ReminderStatus", [
+  "OPEN",
+  "DONE",
+  "CANCELED",
+]);
+
+export const reminderRecurrenceEnum = pgEnum("ReminderRecurrence", [
+  "NONE",
+  "DAILY",
+  "WEEKLY",
+  "MONTHLY",
+  "YEARLY",
+]);
+
 // ============================================
 // Users (Supabase Auth - reference only)
 // ============================================
@@ -163,6 +177,50 @@ export const conversationParticipants = pgTable(
     unique("conversation_participants_unique").on(table.conversationId, table.contactId),
     index("conversation_participants_conversationId_idx").on(table.conversationId),
     index("conversation_participants_contactId_idx").on(table.contactId),
+  ]
+);
+
+export const reminders = pgTable(
+  "reminders",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("userId").notNull(),
+    title: text("title").notNull(),
+    notes: text("notes"),
+    dueAt: timestamp("dueAt", { mode: "date" }).notNull(),
+    status: reminderStatusEnum("status").default("OPEN").notNull(),
+    recurrence: reminderRecurrenceEnum("recurrence").default("NONE").notNull(),
+    recurrenceInterval: integer("recurrenceInterval").default(1).notNull(),
+    recurrenceEndsAt: timestamp("recurrenceEndsAt", { mode: "date" }),
+    conversationId: text("conversationId"),
+    isAutoFromConversation: boolean("isAutoFromConversation").default(false).notNull(),
+    createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("reminders_userId_idx").on(table.userId),
+    index("reminders_userId_dueAt_idx").on(table.userId, table.dueAt),
+    index("reminders_userId_status_idx").on(table.userId, table.status),
+    index("reminders_conversationId_idx").on(table.conversationId),
+  ]
+);
+
+export const reminderParticipants = pgTable(
+  "reminder_participants",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    reminderId: text("reminderId").notNull(),
+    contactId: text("contactId").notNull(),
+    createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => [
+    unique("reminder_participants_unique").on(table.reminderId, table.contactId),
+    index("reminder_participants_reminderId_idx").on(table.reminderId),
+    index("reminder_participants_contactId_idx").on(table.contactId),
   ]
 );
 
@@ -299,6 +357,7 @@ export const contactImages = pgTable(
 export const contactsRelations = relations(contacts, ({ many }) => ({
   tags: many(contactTags),
   conversationParticipants: many(conversationParticipants),
+  reminderParticipants: many(reminderParticipants),
   eventParticipants: many(eventParticipants),
   relationshipsFrom: many(relationships, { relationName: "fromContact" }),
   relationshipsTo: many(relationships, { relationName: "toContact" }),
@@ -327,6 +386,7 @@ export const conversationsRelations = relations(conversations, ({ one, many }) =
     references: [events.id],
   }),
   participants: many(conversationParticipants),
+  reminders: many(reminders),
 }));
 
 export const conversationParticipantsRelations = relations(conversationParticipants, ({ one }) => ({
@@ -336,6 +396,25 @@ export const conversationParticipantsRelations = relations(conversationParticipa
   }),
   contact: one(contacts, {
     fields: [conversationParticipants.contactId],
+    references: [contacts.id],
+  }),
+}));
+
+export const remindersRelations = relations(reminders, ({ one, many }) => ({
+  conversation: one(conversations, {
+    fields: [reminders.conversationId],
+    references: [conversations.id],
+  }),
+  participants: many(reminderParticipants),
+}));
+
+export const reminderParticipantsRelations = relations(reminderParticipants, ({ one }) => ({
+  reminder: one(reminders, {
+    fields: [reminderParticipants.reminderId],
+    references: [reminders.id],
+  }),
+  contact: one(contacts, {
+    fields: [reminderParticipants.contactId],
     references: [contacts.id],
   }),
 }));
@@ -398,6 +477,8 @@ export type Tag = typeof tags.$inferSelect;
 export type NewTag = typeof tags.$inferInsert;
 export type Conversation = typeof conversations.$inferSelect;
 export type NewConversation = typeof conversations.$inferInsert;
+export type Reminder = typeof reminders.$inferSelect;
+export type NewReminder = typeof reminders.$inferInsert;
 export type Event = typeof events.$inferSelect;
 export type NewEvent = typeof events.$inferInsert;
 export type Relationship = typeof relationships.$inferSelect;

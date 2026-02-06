@@ -12,6 +12,7 @@ import eventsRouter from "./routes/events";
 import tagsRouter from "./routes/tags";
 import relationshipsRouter from "./routes/relationships";
 import assistantRouter from "./routes/assistant";
+import remindersRouter from "./routes/reminders";
 
 const app = new Hono();
 
@@ -51,6 +52,7 @@ app.route("/api/events", eventsRouter);
 app.route("/api/tags", tagsRouter);
 app.route("/api/relationships", relationshipsRouter);
 app.route("/api/assistant", assistantRouter);
+app.route("/api/reminders", remindersRouter);
 
 // Global error handler
 app.onError((err, c) => {

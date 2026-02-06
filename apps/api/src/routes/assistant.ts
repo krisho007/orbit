@@ -10,6 +10,8 @@ import {
   contacts,
   conversations,
   conversationParticipants,
+  reminders,
+  reminderParticipants,
   events,
   eventParticipants,
   tags,
@@ -57,6 +59,8 @@ const eventTypes = [
   "FAMILY_EVENT",
   "OTHER",
 ] as const;
+
+const reminderStatuses = ["OPEN", "DONE", "CANCELED"] as const;
 
 function normalizeEnumCandidate(value: string): string {
   return value.trim().toUpperCase().replace(/[\s-]+/g, "_");
@@ -110,6 +114,22 @@ function mapEventType(text: string): string {
   if (lower.includes("social")) return "SOCIAL";
   if (lower.includes("family")) return "FAMILY_EVENT";
   return "OTHER";
+}
+
+function mapReminderStatus(text: string): (typeof reminderStatuses)[number] {
+  const normalized = normalizeEnumCandidate(text);
+  if (reminderStatuses.includes(normalized as any)) {
+    return normalized as (typeof reminderStatuses)[number];
+  }
+
+  const lower = text.toLowerCase();
+  if (lower.includes("done") || lower.includes("complete") || lower.includes("completed")) {
+    return "DONE";
+  }
+  if (lower.includes("cancel")) {
+    return "CANCELED";
+  }
+  return "OPEN";
 }
 
 // Fuzzy search for contacts
@@ -249,11 +269,27 @@ type AssistantEventCard = {
   participants?: string[];
 };
 
+type AssistantReminderCard = {
+  id: string;
+  title: string;
+  dueAt: string;
+  status: string;
+  participants?: string[];
+};
+
+type AssistantCreatedCard =
+  | { kind: "contact"; contact: AssistantContactCard }
+  | { kind: "conversation"; conversation: AssistantConversationCard }
+  | { kind: "event"; event: AssistantEventCard }
+  | { kind: "reminder"; reminder: AssistantReminderCard };
+
 type AssistantUi =
   | { kind: "contact"; contact: AssistantContactCard }
   | { kind: "contacts"; count: number; contacts: AssistantContactCard[] }
   | { kind: "conversations"; count: number; conversations: AssistantConversationCard[] }
-  | { kind: "events"; count: number; events: AssistantEventCard[] };
+  | { kind: "events"; count: number; events: AssistantEventCard[] }
+  | { kind: "reminders"; count: number; reminders: AssistantReminderCard[] }
+  | { kind: "created"; cards: AssistantCreatedCard[] };
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -291,6 +327,14 @@ async function getOwnedEvent(userId: string, eventId: string) {
     .from(events)
     .where(and(eq(events.id, eventId), eq(events.userId, userId)));
   return event || null;
+}
+
+async function getOwnedReminder(userId: string, reminderId: string) {
+  const [reminder] = await db
+    .select()
+    .from(reminders)
+    .where(and(eq(reminders.id, reminderId), eq(reminders.userId, userId)));
+  return reminder || null;
 }
 
 async function getOwnedTag(userId: string, tagId: string) {
@@ -387,6 +431,143 @@ async function enrichEvents(eventsList: any[]) {
   }));
 }
 
+async function enrichReminders(remindersList: any[]) {
+  const reminderIds = remindersList.map((reminder) => reminder.id);
+  const conversationIds = remindersList
+    .map((reminder) => reminder.conversationId)
+    .filter((id: string | null): id is string => Boolean(id));
+
+  const [participantsData, conversationsData] = await Promise.all([
+    reminderIds.length > 0
+      ? db
+          .select()
+          .from(reminderParticipants)
+          .innerJoin(contacts, eq(reminderParticipants.contactId, contacts.id))
+          .where(inArray(reminderParticipants.reminderId, reminderIds))
+      : [],
+    conversationIds.length > 0
+      ? db
+          .select({
+            id: conversations.id,
+            medium: conversations.medium,
+            happenedAt: conversations.happenedAt,
+          })
+          .from(conversations)
+          .where(inArray(conversations.id, conversationIds))
+      : [],
+  ]);
+
+  return remindersList.map((reminder) => ({
+    ...reminder,
+    participants: participantsData
+      .filter((p: any) => p.reminder_participants.reminderId === reminder.id)
+      .map((p: any) => ({
+        ...p.reminder_participants,
+        contact: p.contacts,
+      })),
+    conversation:
+      conversationsData.find((conversation) => conversation.id === reminder.conversationId) ||
+      null,
+  }));
+}
+
+async function buildAutoReminderTitle(participantIds: string[]) {
+  if (participantIds.length === 0) {
+    return "Follow up";
+  }
+
+  const participantContacts = await db
+    .select({ displayName: contacts.displayName })
+    .from(contacts)
+    .where(sql`${contacts.id} = ANY(${participantIds})`);
+
+  const names = participantContacts.map((p) => p.displayName).filter(Boolean);
+  if (names.length === 0) return "Follow up";
+  if (names.length === 1) return `Follow up with ${names[0]}`;
+  if (names.length === 2) return `Follow up with ${names[0]} and ${names[1]}`;
+  return `Follow up with ${names[0]} and ${names.length - 1} others`;
+}
+
+async function syncConversationFollowUpReminder(
+  userId: string,
+  conversationId: string,
+  followUpAt: Date | null,
+  participantIds: string[],
+  content?: string | null
+) {
+  const uniqueParticipantIds = [...new Set(participantIds)];
+  const title = await buildAutoReminderTitle(uniqueParticipantIds);
+
+  const [existingAutoReminder] = await db
+    .select()
+    .from(reminders)
+    .where(
+      and(
+        eq(reminders.userId, userId),
+        eq(reminders.conversationId, conversationId),
+        eq(reminders.isAutoFromConversation, true)
+      )
+    )
+    .orderBy(desc(reminders.createdAt))
+    .limit(1);
+
+  if (!followUpAt) {
+    if (existingAutoReminder) {
+      await db
+        .update(reminders)
+        .set({
+          status: "CANCELED",
+          updatedAt: new Date(),
+        })
+        .where(eq(reminders.id, existingAutoReminder.id));
+    }
+    return;
+  }
+
+  let reminderId = existingAutoReminder?.id;
+
+  if (existingAutoReminder) {
+    await db
+      .update(reminders)
+      .set({
+        title,
+        notes: content || null,
+        dueAt: followUpAt,
+        status: "OPEN",
+        updatedAt: new Date(),
+      })
+      .where(eq(reminders.id, existingAutoReminder.id));
+  } else {
+    const [newReminder] = await db
+      .insert(reminders)
+      .values({
+        userId,
+        title,
+        notes: content || null,
+        dueAt: followUpAt,
+        status: "OPEN",
+        conversationId,
+        isAutoFromConversation: true,
+      })
+      .returning({ id: reminders.id });
+    reminderId = newReminder?.id;
+  }
+
+  if (!reminderId) {
+    return;
+  }
+
+  await db.delete(reminderParticipants).where(eq(reminderParticipants.reminderId, reminderId));
+  if (uniqueParticipantIds.length > 0) {
+    await db.insert(reminderParticipants).values(
+      uniqueParticipantIds.map((contactId) => ({
+        reminderId,
+        contactId,
+      }))
+    );
+  }
+}
+
 // Tool implementations
 async function createConversation(
   userId: string,
@@ -416,7 +597,7 @@ async function createConversation(
       };
     }
 
-    resolvedParticipantIds = participantIds;
+    resolvedParticipantIds = [...new Set(participantIds)];
   } else if (participantNames) {
     const names = parseNames(participantNames);
     const resolved = await resolveContactIdsFromNames(userId, names);
@@ -428,7 +609,7 @@ async function createConversation(
       };
     }
 
-    resolvedParticipantIds = resolved.ids;
+    resolvedParticipantIds = [...new Set(resolved.ids)];
   }
 
   if (resolvedParticipantIds.length === 0) {
@@ -476,6 +657,14 @@ async function createConversation(
     );
   }
 
+  await syncConversationFollowUpReminder(
+    userId,
+    conversation.id,
+    conversation.followUpAt,
+    resolvedParticipantIds,
+    conversation.content
+  );
+
   // Get participant names
   const participantContacts = await db
     .select({ displayName: contacts.displayName })
@@ -487,6 +676,7 @@ async function createConversation(
     id: conversation.id,
     medium: conversation.medium,
     happenedAt: conversation.happenedAt,
+    content: conversation.content,
     participants: participantContacts.map((p) => p.displayName),
   };
 }
@@ -644,6 +834,7 @@ async function createEvent(
     title: event.title,
     eventType: event.eventType,
     startAt: event.startAt,
+    location: event.location,
     participants: participantContacts.map((p) => p.displayName),
   };
 }
@@ -752,6 +943,11 @@ async function createContact(
     type: "contact_created",
     id: contact.id,
     displayName: contact.displayName,
+    primaryPhone: contact.primaryPhone,
+    primaryEmail: contact.primaryEmail,
+    company: contact.company,
+    jobTitle: contact.jobTitle,
+    location: contact.location,
   };
 }
 
@@ -1346,7 +1542,8 @@ async function searchContactsByPhone(
   phone: string,
   include?: string[],
   conversationsLimit?: number,
-  eventsLimit?: number
+  eventsLimit?: number,
+  remindersLimit?: number
 ): Promise<ToolResult> {
   const includeList =
     include?.map((v) => v.trim()).filter((v) => v.length > 0) || [];
@@ -1432,6 +1629,34 @@ async function searchContactsByPhone(
         .limit(eventsLimit || 10);
 
       response.events = await enrichEvents(eventsList);
+    }
+  }
+
+  if (includeList.includes("reminders")) {
+    const reminderIdsResult = await db
+      .select({ reminderId: reminderParticipants.reminderId })
+      .from(reminderParticipants)
+      .where(eq(reminderParticipants.contactId, contact.id));
+
+    const reminderIds = reminderIdsResult.map((r) => r.reminderId);
+
+    if (reminderIds.length === 0) {
+      response.reminders = [];
+    } else {
+      const remindersList = await db
+        .select()
+        .from(reminders)
+        .where(
+          and(
+            eq(reminders.userId, userId),
+            eq(reminders.status, "OPEN"),
+            inArray(reminders.id, reminderIds)
+          )
+        )
+        .orderBy(asc(reminders.dueAt))
+        .limit(remindersLimit || 10);
+
+      response.reminders = await enrichReminders(remindersList);
     }
   }
 
@@ -1699,6 +1924,8 @@ async function createConversationByIds(
     participantIds: string[];
   }
 ): Promise<ToolResult> {
+  const participantIds = [...new Set(payload.participantIds)];
+
   const [newConversation] = await db
     .insert(conversations)
     .values({
@@ -1715,16 +1942,39 @@ async function createConversationByIds(
     return { type: "error", message: "Failed to create conversation" };
   }
 
-  if (payload.participantIds.length > 0) {
+  if (participantIds.length > 0) {
     await db.insert(conversationParticipants).values(
-      payload.participantIds.map((contactId) => ({
+      participantIds.map((contactId) => ({
         conversationId: newConversation.id,
         contactId,
       }))
     );
   }
 
-  return { type: "conversation_created", id: newConversation.id };
+  await syncConversationFollowUpReminder(
+    userId,
+    newConversation.id,
+    newConversation.followUpAt,
+    participantIds,
+    newConversation.content
+  );
+
+  const participantContacts =
+    participantIds.length > 0
+      ? await db
+          .select({ displayName: contacts.displayName })
+          .from(contacts)
+          .where(sql`${contacts.id} = ANY(${participantIds})`)
+      : [];
+
+  return {
+    type: "conversation_created",
+    id: newConversation.id,
+    medium: newConversation.medium,
+    happenedAt: newConversation.happenedAt,
+    content: newConversation.content,
+    participants: participantContacts.map((p) => p.displayName),
+  };
 }
 
 async function updateConversationById(
@@ -1754,22 +2004,44 @@ async function updateConversationById(
     updateData.followUpAt = updates.followUpAt ? new Date(updates.followUpAt) : null;
   if (updates.eventId !== undefined) updateData.eventId = updates.eventId || null;
 
-  await db.update(conversations).set(updateData).where(eq(conversations.id, conversationId));
+  const [updatedConversation] = await db
+    .update(conversations)
+    .set(updateData)
+    .where(eq(conversations.id, conversationId))
+    .returning();
 
+  let participantIdsForReminder: string[] | null = null;
   if (updates.participantIds !== undefined) {
+    participantIdsForReminder = [...new Set(updates.participantIds)];
     await db
       .delete(conversationParticipants)
       .where(eq(conversationParticipants.conversationId, conversationId));
 
-    if (updates.participantIds.length > 0) {
+    if (participantIdsForReminder.length > 0) {
       await db.insert(conversationParticipants).values(
-        updates.participantIds.map((contactId) => ({
+        participantIdsForReminder.map((contactId) => ({
           conversationId,
           contactId,
         }))
       );
     }
   }
+
+  if (!participantIdsForReminder) {
+    const existingParticipants = await db
+      .select({ contactId: conversationParticipants.contactId })
+      .from(conversationParticipants)
+      .where(eq(conversationParticipants.conversationId, conversationId));
+    participantIdsForReminder = existingParticipants.map((row) => row.contactId);
+  }
+
+  await syncConversationFollowUpReminder(
+    userId,
+    conversationId,
+    updatedConversation?.followUpAt || null,
+    participantIdsForReminder,
+    updatedConversation?.content || null
+  );
 
   return { type: "conversation_updated", id: conversationId };
 }
@@ -1784,6 +2056,20 @@ async function deleteConversationById(
     return { type: "error", message: "Conversation not found" };
   }
 
+  await db
+    .update(reminders)
+    .set({
+      status: "CANCELED",
+      conversationId: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(reminders.userId, userId),
+        eq(reminders.conversationId, conversationId),
+        eq(reminders.isAutoFromConversation, true)
+      )
+    );
   await db.delete(conversations).where(eq(conversations.id, conversationId));
   return { type: "conversation_deleted", id: conversationId };
 }
@@ -2017,7 +2303,22 @@ async function createEventByIds(
     );
   }
 
-  return { type: "event_created", id: newEvent.id };
+  const participantContacts =
+    payload.participantIds && payload.participantIds.length > 0
+      ? await db
+          .select({ displayName: contacts.displayName })
+          .from(contacts)
+          .where(sql`${contacts.id} = ANY(${payload.participantIds})`)
+      : [];
+
+  return {
+    type: "event_created",
+    id: newEvent.id,
+    title: newEvent.title,
+    startAt: newEvent.startAt,
+    location: newEvent.location,
+    participants: participantContacts.map((p) => p.displayName),
+  };
 }
 
 async function updateEventById(
@@ -2179,6 +2480,264 @@ async function listEventContacts(
       contact: p.contacts,
     })),
   };
+}
+
+async function listReminders(
+  userId: string,
+  cursor?: string,
+  search?: string,
+  status?: string,
+  dueBefore?: string,
+  dueAfter?: string,
+  contactId?: string,
+  limit?: number
+): Promise<ToolResult> {
+  const conditions = [eq(reminders.userId, userId)];
+
+  if (status) {
+    conditions.push(eq(reminders.status, mapReminderStatus(status) as any));
+  }
+  if (search) {
+    conditions.push(or(ilike(reminders.title, `%${search}%`), ilike(reminders.notes, `%${search}%`))!);
+  }
+  if (dueBefore) {
+    const parsed = new Date(dueBefore);
+    if (!Number.isNaN(parsed.getTime())) {
+      conditions.push(sql`${reminders.dueAt} <= ${parsed}`);
+    }
+  }
+  if (dueAfter) {
+    const parsed = new Date(dueAfter);
+    if (!Number.isNaN(parsed.getTime())) {
+      conditions.push(sql`${reminders.dueAt} >= ${parsed}`);
+    }
+  }
+  if (contactId) {
+    const contact = await getOwnedContact(userId, contactId);
+    if (!contact) return { type: "error", message: "Contact not found" };
+
+    const reminderIdsResult = await db
+      .select({ reminderId: reminderParticipants.reminderId })
+      .from(reminderParticipants)
+      .where(eq(reminderParticipants.contactId, contactId));
+
+    const reminderIds = reminderIdsResult.map((row) => row.reminderId);
+    if (reminderIds.length === 0) {
+      return { type: "reminders_found", count: 0, reminders: [], nextCursor: null };
+    }
+
+    conditions.push(inArray(reminders.id, reminderIds));
+  }
+
+  const takeLimit = limit || PAGE_SIZE;
+  let remindersList;
+  if (cursor) {
+    remindersList = await db
+      .select()
+      .from(reminders)
+      .where(
+        and(
+          ...conditions,
+          sql`(
+            ${reminders.dueAt} > (SELECT "dueAt" FROM reminders WHERE id = ${cursor})
+            OR (
+              ${reminders.dueAt} = (SELECT "dueAt" FROM reminders WHERE id = ${cursor})
+              AND ${reminders.id} > ${cursor}
+            )
+          )`
+        )
+      )
+      .orderBy(asc(reminders.dueAt), asc(reminders.id))
+      .limit(takeLimit + 1);
+  } else {
+    remindersList = await db
+      .select()
+      .from(reminders)
+      .where(and(...conditions))
+      .orderBy(asc(reminders.dueAt), asc(reminders.id))
+      .limit(takeLimit + 1);
+  }
+
+  let nextCursor: string | null = null;
+  if (remindersList.length > takeLimit) {
+    const nextItem = remindersList.pop();
+    nextCursor = nextItem?.id || null;
+  }
+
+  const enrichedReminders = await enrichReminders(remindersList);
+
+  return {
+    type: "reminders_found",
+    count: enrichedReminders.length,
+    reminders: enrichedReminders,
+    nextCursor,
+  };
+}
+
+async function getReminderById(userId: string, reminderId: string): Promise<ToolResult> {
+  const reminder = await getOwnedReminder(userId, reminderId);
+  if (!reminder) return { type: "error", message: "Reminder not found" };
+
+  const [enrichedReminder] = await enrichReminders([reminder]);
+  return {
+    type: "reminder_details",
+    ...enrichedReminder,
+  };
+}
+
+async function createReminderByIds(
+  userId: string,
+  payload: {
+    title?: string;
+    notes?: string;
+    dueAt: string;
+    status?: string;
+    conversationId?: string;
+    participantIds: string[];
+  }
+): Promise<ToolResult> {
+  const uniqueParticipantIds = [...new Set(payload.participantIds)];
+  if (uniqueParticipantIds.length === 0) {
+    return { type: "error", message: "At least one participant is required" };
+  }
+
+  const ownedContacts = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(eq(contacts.userId, userId), inArray(contacts.id, uniqueParticipantIds)));
+  if (ownedContacts.length !== uniqueParticipantIds.length) {
+    return { type: "error", message: "Contact not found" };
+  }
+
+  if (payload.conversationId) {
+    const conversation = await getOwnedConversation(userId, payload.conversationId);
+    if (!conversation) {
+      return { type: "error", message: "Conversation not found" };
+    }
+  }
+
+  const [newReminder] = await db
+    .insert(reminders)
+    .values({
+      userId,
+      title: payload.title?.trim() || "Follow up",
+      notes: payload.notes || null,
+      dueAt: new Date(payload.dueAt),
+      status: payload.status ? mapReminderStatus(payload.status) : "OPEN",
+      conversationId: payload.conversationId || null,
+      isAutoFromConversation: false,
+    })
+    .returning();
+
+  if (!newReminder) {
+    return { type: "error", message: "Failed to create reminder" };
+  }
+
+  await db.insert(reminderParticipants).values(
+    uniqueParticipantIds.map((contactId) => ({
+      reminderId: newReminder.id,
+      contactId,
+    }))
+  );
+
+  const participantContacts = await db
+    .select({ displayName: contacts.displayName })
+    .from(contacts)
+    .where(sql`${contacts.id} = ANY(${uniqueParticipantIds})`);
+
+  return {
+    type: "reminder_created",
+    id: newReminder.id,
+    title: newReminder.title,
+    dueAt: newReminder.dueAt,
+    status: newReminder.status,
+    participants: participantContacts.map((p) => p.displayName),
+  };
+}
+
+async function updateReminderById(
+  userId: string,
+  reminderId: string,
+  updates: {
+    title?: string;
+    notes?: string;
+    dueAt?: string;
+    status?: string;
+    conversationId?: string;
+    participantIds?: string[];
+  }
+): Promise<ToolResult> {
+  const existing = await getOwnedReminder(userId, reminderId);
+  if (!existing) return { type: "error", message: "Reminder not found" };
+
+  if (updates.conversationId !== undefined && updates.conversationId) {
+    const conversation = await getOwnedConversation(userId, updates.conversationId);
+    if (!conversation) {
+      return { type: "error", message: "Conversation not found" };
+    }
+  }
+
+  if (updates.participantIds !== undefined) {
+    const uniqueIds = [...new Set(updates.participantIds)];
+    if (uniqueIds.length > 0) {
+      const ownedContacts = await db
+        .select({ id: contacts.id })
+        .from(contacts)
+        .where(and(eq(contacts.userId, userId), inArray(contacts.id, uniqueIds)));
+      if (ownedContacts.length !== uniqueIds.length) {
+        return { type: "error", message: "Contact not found" };
+      }
+    }
+  }
+
+  const updateData: Record<string, unknown> = { updatedAt: new Date() };
+  if (updates.title !== undefined) updateData.title = updates.title?.trim() || "Follow up";
+  if (updates.notes !== undefined) updateData.notes = updates.notes || null;
+  if (updates.dueAt !== undefined) updateData.dueAt = new Date(updates.dueAt);
+  if (updates.status !== undefined) updateData.status = mapReminderStatus(updates.status);
+  if (updates.conversationId !== undefined) updateData.conversationId = updates.conversationId || null;
+
+  await db.update(reminders).set(updateData).where(eq(reminders.id, reminderId));
+
+  if (updates.participantIds !== undefined) {
+    const uniqueIds = [...new Set(updates.participantIds)];
+    await db.delete(reminderParticipants).where(eq(reminderParticipants.reminderId, reminderId));
+    if (uniqueIds.length > 0) {
+      await db.insert(reminderParticipants).values(
+        uniqueIds.map((contactId) => ({
+          reminderId,
+          contactId,
+        }))
+      );
+    }
+  }
+
+  return { type: "reminder_updated", id: reminderId };
+}
+
+async function completeReminderById(
+  userId: string,
+  reminderId: string,
+  status: "DONE" | "CANCELED" = "DONE"
+): Promise<ToolResult> {
+  const existing = await getOwnedReminder(userId, reminderId);
+  if (!existing) return { type: "error", message: "Reminder not found" };
+
+  await db
+    .update(reminders)
+    .set({ status, updatedAt: new Date() })
+    .where(eq(reminders.id, reminderId));
+
+  return { type: "reminder_updated", id: reminderId };
+}
+
+async function deleteReminderById(userId: string, reminderId: string): Promise<ToolResult> {
+  const existing = await getOwnedReminder(userId, reminderId);
+  if (!existing) return { type: "error", message: "Reminder not found" };
+
+  await db.delete(reminderParticipants).where(eq(reminderParticipants.reminderId, reminderId));
+  await db.delete(reminders).where(eq(reminders.id, reminderId));
+  return { type: "reminder_deleted", id: reminderId };
 }
 
 async function listTags(userId: string): Promise<ToolResult> {
@@ -2569,7 +3128,7 @@ async function deleteRelationshipById(
 
 function buildSystemPrompt(): string {
   const today = formatToday(new Date());
-  return `You are a helpful assistant for Orbit, a personal CRM app. Help users manage their contacts, conversations, and events.
+  return `You are a helpful assistant for Orbit, a personal CRM app. Help users manage their contacts, conversations, events, and reminders.
 
 Today's date is ${today}.
 
@@ -2578,14 +3137,15 @@ You can:
 - Search contacts (fuzzy search or by phone number)
 - Log, update, delete, and search conversations
 - Create, update, delete, and query events
+- Create, update, complete, delete, and query reminders
 - Manage tags
 - Manage relationships and relationship types
 
 When users describe interactions or meetings, extract the relevant information and use the appropriate functions.
 When users ask about contact information like phone numbers, use the get_contact_details tool to retrieve it.
-When users ask to find, search, show, or list contacts, conversations, events, tags, or relationships, always call the corresponding query tool.
+When users ask to find, search, show, or list contacts, conversations, events, reminders, tags, or relationships, always call the corresponding query tool.
 Keep responses brief when tool results are available; the client will render result cards.
-When returning lists of contacts, conversations, or events, keep results to 10 or fewer.
+When returning lists of contacts, conversations, events, or reminders, keep results to 10 or fewer.
 When users mention relative dates like "today", "tomorrow", "yesterday", "next week", etc., convert them to actual dates based on today's date. If no date is mentioned, assume it's for today.
 Be conversational and friendly.`;
 }
@@ -2593,6 +3153,97 @@ Be conversational and friendly.`;
 function buildUiFromToolResults(
   toolResults: Array<{ output?: ToolResult }>
 ): AssistantUi | null {
+  const createdCards: AssistantCreatedCard[] = [];
+  const createdKeys = new Set<string>();
+
+  for (const toolResult of toolResults) {
+    const output = toolResult.output;
+    if (!output || typeof output !== "object") continue;
+
+    if (output.type === "contact_created") {
+      const id = String(output.id || "");
+      const key = `contact:${id}`;
+      if (createdKeys.has(key)) continue;
+      createdKeys.add(key);
+      createdCards.push({
+        kind: "contact",
+        contact: {
+          id,
+          displayName: String(output.displayName || ""),
+          primaryPhone: (output.primaryPhone as string | null | undefined) ?? null,
+          primaryEmail: (output.primaryEmail as string | null | undefined) ?? null,
+          company: (output.company as string | null | undefined) ?? null,
+          jobTitle: (output.jobTitle as string | null | undefined) ?? null,
+          location: (output.location as string | null | undefined) ?? null,
+        },
+      });
+      continue;
+    }
+
+    if (output.type === "conversation_created") {
+      const id = String(output.id || "");
+      const key = `conversation:${id}`;
+      if (createdKeys.has(key)) continue;
+      createdKeys.add(key);
+      createdCards.push({
+        kind: "conversation",
+        conversation: {
+          id,
+          medium: String(output.medium || "OTHER"),
+          happenedAt: String(output.happenedAt || ""),
+          content: (output.content as string | null | undefined) ?? null,
+          participants: Array.isArray(output.participants)
+            ? output.participants.map((p: any) => String(p))
+            : [],
+        },
+      });
+      continue;
+    }
+
+    if (output.type === "event_created") {
+      const id = String(output.id || "");
+      const key = `event:${id}`;
+      if (createdKeys.has(key)) continue;
+      createdKeys.add(key);
+      createdCards.push({
+        kind: "event",
+        event: {
+          id,
+          title: String(output.title || ""),
+          startAt: String(output.startAt || ""),
+          location: (output.location as string | null | undefined) ?? null,
+          participants: Array.isArray(output.participants)
+            ? output.participants.map((p: any) => String(p))
+            : [],
+        },
+      });
+      continue;
+    }
+
+    if (output.type === "reminder_created") {
+      const id = String(output.id || "");
+      const key = `reminder:${id}`;
+      if (createdKeys.has(key)) continue;
+      createdKeys.add(key);
+      createdCards.push({
+        kind: "reminder",
+        reminder: {
+          id,
+          title: String(output.title || "Follow up"),
+          dueAt: String(output.dueAt || ""),
+          status: String(output.status || "OPEN"),
+          participants: Array.isArray(output.participants)
+            ? output.participants.map((p: any) => String(p))
+            : [],
+        },
+      });
+    }
+  }
+
+  if (createdCards.length > 0) {
+    return { kind: "created", cards: createdCards };
+  }
+
   for (let i = toolResults.length - 1; i >= 0; i -= 1) {
     const output = toolResults[i]?.output;
     if (!output || typeof output !== "object") continue;
@@ -2662,6 +3313,49 @@ function buildUiFromToolResults(
         })),
       };
     }
+
+    if (output.type === "reminder_details") {
+      return {
+        kind: "reminders",
+        count: 1,
+        reminders: [
+          {
+            id: String(output.id),
+            title: String(output.title || "Follow up"),
+            dueAt: String(output.dueAt || ""),
+            status: String(output.status || "OPEN"),
+            participants: Array.isArray(output.participants)
+              ? output.participants.map((participant: any) =>
+                  participant?.contact?.displayName
+                    ? String(participant.contact.displayName)
+                    : String(participant)
+                )
+              : [],
+          },
+        ],
+      };
+    }
+
+    if (output.type === "reminders_found") {
+      const remindersList = Array.isArray(output.reminders) ? output.reminders : [];
+      return {
+        kind: "reminders",
+        count: typeof output.count === "number" ? output.count : remindersList.length,
+        reminders: remindersList.map((reminder: any) => ({
+          id: String(reminder.id),
+          title: String(reminder.title || "Follow up"),
+          dueAt: String(reminder.dueAt || ""),
+          status: String(reminder.status || "OPEN"),
+          participants: Array.isArray(reminder.participants)
+            ? reminder.participants.map((participant: any) =>
+                participant?.contact?.displayName
+                  ? String(participant.contact.displayName)
+                  : String(participant)
+              )
+            : [],
+        })),
+      };
+    }
   }
 
   return null;
@@ -2669,6 +3363,29 @@ function buildUiFromToolResults(
 
 function summarizeUiText(ui: AssistantUi | null, fallback: string): string {
   if (!ui) return fallback;
+
+  if (ui.kind === "created") {
+    if (fallback.trim().length > 0) {
+      return fallback;
+    }
+
+    const contactCount = ui.cards.filter((card) => card.kind === "contact").length;
+    const conversationCount = ui.cards.filter((card) => card.kind === "conversation").length;
+    const eventCount = ui.cards.filter((card) => card.kind === "event").length;
+    const reminderCount = ui.cards.filter((card) => card.kind === "reminder").length;
+    const chunks = [
+      contactCount > 0
+        ? `${contactCount} contact${contactCount === 1 ? "" : "s"}`
+        : null,
+      conversationCount > 0
+        ? `${conversationCount} conversation${conversationCount === 1 ? "" : "s"}`
+        : null,
+      eventCount > 0 ? `${eventCount} event${eventCount === 1 ? "" : "s"}` : null,
+      reminderCount > 0 ? `${reminderCount} reminder${reminderCount === 1 ? "" : "s"}` : null,
+    ].filter(Boolean);
+
+    return chunks.length > 0 ? `Logged ${chunks.join(", ")}.` : "Done.";
+  }
 
   if (ui.kind === "contacts") {
     if (ui.count === 0) return "No contacts found.";
@@ -2694,6 +3411,14 @@ function summarizeUiText(ui: AssistantUi | null, fallback: string): string {
     return `Showing ${ui.count} event${ui.count === 1 ? "" : "s"}.`;
   }
 
+  if (ui.kind === "reminders") {
+    if (ui.count === 0) return "No reminders found.";
+    if (ui.reminders.length < ui.count) {
+      return `Showing ${ui.reminders.length} of ${ui.count} reminders.`;
+    }
+    return `Showing ${ui.count} reminder${ui.count === 1 ? "" : "s"}.`;
+  }
+
   if (ui.kind === "contact") {
     return "Here are the contact details.";
   }
@@ -2701,9 +3426,10 @@ function summarizeUiText(ui: AssistantUi | null, fallback: string): string {
   return fallback;
 }
 
-async function processMessageLLM(
+export async function processMessageLLM(
   userId: string,
-  messages: ChatMessage[]
+  messages: ChatMessage[],
+  generate: typeof generateText = generateText
 ): Promise<{ text: string; ui: AssistantUi | null }> {
   if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     return {
@@ -3014,18 +3740,26 @@ async function processMessageLLM(
     }),
 
     search_contacts_by_phone: tool({
-      description: "Search contacts by phone number, optionally including conversations or events",
+      description: "Search contacts by phone number, optionally including conversations, events, or reminders",
       inputSchema: z.object({
         phone: z.string().describe("Phone number to search"),
         include: z
-          .array(z.enum(["conversations", "events"]))
+          .array(z.enum(["conversations", "events", "reminders"]))
           .optional()
-          .describe("Include related conversations and/or events"),
+          .describe("Include related conversations, events, and/or reminders"),
         conversationsLimit: z.number().optional().describe("Limit for conversations"),
         eventsLimit: z.number().optional().describe("Limit for events"),
+        remindersLimit: z.number().optional().describe("Limit for reminders"),
       }),
-      execute: async ({ phone, include, conversationsLimit, eventsLimit }) =>
-        searchContactsByPhone(userId, phone, include, conversationsLimit, eventsLimit),
+      execute: async ({ phone, include, conversationsLimit, eventsLimit, remindersLimit }) =>
+        searchContactsByPhone(
+          userId,
+          phone,
+          include,
+          conversationsLimit,
+          eventsLimit,
+          remindersLimit
+        ),
     }),
 
     list_contact_conversations: tool({
@@ -3266,6 +4000,98 @@ async function processMessageLLM(
       execute: async ({ eventId }) => listEventContacts(userId, eventId),
     }),
 
+    list_reminders: tool({
+      description: "List reminders with optional pagination and filters",
+      inputSchema: z.object({
+        cursor: z.string().optional().describe("Pagination cursor (reminder id)"),
+        search: z.string().optional().describe("Search term"),
+        status: z.enum(reminderStatuses).optional().describe("Reminder status"),
+        dueBefore: z.string().optional().describe("Due before ISO date"),
+        dueAfter: z.string().optional().describe("Due after ISO date"),
+        contactId: z.string().optional().describe("Filter by participant contact id"),
+        limit: z.number().optional().describe("Number of results to return"),
+      }),
+      execute: async ({ cursor, search, status, dueBefore, dueAfter, contactId, limit }) =>
+        listReminders(userId, cursor, search, status, dueBefore, dueAfter, contactId, limit),
+    }),
+
+    get_reminder: tool({
+      description: "Get a single reminder by id",
+      inputSchema: z.object({
+        reminderId: z.string().describe("Reminder id"),
+      }),
+      execute: async ({ reminderId }) => getReminderById(userId, reminderId),
+    }),
+
+    create_reminder_by_ids: tool({
+      description: "Create a reminder and link it to contact ids",
+      inputSchema: z.object({
+        title: z.string().optional().describe("Reminder title"),
+        notes: z.string().optional().describe("Reminder notes"),
+        dueAt: z.string().describe("Due date/time in ISO format"),
+        status: z.enum(reminderStatuses).optional().describe("Reminder status"),
+        conversationId: z.string().optional().describe("Linked conversation id"),
+        participantIds: z.array(z.string()).describe("Participant contact ids"),
+      }),
+      execute: async ({ title, notes, dueAt, status, conversationId, participantIds }) =>
+        createReminderByIds(userId, {
+          title,
+          notes,
+          dueAt,
+          status,
+          conversationId,
+          participantIds,
+        }),
+    }),
+
+    update_reminder_by_id: tool({
+      description: "Update a reminder by id",
+      inputSchema: z.object({
+        reminderId: z.string().describe("Reminder id"),
+        title: z.string().optional().describe("Reminder title"),
+        notes: z.string().optional().describe("Reminder notes"),
+        dueAt: z.string().optional().describe("Due date/time in ISO format"),
+        status: z.enum(reminderStatuses).optional().describe("Reminder status"),
+        conversationId: z.string().optional().describe("Linked conversation id"),
+        participantIds: z.array(z.string()).optional().describe("Participant contact ids"),
+      }),
+      execute: async ({
+        reminderId,
+        title,
+        notes,
+        dueAt,
+        status,
+        conversationId,
+        participantIds,
+      }) =>
+        updateReminderById(userId, reminderId, {
+          title,
+          notes,
+          dueAt,
+          status,
+          conversationId,
+          participantIds,
+        }),
+    }),
+
+    complete_reminder: tool({
+      description: "Mark a reminder as done or canceled",
+      inputSchema: z.object({
+        reminderId: z.string().describe("Reminder id"),
+        status: z.enum(["DONE", "CANCELED"]).optional().describe("Completion status"),
+      }),
+      execute: async ({ reminderId, status }) =>
+        completeReminderById(userId, reminderId, status || "DONE"),
+    }),
+
+    delete_reminder: tool({
+      description: "Delete a reminder by id",
+      inputSchema: z.object({
+        reminderId: z.string().describe("Reminder id"),
+      }),
+      execute: async ({ reminderId }) => deleteReminderById(userId, reminderId),
+    }),
+
     list_tags: tool({
       description: "List all tags",
       inputSchema: z.object({}),
@@ -3430,7 +4256,7 @@ async function processMessageLLM(
 
   let capturedToolResults: Array<{ output?: ToolResult }> = [];
 
-  const result = await generateText({
+  const result = await generate({
     model: google("gemini-2.0-flash"),
     system: buildSystemPrompt(),
     messages: modelMessages,

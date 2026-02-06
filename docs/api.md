@@ -30,14 +30,17 @@
 - `GET /api/contacts/search/fuzzy`
   - Query: `name`, `limit`
 - `GET /api/contacts/search/phone`
-  - Query: `phone`, `include=conversations,events?`, `conversationsLimit?`, `eventsLimit?`
-  - Returns: `{ contact, candidates, conversations?, events? }`
+  - Query: `phone`, `include=conversations,events,reminders?`, `conversationsLimit?`, `eventsLimit?`, `remindersLimit?`
+  - Returns: `{ contact, candidates, conversations?, events?, reminders? }`
 - `POST /api/contacts/google/fetch`
   - Body: `accessToken`, `includePhotos?`
   - Returns: `{ contacts: GoogleContact[] }` where each contact may include `photoBase64` and `photoContentType`
 - `POST /api/contacts/google/import/batch`
   - Body: `contacts[]`, `overrideExisting?`
-  - Duplicate matching: by normalized `primaryPhone` (digits only)
+  - Duplicate matching order:
+    - normalized `primaryPhone` (digits only)
+    - if incoming has no phone: exact `primaryEmail`
+    - if incoming has no phone: strict normalized name match (case/spacing/punctuation-insensitive) against contacts that also have no phone
   - Name merge rule: if incoming `displayName` is more detailed (longer normalized value), it overwrites the existing name
   - Returns: `{ imported, updated, skipped, errors }`
 
@@ -73,6 +76,18 @@
   - Query: `cursor`, `limit`, `search`, `medium`
 - `GET /api/events/:id/contacts`
 
+## Reminders
+- `GET /api/reminders`
+  - Query: `cursor`, `limit`, `search`, `status`, `dueBefore`, `dueAfter`, `contactId`
+- `GET /api/reminders/:id`
+- `POST /api/reminders`
+  - Body: `title?`, `notes?`, `dueAt`, `status?`, `recurrence?`, `recurrenceInterval?`, `recurrenceEndsAt?`, `conversationId?`, `participantIds?[]`
+  - `participantIds` is optional (unlinked reminders are allowed)
+  - `recurrence` values: `NONE`, `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY` (default: `NONE`)
+- `PUT /api/reminders/:id`
+  - Body: any of the create fields
+- `DELETE /api/reminders/:id`
+
 ## Tags
 - `GET /api/tags`
 - `GET /api/tags/:id`
@@ -105,4 +120,6 @@
 ## Enums
 - Conversation medium: `PHONE_CALL`, `WHATSAPP`, `EMAIL`, `CHANCE_ENCOUNTER`, `ONLINE_MEETING`, `IN_PERSON_MEETING`, `OTHER`
 - Event type: `MEETING`, `CALL`, `BIRTHDAY`, `ANNIVERSARY`, `CONFERENCE`, `SOCIAL`, `FAMILY_EVENT`, `OTHER`
+- Reminder status: `OPEN`, `DONE`, `CANCELED`
+- Reminder recurrence: `NONE`, `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`
 - Gender: `MALE`, `FEMALE`

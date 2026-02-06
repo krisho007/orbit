@@ -12,6 +12,8 @@ import {
   socialLinks,
   conversations,
   conversationParticipants,
+  reminders,
+  reminderParticipants,
   events,
   eventParticipants,
 } from "../db";
@@ -134,6 +136,22 @@ function normalizePhoneDigits(phone?: string | null): string | null {
 
 function normalizeName(name?: string | null): string {
   return (name || "").trim().replace(/\s+/g, " ");
+}
+
+function normalizeNameForExactMatch(name?: string | null): string | null {
+  const normalized = normalizeName(name);
+  if (!normalized) return null;
+  const asciiLike = normalized
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  return asciiLike.length > 0 ? asciiLike : null;
+}
+
+function normalizeEmail(email?: string | null): string | null {
+  const normalized = (email || "").trim().toLowerCase();
+  return normalized.length > 0 ? normalized : null;
 }
 
 function parseOptionalDate(value?: string): Date | null {
@@ -418,6 +436,7 @@ app.get("/search/phone", async (c) => {
     .filter((v) => v.length > 0);
   const conversationsLimit = parseInt(c.req.query("conversationsLimit") || "10");
   const eventsLimit = parseInt(c.req.query("eventsLimit") || "10");
+  const remindersLimit = parseInt(c.req.query("remindersLimit") || "10");
 
   const normalized = phone.replace(/\D/g, "");
   if (!phone || normalized.length < 3) {
@@ -567,6 +586,70 @@ app.get("/search/phone", async (c) => {
       }
     }
 
+    if (include.includes("reminders")) {
+      const reminderIdsResult = await db
+        .select({ reminderId: reminderParticipants.reminderId })
+        .from(reminderParticipants)
+        .where(eq(reminderParticipants.contactId, contact.id));
+
+      const reminderIds = reminderIdsResult.map((r) => r.reminderId);
+
+      if (reminderIds.length === 0) {
+        response.reminders = [];
+      } else {
+        const remindersList = await db
+          .select()
+          .from(reminders)
+          .where(
+            and(
+              eq(reminders.userId, userId),
+              eq(reminders.status, "OPEN"),
+              inArray(reminders.id, reminderIds)
+            )
+          )
+          .orderBy(asc(reminders.dueAt))
+          .limit(remindersLimit);
+
+        const reminderIdsPage = remindersList.map((reminder) => reminder.id);
+        const conversationIds = remindersList
+          .map((reminder) => reminder.conversationId)
+          .filter((id: string | null): id is string => Boolean(id));
+
+        const [participantsData, conversationsData] = await Promise.all([
+          reminderIdsPage.length > 0
+            ? db
+                .select()
+                .from(reminderParticipants)
+                .innerJoin(contacts, eq(reminderParticipants.contactId, contacts.id))
+                .where(inArray(reminderParticipants.reminderId, reminderIdsPage))
+            : [],
+          conversationIds.length > 0
+            ? db
+                .select({
+                  id: conversations.id,
+                  medium: conversations.medium,
+                  happenedAt: conversations.happenedAt,
+                })
+                .from(conversations)
+                .where(inArray(conversations.id, conversationIds))
+            : [],
+        ]);
+
+        response.reminders = remindersList.map((reminder) => ({
+          ...reminder,
+          participants: participantsData
+            .filter((p: any) => p.reminder_participants.reminderId === reminder.id)
+            .map((p: any) => ({
+              ...p.reminder_participants,
+              contact: p.contacts,
+            })),
+          conversation:
+            conversationsData.find((conversation) => conversation.id === reminder.conversationId) ||
+            null,
+        }));
+      }
+    }
+
     return c.json(response);
   } catch (error) {
     console.error("Error searching contact by phone:", error);
@@ -706,7 +789,20 @@ app.post("/google/import/batch", async (c) => {
   try {
     const googleImportTagId = await getOrCreateGoogleImportTagId(userId);
 
-    const existingWithPhone = await db
+    type ExistingImportContact = {
+      id: string;
+      displayName: string;
+      primaryPhone: string | null;
+      primaryEmail: string | null;
+      company: string | null;
+      jobTitle: string | null;
+      location: string | null;
+      notes: string | null;
+      dateOfBirth: Date | null;
+      googleContactName: string | null;
+    };
+
+    const existingContacts = await db
       .select({
         id: contacts.id,
         displayName: contacts.displayName,
@@ -720,30 +816,55 @@ app.post("/google/import/batch", async (c) => {
         googleContactName: contacts.googleContactName,
       })
       .from(contacts)
-      .where(and(eq(contacts.userId, userId), sql`${contacts.primaryPhone} IS NOT NULL`))
+      .where(eq(contacts.userId, userId))
       .orderBy(asc(contacts.createdAt));
 
-    const existingByNormalizedPhone = new Map<
-      string,
-      {
-        id: string;
-        displayName: string;
-        primaryPhone: string | null;
-        primaryEmail: string | null;
-        company: string | null;
-        jobTitle: string | null;
-        location: string | null;
-        notes: string | null;
-        dateOfBirth: Date | null;
-        googleContactName: string | null;
-      }
-    >();
+    const existingByNormalizedPhone = new Map<string, ExistingImportContact>();
+    const existingByNormalizedEmail = new Map<string, ExistingImportContact>();
+    const existingByNormalizedNameWithoutPhone = new Map<string, ExistingImportContact>();
 
-    for (const existing of existingWithPhone) {
-      const normalized = normalizePhoneDigits(existing.primaryPhone);
-      if (normalized && !existingByNormalizedPhone.has(normalized)) {
-        existingByNormalizedPhone.set(normalized, existing);
+    const indexExistingContact = (contact: ExistingImportContact) => {
+      const normalizedPhone = normalizePhoneDigits(contact.primaryPhone);
+      if (normalizedPhone && !existingByNormalizedPhone.has(normalizedPhone)) {
+        existingByNormalizedPhone.set(normalizedPhone, contact);
       }
+
+      const normalizedEmail = normalizeEmail(contact.primaryEmail);
+      if (normalizedEmail && !existingByNormalizedEmail.has(normalizedEmail)) {
+        existingByNormalizedEmail.set(normalizedEmail, contact);
+      }
+
+      if (!normalizedPhone) {
+        const normalizedName = normalizeNameForExactMatch(contact.displayName);
+        if (normalizedName && !existingByNormalizedNameWithoutPhone.has(normalizedName)) {
+          existingByNormalizedNameWithoutPhone.set(normalizedName, contact);
+        }
+      }
+    };
+
+    const removeExistingContactIndexes = (contact: ExistingImportContact) => {
+      const normalizedPhone = normalizePhoneDigits(contact.primaryPhone);
+      if (normalizedPhone && existingByNormalizedPhone.get(normalizedPhone)?.id === contact.id) {
+        existingByNormalizedPhone.delete(normalizedPhone);
+      }
+
+      const normalizedEmail = normalizeEmail(contact.primaryEmail);
+      if (normalizedEmail && existingByNormalizedEmail.get(normalizedEmail)?.id === contact.id) {
+        existingByNormalizedEmail.delete(normalizedEmail);
+      }
+
+      const normalizedName = normalizeNameForExactMatch(contact.displayName);
+      if (
+        !normalizedPhone &&
+        normalizedName &&
+        existingByNormalizedNameWithoutPhone.get(normalizedName)?.id === contact.id
+      ) {
+        existingByNormalizedNameWithoutPhone.delete(normalizedName);
+      }
+    };
+
+    for (const existing of existingContacts) {
+      indexExistingContact(existing);
     }
 
     let imported = 0;
@@ -760,10 +881,25 @@ app.post("/google/import/batch", async (c) => {
         }
 
         const normalizedIncomingPhone = normalizePhoneDigits(incoming.primaryPhone);
-        const existing =
-          normalizedIncomingPhone && existingByNormalizedPhone.has(normalizedIncomingPhone)
-            ? existingByNormalizedPhone.get(normalizedIncomingPhone)!
-            : null;
+        const normalizedIncomingEmail = normalizeEmail(incoming.primaryEmail);
+        const normalizedIncomingName = normalizeNameForExactMatch(incomingName);
+
+        let existing: ExistingImportContact | null = null;
+
+        if (normalizedIncomingPhone) {
+          existing = existingByNormalizedPhone.get(normalizedIncomingPhone) || null;
+        }
+
+        // Fallback when incoming contact has no phone: exact email match.
+        if (!existing && !normalizedIncomingPhone && normalizedIncomingEmail) {
+          existing = existingByNormalizedEmail.get(normalizedIncomingEmail) || null;
+        }
+
+        // Last fallback when incoming contact has no phone: strict normalized name match
+        // against contacts that also have no phone number.
+        if (!existing && !normalizedIncomingPhone && normalizedIncomingName) {
+          existing = existingByNormalizedNameWithoutPhone.get(normalizedIncomingName) || null;
+        }
 
         if (!existing) {
           const [createdContact] = await db
@@ -821,9 +957,7 @@ app.post("/google/import/batch", async (c) => {
             }
           }
 
-          if (normalizedIncomingPhone) {
-            existingByNormalizedPhone.set(normalizedIncomingPhone, createdContact);
-          }
+          indexExistingContact(createdContact);
 
           continue;
         }
@@ -876,6 +1010,9 @@ app.post("/google/import/batch", async (c) => {
           continue;
         }
 
+        removeExistingContactIndexes(existing);
+        indexExistingContact(updatedContact);
+
         updated += 1;
 
         if (incoming.photoBase64 && incoming.photoContentType) {
@@ -891,10 +1028,6 @@ app.post("/google/import/batch", async (c) => {
           }
         }
 
-        const updatedPhone = normalizePhoneDigits(updatedContact.primaryPhone);
-        if (updatedPhone) {
-          existingByNormalizedPhone.set(updatedPhone, updatedContact);
-        }
       } catch (error) {
         console.error("Error importing contact:", incoming?.displayName, error);
         errors += 1;

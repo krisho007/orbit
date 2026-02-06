@@ -219,6 +219,34 @@ export const eventsApi = {
   delete: (id: string) => api.delete(`/api/events/${id}`),
 };
 
+// Reminders
+export const remindersApi = {
+  list: (params?: {
+    cursor?: string;
+    search?: string;
+    status?: ReminderStatus;
+    dueBefore?: string;
+    dueAfter?: string;
+    contactId?: string;
+    limit?: number;
+  }) =>
+    api.get<{
+      reminders: Reminder[];
+      nextCursor: string | null;
+      stats?: { totalCount: number };
+    }>("/api/reminders", params),
+
+  get: (id: string) => api.get<Reminder>(`/api/reminders/${id}`),
+
+  create: (data: CreateReminderData) =>
+    api.post<Reminder>("/api/reminders", data),
+
+  update: (id: string, data: Partial<CreateReminderData>) =>
+    api.put<Reminder>(`/api/reminders/${id}`, data),
+
+  delete: (id: string) => api.delete(`/api/reminders/${id}`),
+};
+
 // Tags
 export const tagsApi = {
   list: () => api.get<{ tags: Tag[] }>("/api/tags"),
@@ -259,11 +287,27 @@ export type AssistantEventCard = {
   participants?: string[];
 };
 
+export type AssistantReminderCard = {
+  id: string;
+  title: string;
+  dueAt: string;
+  status: string;
+  participants?: string[];
+};
+
+export type AssistantCreatedCard =
+  | { kind: "contact"; contact: AssistantContactCard }
+  | { kind: "conversation"; conversation: AssistantConversationCard }
+  | { kind: "event"; event: AssistantEventCard }
+  | { kind: "reminder"; reminder: AssistantReminderCard };
+
 export type AssistantUi =
   | { kind: "contact"; contact: AssistantContactCard }
   | { kind: "contacts"; count: number; contacts: AssistantContactCard[] }
   | { kind: "conversations"; count: number; conversations: AssistantConversationCard[] }
-  | { kind: "events"; count: number; events: AssistantEventCard[] };
+  | { kind: "events"; count: number; events: AssistantEventCard[] }
+  | { kind: "reminders"; count: number; reminders: AssistantReminderCard[] }
+  | { kind: "created"; cards: AssistantCreatedCard[] };
 
 export type ChatMessage = {
   role: "user" | "assistant";
@@ -407,5 +451,41 @@ export type CreateEventData = {
   startAt: string;
   endAt?: string;
   location?: string;
+  participantIds?: string[];
+};
+
+export type ReminderStatus = "OPEN" | "DONE" | "CANCELED";
+export type ReminderRecurrence = "NONE" | "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
+
+export type Reminder = {
+  id: string;
+  title: string;
+  notes?: string | null;
+  dueAt: string;
+  status: ReminderStatus;
+  recurrence: ReminderRecurrence;
+  recurrenceInterval: number;
+  recurrenceEndsAt?: string | null;
+  conversationId?: string | null;
+  isAutoFromConversation: boolean;
+  createdAt: string;
+  updatedAt: string;
+  participants?: { contact: Contact }[];
+  conversation?: {
+    id: string;
+    medium: ConversationMedium;
+    happenedAt: string;
+  } | null;
+};
+
+export type CreateReminderData = {
+  title?: string;
+  notes?: string;
+  dueAt: string;
+  status?: ReminderStatus;
+  recurrence?: ReminderRecurrence;
+  recurrenceInterval?: number;
+  recurrenceEndsAt?: string | null;
+  conversationId?: string;
   participantIds?: string[];
 };

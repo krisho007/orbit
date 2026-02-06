@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import type { ComponentType } from "react";
 import {
   View,
@@ -25,6 +25,7 @@ import {
   FileText,
   CalendarDays,
   MapPin,
+  Bell,
 } from "lucide-react-native";
 import {
   assistantApi,
@@ -33,6 +34,7 @@ import {
   AssistantContactCard,
   AssistantConversationCard,
   AssistantEventCard,
+  AssistantReminderCard,
 } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
 import { useGluestackUI } from "../../components/ui/gluestack-ui-provider";
@@ -40,6 +42,18 @@ import { useGluestackUI } from "../../components/ui/gluestack-ui-provider";
 type Message = ChatMessage & {
   id: string;
   isLoading?: boolean;
+};
+
+type AssistantDraftState = {
+  messages: Message[];
+  input: string;
+  messageSequence: number;
+};
+
+const assistantDraftState: AssistantDraftState = {
+  messages: [],
+  input: "",
+  messageSequence: 0,
 };
 
 const SUGGESTIONS = [
@@ -52,7 +66,7 @@ const SUGGESTIONS = [
 const CAPABILITY_TAGS = [
   "Log conversations",
   "Find contacts quickly",
-  "Create follow-up events",
+  "Track reminders",
   "Review recent activity",
 ];
 
@@ -71,21 +85,47 @@ const MEDIUM_META: Record<
   OTHER: { label: "Other", icon: FileText },
 };
 
+const REMINDER_STATUS_META: Record<string, string> = {
+  OPEN: "Open",
+  DONE: "Done",
+  CANCELED: "Canceled",
+};
+
 export default function AssistantScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const { resolvedColorMode } = useGluestackUI();
   const scrollIndicatorStyle = resolvedColorMode === "dark" ? "white" : "black";
   const resultScrollContentStyle = Platform.OS === "android" ? { paddingRight: 6 } : undefined;
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<Message[]>(assistantDraftState.messages);
+  const [input, setInput] = useState(assistantDraftState.input);
   const [isLoading, setIsLoading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const isSendingRef = useRef(false);
-  const messageSequenceRef = useRef(0);
+  const messageSequenceRef = useRef(assistantDraftState.messageSequence);
+
+  useEffect(() => {
+    // Keep only stable messages in cache so returning from detail pages restores results.
+    assistantDraftState.messages = messages.filter((message) => !message.isLoading);
+  }, [messages]);
+
+  useEffect(() => {
+    assistantDraftState.input = input;
+  }, [input]);
+
+  useEffect(
+    () => () => {
+      assistantDraftState.messages = assistantDraftState.messages.filter(
+        (message) => !message.isLoading
+      );
+      assistantDraftState.messageSequence = messageSequenceRef.current;
+    },
+    []
+  );
 
   const nextMessageId = useCallback((prefix: string) => {
     messageSequenceRef.current += 1;
+    assistantDraftState.messageSequence = messageSequenceRef.current;
     return `${prefix}-${Date.now()}-${messageSequenceRef.current}`;
   }, []);
 
@@ -291,7 +331,90 @@ export default function AssistantScreen() {
     );
   };
 
+  const renderReminderCard = (reminder: AssistantReminderCard) => {
+    const participants =
+      reminder.participants && reminder.participants.length > 0
+        ? reminder.participants.join(", ")
+        : "No participants";
+    const dueLabel = formatDateTime(reminder.dueAt, "MMM d, yyyy", "Due date unknown");
+    const statusLabel = REMINDER_STATUS_META[reminder.status] || reminder.status;
+
+    return (
+      <Pressable
+        key={reminder.id}
+        onPress={() => router.push(`/reminder/${reminder.id}`)}
+        className="bg-background-0 border border-border-100 rounded-2xl p-4 mb-3 active:bg-background-50"
+      >
+        <View className="flex-row items-start">
+          <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mr-3">
+            <Bell size={18} color={getThemeColor(colors, "primary-600")} />
+          </View>
+          <View className="flex-1">
+            <Text className="text-typography-900 font-semibold text-base" numberOfLines={1}>
+              {reminder.title}
+            </Text>
+            <Text className="text-typography-500 text-sm mt-0.5">
+              {dueLabel} · {statusLabel}
+            </Text>
+            <Text className="text-typography-700 text-sm mt-2" numberOfLines={1}>
+              {participants}
+            </Text>
+          </View>
+        </View>
+      </Pressable>
+    );
+  };
+
   const renderAssistantUi = (ui: AssistantUi) => {
+    if (ui.kind === "created") {
+      const cards = ui.cards.slice(0, RESULT_CARD_LIMIT);
+      const showCountLabel = ui.cards.length > cards.length;
+      const showScrollableResults = cards.length > 2;
+      const renderedCards = cards.map((card) => {
+        if (card.kind === "contact") {
+          return <View key={`contact:${card.contact.id}`}>{renderContactCard(card.contact)}</View>;
+        }
+
+        if (card.kind === "conversation") {
+          return (
+            <View key={`conversation:${card.conversation.id}`}>
+              {renderConversationCard(card.conversation)}
+            </View>
+          );
+        }
+
+        if (card.kind === "reminder") {
+          return <View key={`reminder:${card.reminder.id}`}>{renderReminderCard(card.reminder)}</View>;
+        }
+
+        return <View key={`event:${card.event.id}`}>{renderEventCard(card.event)}</View>;
+      });
+
+      return (
+        <View>
+          {showCountLabel && (
+            <Text className="text-typography-500 text-xs mb-2">
+              Showing {cards.length} of {ui.cards.length} created records
+            </Text>
+          )}
+          {showScrollableResults ? (
+            <ScrollView
+              className="max-h-[340px]"
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+              indicatorStyle={scrollIndicatorStyle}
+              persistentScrollbar
+              contentContainerStyle={resultScrollContentStyle}
+            >
+              {renderedCards}
+            </ScrollView>
+          ) : (
+            renderedCards
+          )}
+        </View>
+      );
+    }
+
     if (ui.kind === "contact") {
       return <View>{renderContactCard(ui.contact)}</View>;
     }
@@ -381,6 +504,36 @@ export default function AssistantScreen() {
             </ScrollView>
           ) : (
             cards.map(renderEventCard)
+          )}
+        </View>
+      );
+    }
+
+    if (ui.kind === "reminders") {
+      const cards = ui.reminders.slice(0, RESULT_CARD_LIMIT);
+      const count = ui.count || cards.length;
+      const showCountLabel = count > cards.length;
+      const showScrollableResults = cards.length > 2;
+      return (
+        <View>
+          {showCountLabel && (
+            <Text className="text-typography-500 text-xs mb-2">
+              Showing {cards.length} of {count} reminders
+            </Text>
+          )}
+          {showScrollableResults ? (
+            <ScrollView
+              className="max-h-[340px]"
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+              indicatorStyle={scrollIndicatorStyle}
+              persistentScrollbar
+              contentContainerStyle={resultScrollContentStyle}
+            >
+              {cards.map(renderReminderCard)}
+            </ScrollView>
+          ) : (
+            cards.map(renderReminderCard)
           )}
         </View>
       );

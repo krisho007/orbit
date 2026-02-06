@@ -194,7 +194,7 @@ export default function GoogleImportScreen() {
                 Override existing contacts
               </Text>
               <Text className="text-typography-500 text-sm">
-                Updates fields for matched contacts. Duplicate match uses primary phone.
+                Updates fields for matched contacts. Matching uses phone first, then email/name when phone is missing.
               </Text>
             </View>
             <Switch

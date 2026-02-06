@@ -36,14 +36,14 @@ bun run dev
 cd apps/mobile
 cp .env.example .env
 # Configure your .env
-npm install
-npm start
+bun install
+bun run start
 ```
 
 ## Development
 
 - API runs on `http://localhost:3000`
-- OAuth is not supported in Expo Go. For local OAuth testing, use `npx expo run:android` (or an iOS simulator build) instead of Expo Go.
+- OAuth is not supported in Expo Go. For local OAuth testing, use `bun run android` (or `bun run ios` for an iOS simulator build) instead of Expo Go.
 
 ## Deployment
 

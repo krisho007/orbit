@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Linking,
   Alert,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -186,11 +187,18 @@ export default function ContactDetailScreen() {
       <ScrollView className="flex-1">
         {/* Avatar & Name */}
         <View className="items-center py-8 bg-background-50">
-          <View className="w-24 h-24 rounded-full bg-primary-100 items-center justify-center mb-4">
-            <Text className="text-primary-700 text-4xl font-semibold">
-              {contact.displayName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+          {contact.images?.[0]?.imageUrl ? (
+            <Image
+              source={{ uri: contact.images[0].imageUrl }}
+              className="w-24 h-24 rounded-full mb-4"
+            />
+          ) : (
+            <View className="w-24 h-24 rounded-full bg-primary-100 items-center justify-center mb-4">
+              <Text className="text-primary-700 text-4xl font-semibold">
+                {contact.displayName.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
           <Text className="text-2xl font-bold text-typography-900 mb-1">
             {contact.displayName}
           </Text>

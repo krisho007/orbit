@@ -462,6 +462,10 @@ async function createConversation(
     })
     .returning();
 
+  if (!conversation) {
+    return { type: "error", message: "Failed to create conversation" };
+  }
+
   // Add participants
   if (resolvedParticipantIds.length > 0) {
     await db.insert(conversationParticipants).values(
@@ -611,6 +615,10 @@ async function createEvent(
     })
     .returning();
 
+  if (!event) {
+    return { type: "error", message: "Failed to create event" };
+  }
+
   // Add participants
   if (resolvedParticipantIds.length > 0) {
     await db.insert(eventParticipants).values(
@@ -726,6 +734,10 @@ async function createContact(
       userId,
     })
     .returning();
+
+  if (!contact) {
+    return { type: "error", message: "Failed to create contact" };
+  }
 
   if (tagIds && tagIds.length > 0) {
     await db.insert(contactTags).values(
@@ -878,6 +890,15 @@ async function getContactDetails(
     .select()
     .from(contacts)
     .where(eq(contacts.id, resolvedId));
+
+  if (!fullContact) {
+    return {
+      type: "error",
+      message: contactId
+        ? `Could not find contact with id: ${contactId}`
+        : `Could not find a contact named: ${contactName}`,
+    };
+  }
 
   // Get tags
   const contactTagsList = await db
@@ -1690,6 +1711,10 @@ async function createConversationByIds(
     })
     .returning();
 
+  if (!newConversation) {
+    return { type: "error", message: "Failed to create conversation" };
+  }
+
   if (payload.participantIds.length > 0) {
     await db.insert(conversationParticipants).values(
       payload.participantIds.map((contactId) => ({
@@ -1979,6 +2004,10 @@ async function createEventByIds(
     })
     .returning();
 
+  if (!newEvent) {
+    return { type: "error", message: "Failed to create event" };
+  }
+
   if (payload.participantIds && payload.participantIds.length > 0) {
     await db.insert(eventParticipants).values(
       payload.participantIds.map((contactId) => ({
@@ -2217,6 +2246,10 @@ async function createTag(
     .values({ userId, name, color: color || "#3B82F6" })
     .returning();
 
+  if (!newTag) {
+    return { type: "error", message: "Failed to create tag" };
+  }
+
   return { type: "tag_created", id: newTag.id, name: newTag.name, color: newTag.color };
 }
 
@@ -2254,6 +2287,10 @@ async function updateTagById(
     .set(updateData)
     .where(eq(tags.id, tagId))
     .returning();
+
+  if (!updatedTag) {
+    return { type: "error", message: "Failed to update tag" };
+  }
 
   return { type: "tag_updated", id: updatedTag.id, name: updatedTag.name, color: updatedTag.color };
 }
@@ -2308,6 +2345,10 @@ async function createRelationshipType(
     })
     .returning();
 
+  if (!newType) {
+    return { type: "error", message: "Failed to create relationship type" };
+  }
+
   return { type: "relationship_type_created", id: newType.id, name: newType.name };
 }
 
@@ -2344,6 +2385,10 @@ async function updateRelationshipTypeById(
     .set(updateData)
     .where(eq(relationshipTypes.id, typeId))
     .returning();
+
+  if (!updatedType) {
+    return { type: "error", message: "Failed to update relationship type" };
+  }
 
   return { type: "relationship_type_updated", id: updatedType.id, name: updatedType.name };
 }
@@ -2475,6 +2520,10 @@ async function createRelationship(
       notes: payload.notes || null,
     })
     .returning();
+
+  if (!newRelationship) {
+    return { type: "error", message: "Failed to create relationship" };
+  }
 
   return { type: "relationship_created", id: newRelationship.id };
 }
@@ -3408,7 +3457,7 @@ app.post("/", async (c) => {
 
   const validation = chatSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.errors }, 400);
+    return c.json({ error: validation.error.issues }, 400);
   }
 
   const { messages } = validation.data;

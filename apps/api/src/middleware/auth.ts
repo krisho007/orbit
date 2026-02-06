@@ -1,6 +1,7 @@
 // Supabase Auth JWT Verification Middleware
 import { createMiddleware } from "hono/factory";
-import { createClient, User } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
+import type { User } from "@supabase/supabase-js";
 import { HTTPException } from "hono/http-exception";
 import { db, users } from "../db";
 import { eq } from "drizzle-orm";

@@ -1,5 +1,5 @@
 import "../global.css";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -11,26 +11,68 @@ import {
   useGluestackUI,
 } from "../components/ui/gluestack-ui-provider";
 import { getThemeColor, ThemeModeProvider, useThemeColors, useThemeMode } from "../lib/theme";
+import { isGoogleImportOnboardingComplete } from "../lib/onboarding";
 
 function RootLayoutNav() {
   const { user, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const colors = useThemeColors();
+  const [onboardingState, setOnboardingState] = useState<
+    "checking" | "required" | "complete"
+  >("checking");
 
   useEffect(() => {
-    if (isLoading) return;
+    let cancelled = false;
 
-    const inAuthGroup = segments[0] === "(auth)";
+    const loadOnboardingState = async () => {
+      if (!user?.id) {
+        if (!cancelled) setOnboardingState("complete");
+        return;
+      }
 
-    if (!user && !inAuthGroup) {
+      if (!cancelled) setOnboardingState("checking");
+      const isComplete = await isGoogleImportOnboardingComplete(user.id);
+      if (!cancelled) {
+        setOnboardingState(isComplete ? "complete" : "required");
+      }
+    };
+
+    loadOnboardingState().catch((error) => {
+      console.error("Failed to load onboarding state:", error);
+      if (!cancelled) setOnboardingState("required");
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, segments[0]]);
+
+  useEffect(() => {
+    if (isLoading || onboardingState === "checking") return;
+
+    const firstSegment = String(segments[0] || "");
+    const inAuthGroup = firstSegment === "(auth)";
+    const inOnboardingWelcome = firstSegment === "welcome";
+    const inGoogleImportScreen = firstSegment === "google-import";
+    const inTabsGroup = firstSegment === "(tabs)";
+    const inOnboardingFlow = inOnboardingWelcome || inGoogleImportScreen;
+
+    if (!user?.id && !inAuthGroup) {
       // Redirect to sign-in if not authenticated
       router.replace("/(auth)/sign-in");
-    } else if (user && inAuthGroup) {
-      // Redirect to home if authenticated
-      router.replace("/(tabs)");
+    } else if (
+      user?.id &&
+      onboardingState === "required" &&
+      !inOnboardingFlow &&
+      !inTabsGroup
+    ) {
+      router.replace("/welcome" as any);
+    } else if (user?.id && onboardingState === "complete" && (inAuthGroup || inOnboardingWelcome)) {
+      // Redirect to assistant if authenticated
+      router.replace("/(tabs)/assistant");
     }
-  }, [user, segments, isLoading]);
+  }, [user?.id, segments, isLoading, onboardingState, router]);
 
   if (isLoading) {
     return (

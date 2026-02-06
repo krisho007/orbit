@@ -23,6 +23,8 @@
 
 - `POST /api/contacts/:id/images`
   - Body: `imageUrl`, `publicId?`
+- `POST /api/contacts/:id/images/upload`
+  - Body: `base64Data`, `contentType`, `fileName?`
 - `DELETE /api/contacts/:id/images/:imageId`
 
 - `GET /api/contacts/search/fuzzy`
@@ -30,6 +32,14 @@
 - `GET /api/contacts/search/phone`
   - Query: `phone`, `include=conversations,events?`, `conversationsLimit?`, `eventsLimit?`
   - Returns: `{ contact, candidates, conversations?, events? }`
+- `POST /api/contacts/google/fetch`
+  - Body: `accessToken`, `includePhotos?`
+  - Returns: `{ contacts: GoogleContact[] }` where each contact may include `photoBase64` and `photoContentType`
+- `POST /api/contacts/google/import/batch`
+  - Body: `contacts[]`, `overrideExisting?`
+  - Duplicate matching: by normalized `primaryPhone` (digits only)
+  - Name merge rule: if incoming `displayName` is more detailed (longer normalized value), it overwrites the existing name
+  - Returns: `{ imported, updated, skipped, errors }`
 
 - `GET /api/contacts/:id/conversations`
   - Query: `cursor`, `limit`, `search`, `medium`

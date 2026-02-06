@@ -115,6 +115,29 @@ export const contactsApi = {
   update: (id: string, data: Partial<CreateContactData>) =>
     api.put<Contact>(`/api/contacts/${id}`, data),
 
+  addImage: (id: string, data: { imageUrl: string; publicId?: string }) =>
+    api.post<ContactImage>(`/api/contacts/${id}/images`, data),
+
+  uploadImage: (
+    id: string,
+    data: { base64Data: string; contentType: string; fileName?: string }
+  ) => api.post<ContactImage>(`/api/contacts/${id}/images/upload`, data),
+
+  deleteImage: (contactId: string, imageId: string) =>
+    api.delete<{ success: true }>(`/api/contacts/${contactId}/images/${imageId}`),
+
+  fetchGoogleContacts: (data: { accessToken: string; includePhotos?: boolean }) =>
+    api.post<{ contacts: GoogleImportContact[] }>("/api/contacts/google/fetch", data),
+
+  importGoogleContactsBatch: (
+    contacts: GoogleImportContact[],
+    overrideExisting: boolean = false
+  ) =>
+    api.post<GoogleImportBatchResult>("/api/contacts/google/import/batch", {
+      contacts,
+      overrideExisting,
+    }),
+
   delete: (id: string) => api.delete(`/api/contacts/${id}`),
 };
 
@@ -285,6 +308,27 @@ export type CreateContactData = {
   location?: string;
   notes?: string;
   tagIds?: string[];
+};
+
+export type GoogleImportContact = {
+  displayName?: string;
+  primaryPhone?: string | null;
+  primaryEmail?: string | null;
+  dateOfBirth?: string | null;
+  company?: string | null;
+  jobTitle?: string | null;
+  location?: string | null;
+  notes?: string | null;
+  photoUrl?: string | null;
+  photoBase64?: string | null;
+  photoContentType?: string | null;
+};
+
+export type GoogleImportBatchResult = {
+  imported: number;
+  updated: number;
+  skipped: number;
+  errors: number;
 };
 
 export type Tag = {

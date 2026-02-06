@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import {
   User,
   Tags,
+  Download,
   Bell,
   Palette,
   HelpCircle,
@@ -135,13 +136,28 @@ export default function SettingsScreen() {
           icon={User}
           title="Edit Profile"
           subtitle="Update your personal information"
-          onPress={() => router.push("/settings/profile")}
+          onPress={() =>
+            Alert.alert("Coming Soon", "Profile settings will be available soon.")
+          }
         />
         <SettingRow
           icon={Tags}
           title="Manage Tags"
           subtitle="Create and edit contact tags"
-          onPress={() => router.push("/settings/tags")}
+          onPress={() =>
+            Alert.alert("Coming Soon", "Tag management will be available soon.")
+          }
+        />
+        <SettingRow
+          icon={Download}
+          title="Import Google Contacts"
+          subtitle="Fetch and merge contacts from your Google account"
+          onPress={() =>
+            router.push({
+              pathname: "/google-import" as any,
+              params: { entry: "settings" },
+            })
+          }
         />
       </View>
 

@@ -34,7 +34,13 @@
       "output": "static"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Orbit to access your photos so you can set contact avatars."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

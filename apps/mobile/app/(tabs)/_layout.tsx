@@ -39,6 +39,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      initialRouteName="assistant"
       screenOptions={{
         headerShown: true,
         headerStyle: {
@@ -62,7 +63,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="assistant"
         options={{
-          title: "Assistant",
+          title: "Orbit",
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} icon={Sparkles} />
           ),

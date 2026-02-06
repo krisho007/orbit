@@ -332,7 +332,7 @@ app.post("/", async (c) => {
 
   const validation = createConversationSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.errors }, 400);
+    return c.json({ error: validation.error.issues }, 400);
   }
 
   const data = validation.data;
@@ -349,6 +349,10 @@ app.post("/", async (c) => {
         eventId: data.eventId || null,
       })
       .returning();
+
+    if (!newConversation) {
+      return c.json({ error: "Failed to create conversation" }, 500);
+    }
 
     // Add participants
     if (data.participantIds.length > 0) {
@@ -375,7 +379,7 @@ app.put("/:id", async (c) => {
 
   const validation = updateConversationSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.errors }, 400);
+    return c.json({ error: validation.error.issues }, 400);
   }
 
   const data = validation.data;

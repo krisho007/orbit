@@ -28,6 +28,8 @@ const getRedirectUrl = () => {
 
 // The redirect URL that will be used - computed once
 const redirectTo = getRedirectUrl();
+const googleContactsScope =
+  "openid email profile https://www.googleapis.com/auth/contacts.readonly";
 
 type AuthContextType = {
   user: User | null;
@@ -169,6 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           provider: "google",
           options: {
             redirectTo,
+            scopes: googleContactsScope,
             queryParams: {
               access_type: "offline",
               prompt: "consent",
@@ -198,6 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           options: {
             redirectTo: redirectTo,
             skipBrowserRedirect: true,
+            scopes: googleContactsScope,
             queryParams: {
               access_type: "offline",
               prompt: "consent",

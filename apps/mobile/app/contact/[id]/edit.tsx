@@ -7,10 +7,12 @@ import {
   Pressable,
   Alert,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { contactsApi, Contact } from "../../../lib/api";
+import * as ImagePicker from "expo-image-picker";
+import { contactsApi, ContactImage } from "../../../lib/api";
 import { getThemeColor, useThemeColors } from "../../../lib/theme";
 
 export default function EditContactScreen() {
@@ -20,6 +22,9 @@ export default function EditContactScreen() {
   const placeholderColor = getThemeColor(colors, "typography-500");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [existingImage, setExistingImage] = useState<ContactImage | null>(null);
+  const [selectedImage, setSelectedImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [removeExistingImage, setRemoveExistingImage] = useState(false);
   const [formData, setFormData] = useState({
     displayName: "",
     company: "",
@@ -37,6 +42,10 @@ export default function EditContactScreen() {
     try {
       setIsLoading(true);
       const contact = await contactsApi.get(id);
+      const primaryImage = contact.images?.[0] ?? null;
+      setExistingImage(primaryImage);
+      setSelectedImage(null);
+      setRemoveExistingImage(false);
       setFormData({
         displayName: contact.displayName || "",
         company: contact.company || "",
@@ -51,6 +60,45 @@ export default function EditContactScreen() {
       router.back();
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const pickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          "Permission Required",
+          "Photo library permission is required to select a contact avatar."
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setSelectedImage(result.assets[0]);
+        setRemoveExistingImage(false);
+      }
+    } catch (error) {
+      console.error("Failed to pick image:", error);
+      Alert.alert("Error", "Failed to pick image");
+    }
+  };
+
+  const handleRemoveImage = () => {
+    if (selectedImage) {
+      setSelectedImage(null);
+      return;
+    }
+    if (existingImage) {
+      setRemoveExistingImage(true);
     }
   };
 
@@ -70,6 +118,24 @@ export default function EditContactScreen() {
         primaryEmail: formData.primaryEmail.trim() || undefined,
         notes: formData.notes.trim() || undefined,
       });
+
+      const shouldDeleteExisting = Boolean(existingImage) && (removeExistingImage || selectedImage);
+      if (shouldDeleteExisting && existingImage) {
+        await contactsApi.deleteImage(id, existingImage.id);
+      }
+
+      if (selectedImage) {
+        if (!selectedImage.base64) {
+          throw new Error("Selected image did not include base64 payload");
+        }
+
+        await contactsApi.uploadImage(id, {
+          base64Data: selectedImage.base64,
+          contentType: selectedImage.mimeType || "image/jpeg",
+          fileName: selectedImage.fileName || `contact-${Date.now()}.jpg`,
+        });
+      }
+
       router.back();
     } catch (error) {
       console.error("Failed to update contact:", error);
@@ -113,6 +179,41 @@ export default function EditContactScreen() {
       </View>
 
       <ScrollView className="flex-1 px-4 py-6">
+        {/* Avatar */}
+        <View className="items-center mb-6">
+          {selectedImage?.uri ? (
+            <Image source={{ uri: selectedImage.uri }} className="w-24 h-24 rounded-full mb-3" />
+          ) : existingImage?.imageUrl && !removeExistingImage ? (
+            <Image source={{ uri: existingImage.imageUrl }} className="w-24 h-24 rounded-full mb-3" />
+          ) : (
+            <View className="w-24 h-24 rounded-full bg-primary-100 items-center justify-center mb-3">
+              <Text className="text-primary-700 text-4xl font-semibold">
+                {(formData.displayName.trim().charAt(0) || "?").toUpperCase()}
+              </Text>
+            </View>
+          )}
+          <View className="flex-row">
+            <Pressable
+              onPress={pickImage}
+              className="px-4 py-2 bg-primary-600 rounded-lg"
+            >
+              <Text className="text-white font-medium">
+                {selectedImage || (existingImage && !removeExistingImage)
+                  ? "Change Photo"
+                  : "Choose Photo"}
+              </Text>
+            </Pressable>
+            {(selectedImage || (existingImage && !removeExistingImage)) && (
+              <Pressable
+                onPress={handleRemoveImage}
+                className="px-4 py-2 bg-background-100 rounded-lg ml-2 border border-border-200"
+              >
+                <Text className="text-typography-700 font-medium">Remove</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+
         {/* Name */}
         <View className="mb-4">
           <Text className="text-typography-700 text-sm font-medium mb-2">

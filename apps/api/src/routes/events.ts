@@ -345,7 +345,7 @@ app.post("/", async (c) => {
 
   const validation = createEventSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.errors }, 400);
+    return c.json({ error: validation.error.issues }, 400);
   }
 
   const data = validation.data;
@@ -363,6 +363,10 @@ app.post("/", async (c) => {
         location: data.location || null,
       })
       .returning();
+
+    if (!newEvent) {
+      return c.json({ error: "Failed to create event" }, 500);
+    }
 
     // Add participants if provided
     if (data.participantIds && data.participantIds.length > 0) {
@@ -389,7 +393,7 @@ app.put("/:id", async (c) => {
 
   const validation = updateEventSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.errors }, 400);
+    return c.json({ error: validation.error.issues }, 400);
   }
 
   const data = validation.data;

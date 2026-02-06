@@ -35,6 +35,7 @@ import {
   AssistantEventCard,
 } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
+import { useGluestackUI } from "../../components/ui/gluestack-ui-provider";
 
 type Message = ChatMessage & {
   id: string;
@@ -42,10 +43,17 @@ type Message = ChatMessage & {
 };
 
 const SUGGESTIONS = [
+  "Find contact Krishna",
   "Show my recent conversations",
   "What are my upcoming events?",
-  "Find contacts named John",
   "I had a call with Sarah today",
+];
+
+const CAPABILITY_TAGS = [
+  "Log conversations",
+  "Find contacts quickly",
+  "Create follow-up events",
+  "Review recent activity",
 ];
 
 const RESULT_CARD_LIMIT = 10;
@@ -66,37 +74,35 @@ const MEDIUM_META: Record<
 export default function AssistantScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content: `Hi! I'm your Orbit assistant. I can help you:
-
-• Log conversations
-• Find conversations
-• Create events
-• Search contacts
-• Get contact info
-
-What would you like to do?`,
-    },
-  ]);
+  const { resolvedColorMode } = useGluestackUI();
+  const scrollIndicatorStyle = resolvedColorMode === "dark" ? "white" : "black";
+  const resultScrollContentStyle = Platform.OS === "android" ? { paddingRight: 6 } : undefined;
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const isSendingRef = useRef(false);
+  const messageSequenceRef = useRef(0);
+
+  const nextMessageId = useCallback((prefix: string) => {
+    messageSequenceRef.current += 1;
+    return `${prefix}-${Date.now()}-${messageSequenceRef.current}`;
+  }, []);
 
   const sendMessage = useCallback(
     async (text: string) => {
-      if (!text.trim() || isLoading) return;
+      const trimmed = text.trim();
+      if (!trimmed || isSendingRef.current) return;
+      isSendingRef.current = true;
 
       const userMessage: Message = {
-        id: `user-${Date.now()}`,
+        id: nextMessageId("user"),
         role: "user",
-        content: text.trim(),
+        content: trimmed,
       };
 
       const loadingMessage: Message = {
-        id: `loading-${Date.now()}`,
+        id: nextMessageId("loading"),
         role: "assistant",
         content: "",
         isLoading: true,
@@ -113,9 +119,9 @@ What would you like to do?`,
       try {
         const chatHistory: ChatMessage[] = [
           ...messages
-            .filter((m) => !m.isLoading && m.id !== "welcome")
+            .filter((m) => !m.isLoading)
             .map((m) => ({ role: m.role, content: m.content })),
-          { role: "user" as const, content: text.trim() },
+          { role: "user" as const, content: trimmed },
         ];
 
         const response = await assistantApi.chat(chatHistory);
@@ -125,7 +131,7 @@ What would you like to do?`,
           return [
             ...filtered,
             {
-              id: `assistant-${Date.now()}`,
+              id: nextMessageId("assistant"),
               role: "assistant",
               content: response.content,
               ui: response.ui ?? null,
@@ -139,24 +145,25 @@ What would you like to do?`,
           return [
             ...filtered,
             {
-              id: `error-${Date.now()}`,
+              id: nextMessageId("error"),
               role: "assistant",
               content: "Sorry, I encountered an error. Please try again.",
             },
           ];
         });
       } finally {
+        isSendingRef.current = false;
         setIsLoading(false);
         setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: true });
         }, 100);
       }
     },
-    [messages, isLoading]
+    [messages, nextMessageId]
   );
 
   const handleSuggestion = (suggestion: string) => {
-    sendMessage(suggestion);
+    setInput(suggestion);
   };
 
   const formatDateTime = (value: string, pattern: string, fallback: string) => {
@@ -306,6 +313,9 @@ What would you like to do?`,
               className="max-h-[340px]"
               nestedScrollEnabled
               showsVerticalScrollIndicator
+              indicatorStyle={scrollIndicatorStyle}
+              persistentScrollbar
+              contentContainerStyle={resultScrollContentStyle}
             >
               {cards.map(renderContactCard)}
             </ScrollView>
@@ -333,6 +343,9 @@ What would you like to do?`,
               className="max-h-[340px]"
               nestedScrollEnabled
               showsVerticalScrollIndicator
+              indicatorStyle={scrollIndicatorStyle}
+              persistentScrollbar
+              contentContainerStyle={resultScrollContentStyle}
             >
               {cards.map(renderConversationCard)}
             </ScrollView>
@@ -360,6 +373,9 @@ What would you like to do?`,
               className="max-h-[340px]"
               nestedScrollEnabled
               showsVerticalScrollIndicator
+              indicatorStyle={scrollIndicatorStyle}
+              persistentScrollbar
+              contentContainerStyle={resultScrollContentStyle}
             >
               {cards.map(renderEventCard)}
             </ScrollView>
@@ -377,11 +393,17 @@ What would you like to do?`,
     const isUser = item.role === "user";
     const hasContent = item.content && item.content.trim().length > 0;
     const showUi = !isUser && item.ui;
+    const assistantAvatar = (
+      <View className="w-8 h-8 rounded-xl bg-primary-100 items-center justify-center mr-2 mt-1">
+        <Sparkles size={14} color={getThemeColor(colors, "primary-600")} />
+      </View>
+    );
 
     if (item.isLoading) {
       return (
         <View className="flex-row justify-start mb-3 px-4">
-          <View className="bg-background-100 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
+          {assistantAvatar}
+          <View className="bg-background-0 border border-border-200 rounded-2xl rounded-bl-md px-4 py-3 max-w-[78%]">
             <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
           </View>
         </View>
@@ -391,14 +413,13 @@ What would you like to do?`,
     return (
       <View className="mb-3">
         {hasContent && (
-          <View
-            className={`flex-row px-4 ${isUser ? "justify-end" : "justify-start"}`}
-          >
+          <View className={`flex-row px-4 ${isUser ? "justify-end" : "justify-start"}`}>
+            {!isUser && assistantAvatar}
             <View
-              className={`rounded-2xl px-4 py-3 max-w-[85%] ${
+              className={`rounded-2xl px-4 py-3 ${
                 isUser
-                  ? "bg-primary-600 rounded-br-md"
-                  : "bg-background-100 rounded-bl-md"
+                  ? "bg-primary-600 rounded-br-md max-w-[82%]"
+                  : "bg-background-0 border border-border-200 rounded-bl-md max-w-[78%]"
               }`}
             >
               <Text
@@ -415,7 +436,7 @@ What would you like to do?`,
           </View>
         )}
         {showUi && (
-          <View className={`px-4 ${hasContent ? "mt-2" : ""}`}>
+          <View className={`px-4 pl-14 ${hasContent ? "mt-2" : ""}`}>
             {renderAssistantUi(item.ui!)}
           </View>
         )}
@@ -424,30 +445,57 @@ What would you like to do?`,
   };
 
   const ListHeader = () => (
-    <View className="py-6">
-      <View className="items-center mb-4">
-        <View className="w-16 h-16 bg-primary-100 rounded-3xl items-center justify-center">
-          <Sparkles size={26} color={getThemeColor(colors, "primary-600")} />
+    <View className="px-4 pt-4 pb-6">
+      <View className="relative overflow-hidden rounded-3xl border border-border-200 bg-background-0 p-5">
+        <View className="absolute -top-10 -right-10 w-28 h-28 rounded-full bg-primary-100" />
+        <View className="absolute -bottom-10 -left-10 w-24 h-24 rounded-full bg-background-100" />
+
+        <View className="flex-row items-center mb-4">
+          <View className="w-12 h-12 bg-primary-600 rounded-2xl items-center justify-center mr-3">
+            <Sparkles size={20} color={getThemeColor(colors, "typography-0")} />
+          </View>
+          <View className="flex-1">
+            <Text className="text-typography-600 text-sm">
+              Chat naturally to search, log, and plan.
+            </Text>
+          </View>
+        </View>
+
+        <View className="flex-row flex-wrap">
+          {CAPABILITY_TAGS.map((tag) => (
+            <View
+              key={tag}
+              className="rounded-full border border-border-200 bg-background-50 px-3 py-1.5 mr-2 mb-2"
+            >
+              <Text className="text-typography-700 text-xs font-medium">{tag}</Text>
+            </View>
+          ))}
         </View>
       </View>
     </View>
   );
 
   const ListFooter = () => (
-    <View className="pb-4">
-      {messages.length <= 1 && (
-        <View className="px-4 mt-2">
-          <Text className="text-typography-500 text-sm mb-3">Try saying:</Text>
-          <View className="flex-row flex-wrap">
-            {SUGGESTIONS.map((suggestion, index) => (
-              <Pressable
-                key={index}
-                onPress={() => handleSuggestion(suggestion)}
-                className="bg-background-0 border border-border-200 rounded-full px-4 py-2 mr-2 mb-2 active:bg-background-50"
-              >
-                <Text className="text-typography-700 text-sm">{suggestion}</Text>
-              </Pressable>
-            ))}
+    <View className="pb-6">
+      {messages.length === 0 && (
+        <View className="px-4 mt-1">
+          <View className="rounded-2xl border border-border-200 bg-background-0 p-4">
+            <Text className="text-typography-900 text-sm font-semibold">Try a quick prompt</Text>
+            <Text className="text-typography-500 text-sm mt-1 mb-3">
+              Tap one to get started.
+            </Text>
+            <View className="flex-row flex-wrap">
+              {SUGGESTIONS.map((suggestion) => (
+                <Pressable
+                  key={suggestion}
+                  onPress={() => handleSuggestion(suggestion)}
+                  className="flex-row items-center bg-primary-50 border border-primary-200 rounded-full px-3 py-2 mr-2 mb-2 active:bg-primary-100"
+                >
+                  <Sparkles size={12} color={getThemeColor(colors, "primary-600")} />
+                  <Text className="text-primary-700 text-sm ml-1">{suggestion}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
         </View>
       )}
@@ -467,17 +515,19 @@ What would you like to do?`,
         renderItem={renderMessage}
         ListHeaderComponent={ListHeader}
         ListFooterComponent={ListFooter}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator
         contentContainerStyle={{ flexGrow: 1 }}
         onContentSizeChange={() =>
           flatListRef.current?.scrollToEnd({ animated: false })
         }
       />
 
-      <View className="border-t border-border-200 px-4 py-3 bg-background-0">
-        <View className="flex-row items-end">
-          <View className="flex-1 bg-background-100 rounded-2xl px-4 py-3 mr-2 min-h-[140px] max-h-[220px]">
+      <View className="border-t border-border-200 px-4 pt-3 pb-4 bg-background-0">
+        <View className="flex-row items-end rounded-3xl border border-border-200 bg-background-50 px-3 py-3">
+          <View className="flex-1 mr-2">
             <TextInput
-              className="text-base text-typography-900 flex-1"
+              className="text-base text-typography-900 min-h-[52px] max-h-[160px] py-2 px-1"
               placeholder="Ask me anything..."
               placeholderTextColor={getThemeColor(colors, "typography-500")}
               value={input}
@@ -485,6 +535,7 @@ What would you like to do?`,
               multiline
               maxLength={500}
               editable={!isLoading}
+              textAlignVertical="top"
               onSubmitEditing={() => sendMessage(input)}
               submitBehavior="submit"
               blurOnSubmit={false}
@@ -494,7 +545,7 @@ What would you like to do?`,
           <Pressable
             onPress={() => sendMessage(input)}
             disabled={!input.trim() || isLoading}
-            className={`w-11 h-11 rounded-full items-center justify-center ${
+            className={`w-11 h-11 rounded-2xl items-center justify-center ${
               input.trim() && !isLoading
                 ? "bg-primary-600 active:bg-primary-700"
                 : "bg-border-200"

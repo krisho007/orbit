@@ -6,9 +6,11 @@ import {
   TextInput,
   Pressable,
   Alert,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import { contactsApi } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
 
@@ -17,6 +19,9 @@ export default function NewContactScreen() {
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<ImagePicker.ImagePickerAsset | null>(
+    null
+  );
   const [formData, setFormData] = useState({
     displayName: "",
     company: "",
@@ -26,6 +31,38 @@ export default function NewContactScreen() {
     notes: "",
   });
 
+  const pickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          "Permission Required",
+          "Photo library permission is required to select a contact avatar."
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setSelectedImage(result.assets[0]);
+      }
+    } catch (error) {
+      console.error("Failed to pick image:", error);
+      Alert.alert("Error", "Failed to pick image");
+    }
+  };
+
+  const clearImage = () => {
+    setSelectedImage(null);
+  };
+
   const handleSubmit = async () => {
     if (!formData.displayName.trim()) {
       Alert.alert("Error", "Name is required");
@@ -34,7 +71,7 @@ export default function NewContactScreen() {
 
     try {
       setIsSubmitting(true);
-      await contactsApi.create({
+      const newContact = await contactsApi.create({
         displayName: formData.displayName.trim(),
         company: formData.company.trim() || undefined,
         jobTitle: formData.jobTitle.trim() || undefined,
@@ -42,6 +79,19 @@ export default function NewContactScreen() {
         primaryEmail: formData.primaryEmail.trim() || undefined,
         notes: formData.notes.trim() || undefined,
       });
+
+      if (selectedImage) {
+        if (!selectedImage.base64) {
+          throw new Error("Selected image did not include base64 payload");
+        }
+
+        await contactsApi.uploadImage(newContact.id, {
+          base64Data: selectedImage.base64,
+          contentType: selectedImage.mimeType || "image/jpeg",
+          fileName: selectedImage.fileName || `contact-${Date.now()}.jpg`,
+        });
+      }
+
       router.back();
     } catch (error) {
       console.error("Failed to create contact:", error);
@@ -75,6 +125,37 @@ export default function NewContactScreen() {
       </View>
 
       <ScrollView className="flex-1 px-4 py-6">
+        {/* Avatar */}
+        <View className="items-center mb-6">
+          {selectedImage?.uri ? (
+            <Image source={{ uri: selectedImage.uri }} className="w-24 h-24 rounded-full mb-3" />
+          ) : (
+            <View className="w-24 h-24 rounded-full bg-primary-100 items-center justify-center mb-3">
+              <Text className="text-primary-700 text-4xl font-semibold">
+                {(formData.displayName.trim().charAt(0) || "?").toUpperCase()}
+              </Text>
+            </View>
+          )}
+          <View className="flex-row">
+            <Pressable
+              onPress={pickImage}
+              className="px-4 py-2 bg-primary-600 rounded-lg"
+            >
+              <Text className="text-white font-medium">
+                {selectedImage ? "Change Photo" : "Choose Photo"}
+              </Text>
+            </Pressable>
+            {selectedImage && (
+              <Pressable
+                onPress={clearImage}
+                className="px-4 py-2 bg-background-100 rounded-lg ml-2 border border-border-200"
+              >
+                <Text className="text-typography-700 font-medium">Remove</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+
         {/* Name */}
         <View className="mb-4">
           <Text className="text-typography-700 text-sm font-medium mb-2">

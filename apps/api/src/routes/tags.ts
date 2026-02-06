@@ -96,7 +96,7 @@ app.post("/", async (c) => {
 
   const validation = createTagSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.errors }, 400);
+    return c.json({ error: validation.error.issues }, 400);
   }
 
   const data = validation.data;
@@ -136,7 +136,7 @@ app.put("/:id", async (c) => {
 
   const validation = updateTagSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.errors }, 400);
+    return c.json({ error: validation.error.issues }, 400);
   }
 
   const data = validation.data;

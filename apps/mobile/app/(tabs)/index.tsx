@@ -7,9 +7,10 @@ import {
   TextInput,
   RefreshControl,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Search, X, Plus, Users } from "lucide-react-native";
+import { Search, X, Plus, Users, Download } from "lucide-react-native";
 import { contactsApi, Contact } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { getThemeColor, useThemeColors, type ThemeColors } from "../../lib/theme";
@@ -129,11 +130,18 @@ export default function ContactsScreen() {
       onPress={() => router.push(`/contact/${item.id}`)}
       className="flex-row items-center px-4 py-4 bg-background-0 border border-border-100 rounded-2xl mx-4 mb-3 active:bg-background-50"
     >
-      <View className="w-12 h-12 rounded-2xl bg-primary-100 items-center justify-center mr-4">
-        <Text className="text-primary-700 text-lg font-semibold">
-          {item.displayName.charAt(0).toUpperCase()}
-        </Text>
-      </View>
+      {item.images?.[0]?.imageUrl ? (
+        <Image
+          source={{ uri: item.images[0].imageUrl }}
+          className="w-12 h-12 rounded-2xl mr-4"
+        />
+      ) : (
+        <View className="w-12 h-12 rounded-2xl bg-primary-100 items-center justify-center mr-4">
+          <Text className="text-primary-700 text-lg font-semibold">
+            {item.displayName.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+      )}
 
       <View className="flex-1">
         <Text className="text-typography-900 font-semibold text-base">
@@ -222,15 +230,29 @@ export default function ContactsScreen() {
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: 96 }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 140 }}
       />
 
-      <Pressable
-        onPress={() => router.push("/contact/new")}
-        className="absolute bottom-6 right-6 w-14 h-14 bg-primary-600 rounded-full items-center justify-center shadow-lg active:bg-primary-700"
-      >
-        <Plus size={22} color={getThemeColor(colors, "typography-0")} />
-      </Pressable>
+      <View className="absolute bottom-6 right-6 items-center">
+        <Pressable
+          onPress={() => router.push("/contact/new")}
+          className="w-14 h-14 bg-primary-600 rounded-full items-center justify-center shadow-lg active:bg-primary-700 mb-3"
+        >
+          <Plus size={22} color={getThemeColor(colors, "typography-0")} />
+        </Pressable>
+
+        <Pressable
+          onPress={() =>
+            router.push({
+              pathname: "/google-import" as any,
+              params: { entry: "contacts" },
+            })
+          }
+          className="w-12 h-12 bg-background-0 border border-border-200 rounded-full items-center justify-center shadow-sm active:bg-background-50"
+        >
+          <Download size={18} color={getThemeColor(colors, "primary-600")} />
+        </Pressable>
+      </View>
     </View>
   );
 }

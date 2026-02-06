@@ -4,15 +4,15 @@
 # ==================================
 # Stage 1: Build Expo Web
 # ==================================
-FROM node:20-slim AS web-builder
+FROM oven/bun:1-slim AS web-builder
 
 WORKDIR /build
 
 # Copy mobile app package files
-COPY apps/mobile/package*.json ./
+COPY apps/mobile/package.json apps/mobile/bun.lock ./
 
 # Install dependencies
-RUN npm install --legacy-peer-deps
+RUN bun install --frozen-lockfile
 
 # Copy mobile app source
 COPY apps/mobile/ ./
@@ -32,7 +32,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 # Copy API package files and install
-COPY apps/api/package.json apps/api/bun.lockb* ./
+COPY apps/api/package.json apps/api/bun.lock ./
 RUN bun install --frozen-lockfile --production
 
 # Copy API source code

@@ -83,7 +83,7 @@ export default function ConversationDetailScreen() {
   };
 
   const handleEdit = () => {
-    Alert.alert("Coming soon", "Conversation editing is not available yet.");
+    router.push(`/conversation/${id}/edit`);
   };
 
   if (isLoading) {

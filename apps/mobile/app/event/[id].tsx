@@ -153,7 +153,7 @@ export default function EventDetailScreen() {
   };
 
   const handleEdit = () => {
-    Alert.alert("Coming soon", "Event editing is not available yet.");
+    router.push(`/event/${id}/edit`);
   };
 
   if (isLoading) {

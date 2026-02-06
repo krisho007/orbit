@@ -207,7 +207,7 @@ export function ButtonIcon({ as: Icon, className }: ButtonIconProps) {
       return "#FFFFFF";
     }
     const colorMap = {
-      primary: "#4F46E5",
+      primary: "#0D9488",
       secondary: "#475569",
       positive: "#16A34A",
       negative: "#DC2626",
@@ -237,7 +237,7 @@ export function ButtonSpinner({ className }: ButtonSpinnerProps) {
       return "#FFFFFF";
     }
     const colorMap = {
-      primary: "#4F46E5",
+      primary: "#0D9488",
       secondary: "#475569",
       positive: "#16A34A",
       negative: "#DC2626",

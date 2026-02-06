@@ -1,56 +1,79 @@
 import { Tabs } from "expo-router";
-import { View, Text, Platform } from "react-native";
+import { View, Platform } from "react-native";
+import type { ComponentType } from "react";
+import {
+  Users,
+  MessageCircle,
+  CalendarDays,
+  Sparkles,
+  Settings as SettingsIcon,
+} from "lucide-react-native";
+import { getThemeColor, useThemeColors } from "../../lib/theme";
 
 type TabIconProps = {
   focused: boolean;
-  icon: string;
-  label: string;
+  icon: ComponentType<{ size?: number; color?: string }>;
 };
 
-function TabIcon({ focused, icon, label }: TabIconProps) {
+function TabIcon({ focused, icon: Icon }: TabIconProps) {
+  const colors = useThemeColors();
+  const iconColor = focused
+    ? getThemeColor(colors, "primary-600")
+    : getThemeColor(colors, "typography-500");
   return (
     <View className="items-center justify-center pt-2">
-      <Text className={`text-xl ${focused ? "" : "opacity-60"}`}>{icon}</Text>
-      <Text
-        className={`text-xs mt-1 ${
-          focused ? "text-primary-600 font-medium" : "text-gray-500"
+      <View
+        className={`w-11 h-11 rounded-2xl items-center justify-center ${
+          focused ? "bg-primary-100" : "bg-transparent"
         }`}
       >
-        {label}
-      </Text>
+        <Icon size={22} color={iconColor} />
+      </View>
+      {focused && <View className="mt-1 h-1 w-4 rounded-full bg-primary-600" />}
     </View>
   );
 }
 
 export default function TabsLayout() {
+  const colors = useThemeColors();
+
   return (
     <Tabs
       screenOptions={{
         headerShown: true,
         headerStyle: {
-          backgroundColor: "#fff",
+          backgroundColor: getThemeColor(colors, "background-0"),
         },
         headerTitleStyle: {
-          fontWeight: "600",
-          color: "#111827",
+          fontWeight: "700",
+          color: getThemeColor(colors, "typography-900"),
         },
         headerShadowVisible: false,
         tabBarStyle: {
-          backgroundColor: "#fff",
-          borderTopColor: "#f3f4f6",
+          backgroundColor: getThemeColor(colors, "background-0"),
+          borderTopColor: getThemeColor(colors, "border-200"),
           borderTopWidth: 1,
-          height: Platform.OS === "ios" ? 85 : 65,
-          paddingBottom: Platform.OS === "ios" ? 20 : 10,
+          height: Platform.OS === "ios" ? 86 : 68,
+          paddingBottom: Platform.OS === "ios" ? 20 : 12,
         },
         tabBarShowLabel: false,
       }}
     >
       <Tabs.Screen
+        name="assistant"
+        options={{
+          title: "Assistant",
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} icon={Sparkles} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="index"
         options={{
           title: "Contacts",
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon="👥" label="Contacts" />
+            <TabIcon focused={focused} icon={Users} />
           ),
         }}
       />
@@ -59,7 +82,7 @@ export default function TabsLayout() {
         options={{
           title: "Conversations",
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon="💬" label="Chats" />
+            <TabIcon focused={focused} icon={MessageCircle} />
           ),
         }}
       />
@@ -68,16 +91,7 @@ export default function TabsLayout() {
         options={{
           title: "Events",
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon="📅" label="Events" />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="assistant"
-        options={{
-          title: "Assistant",
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon="🤖" label="AI" />
+            <TabIcon focused={focused} icon={CalendarDays} />
           ),
         }}
       />
@@ -86,7 +100,7 @@ export default function TabsLayout() {
         options={{
           title: "Settings",
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon="⚙️" label="Settings" />
+            <TabIcon focused={focused} icon={SettingsIcon} />
           ),
         }}
       />

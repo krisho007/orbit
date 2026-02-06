@@ -132,6 +132,21 @@ export const conversationsApi = {
       stats?: { totalCount: number };
     }>("/api/conversations", params),
 
+  listByContacts: (params: {
+    contactIds: string[];
+    cursor?: string;
+    search?: string;
+    medium?: string;
+    limit?: number;
+  }) =>
+    api.get<{
+      conversations: Conversation[];
+      nextCursor: string | null;
+    }>("/api/conversations/by-contacts", {
+      ...params,
+      contactIds: params.contactIds.join(","),
+    }),
+
   get: (id: string) => api.get<Conversation>(`/api/conversations/${id}`),
 
   create: (data: CreateConversationData) =>
@@ -159,6 +174,20 @@ export const eventsApi = {
 
   get: (id: string) => api.get<Event>(`/api/events/${id}`),
 
+  listConversations: (
+    id: string,
+    params?: {
+      cursor?: string;
+      search?: string;
+      medium?: string;
+      limit?: number;
+    }
+  ) =>
+    api.get<{
+      conversations: Conversation[];
+      nextCursor: string | null;
+    }>(`/api/events/${id}/conversations`, params),
+
   create: (data: CreateEventData) => api.post<Event>("/api/events", data),
 
   update: (id: string, data: Partial<CreateEventData>) =>
@@ -181,9 +210,42 @@ export const tagsApi = {
 };
 
 // Assistant
+export type AssistantContactCard = {
+  id: string;
+  displayName: string;
+  primaryPhone?: string | null;
+  primaryEmail?: string | null;
+  company?: string | null;
+  jobTitle?: string | null;
+  location?: string | null;
+};
+
+export type AssistantConversationCard = {
+  id: string;
+  medium: string;
+  happenedAt: string;
+  content?: string | null;
+  participants?: string[];
+};
+
+export type AssistantEventCard = {
+  id: string;
+  title: string;
+  startAt: string;
+  location?: string | null;
+  participants?: string[];
+};
+
+export type AssistantUi =
+  | { kind: "contact"; contact: AssistantContactCard }
+  | { kind: "contacts"; count: number; contacts: AssistantContactCard[] }
+  | { kind: "conversations"; count: number; conversations: AssistantConversationCard[] }
+  | { kind: "events"; count: number; events: AssistantEventCard[] };
+
 export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  ui?: AssistantUi | null;
 };
 
 export const assistantApi = {
@@ -290,6 +352,7 @@ export type Event = {
   createdAt: string;
   updatedAt: string;
   participants?: { contact: Contact }[];
+  conversations?: Conversation[];
   _count?: { conversations: number };
 };
 

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import type { ComponentType } from "react";
 import {
   View,
   Text,
@@ -8,33 +9,40 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
+import {
+  Briefcase,
+  Phone,
+  Cake,
+  Heart,
+  Mic,
+  PartyPopper,
+  Users,
+  Bookmark,
+  CalendarDays,
+  MapPin,
+  Plus,
+} from "lucide-react-native";
 import { eventsApi, Event } from "../../lib/api";
-import { format, isToday, isTomorrow, isPast } from "date-fns";
+import { format, isPast } from "date-fns";
+import { getThemeColor, useThemeColors } from "../../lib/theme";
 
-const EVENT_TYPE_ICONS: Record<string, string> = {
-  MEETING: "📋",
-  CALL: "📞",
-  BIRTHDAY: "🎂",
-  ANNIVERSARY: "💍",
-  CONFERENCE: "🎤",
-  SOCIAL: "🎉",
-  FAMILY_EVENT: "👨‍👩‍👧‍👦",
-  OTHER: "📌",
-};
-
-const EVENT_TYPE_LABELS: Record<string, string> = {
-  MEETING: "Meeting",
-  CALL: "Call",
-  BIRTHDAY: "Birthday",
-  ANNIVERSARY: "Anniversary",
-  CONFERENCE: "Conference",
-  SOCIAL: "Social",
-  FAMILY_EVENT: "Family Event",
-  OTHER: "Other",
+const EVENT_META: Record<
+  string,
+  { label: string; icon: ComponentType<{ size?: number; color?: string }> }
+> = {
+  MEETING: { label: "Meeting", icon: Briefcase },
+  CALL: { label: "Call", icon: Phone },
+  BIRTHDAY: { label: "Birthday", icon: Cake },
+  ANNIVERSARY: { label: "Anniversary", icon: Heart },
+  CONFERENCE: { label: "Conference", icon: Mic },
+  SOCIAL: { label: "Social", icon: PartyPopper },
+  FAMILY_EVENT: { label: "Family Event", icon: Users },
+  OTHER: { label: "Other", icon: Bookmark },
 };
 
 export default function EventsScreen() {
   const router = useRouter();
+  const colors = useThemeColors();
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -90,64 +98,60 @@ export default function EventsScreen() {
     }
   };
 
-  const getDateLabel = (dateStr: string) => {
-    const date = new Date(dateStr);
-    if (isToday(date)) return "Today";
-    if (isTomorrow(date)) return "Tomorrow";
-    return format(date, "MMM d, yyyy");
-  };
-
   const renderEvent = ({ item }: { item: Event }) => {
     const eventDate = new Date(item.startAt);
     const isPastEvent = isPast(eventDate);
     const participantCount = item.participants?.length || 0;
+    const meta = EVENT_META[item.eventType] || EVENT_META.OTHER;
+    const EventIcon = meta.icon;
 
     return (
       <Pressable
         onPress={() => router.push(`/event/${item.id}`)}
-        className={`p-4 bg-white border-b border-gray-100 active:bg-gray-50 ${
+        className={`p-4 bg-background-0 border-b border-border-100 active:bg-background-50 ${
           isPastEvent ? "opacity-60" : ""
         }`}
       >
         <View className="flex-row">
-          {/* Date Column */}
           <View className="w-16 items-center mr-3">
-            <Text className="text-xs text-gray-500 uppercase">
+            <Text className="text-xs text-typography-500 uppercase">
               {format(eventDate, "MMM")}
             </Text>
-            <Text className="text-2xl font-bold text-gray-900">
+            <Text className="text-2xl font-bold text-typography-900">
               {format(eventDate, "d")}
             </Text>
-            <Text className="text-xs text-gray-400">
+            <Text className="text-xs text-typography-400">
               {format(eventDate, "EEE")}
             </Text>
           </View>
 
-          {/* Event Details */}
           <View className="flex-1 border-l-2 border-primary-200 pl-3">
             <View className="flex-row items-center mb-1">
-              <Text className="mr-2">
-                {EVENT_TYPE_ICONS[item.eventType] || "📌"}
-              </Text>
-              <Text className="text-gray-900 font-semibold flex-1" numberOfLines={1}>
+              <View className="w-7 h-7 rounded-xl bg-primary-100 items-center justify-center mr-2">
+                <EventIcon size={14} color={getThemeColor(colors, "primary-600")} />
+              </View>
+              <Text className="text-typography-900 font-semibold flex-1" numberOfLines={1}>
                 {item.title}
               </Text>
             </View>
 
-            <Text className="text-gray-500 text-sm mb-1">
+            <Text className="text-typography-600 text-sm mb-1">
               {format(eventDate, "h:mm a")}
               {item.endAt && ` - ${format(new Date(item.endAt), "h:mm a")}`}
             </Text>
 
             {item.location && (
-              <Text className="text-gray-400 text-sm" numberOfLines={1}>
-                📍 {item.location}
-              </Text>
+              <View className="flex-row items-center">
+                <MapPin size={14} color={getThemeColor(colors, "typography-500")} />
+                <Text className="text-typography-500 text-sm ml-1" numberOfLines={1}>
+                  {item.location}
+                </Text>
+              </View>
             )}
 
             {participantCount > 0 && (
-              <Text className="text-gray-400 text-sm mt-1">
-                👥 {participantCount} participant{participantCount !== 1 ? "s" : ""}
+              <Text className="text-typography-500 text-sm mt-1">
+                {participantCount} participant{participantCount !== 1 ? "s" : ""}
               </Text>
             )}
           </View>
@@ -157,9 +161,9 @@ export default function EventsScreen() {
   };
 
   const ListHeader = () => (
-    <View className="p-4 bg-gray-50">
+    <View className="p-4 bg-background-0">
       {totalCount > 0 && (
-        <Text className="text-gray-500 text-sm">
+        <Text className="text-typography-500 text-sm">
           {totalCount} event{totalCount !== 1 ? "s" : ""}
         </Text>
       )}
@@ -169,14 +173,16 @@ export default function EventsScreen() {
   const ListEmpty = () => (
     <View className="flex-1 items-center justify-center py-20">
       {isLoading ? (
-        <ActivityIndicator size="large" color="#4F46E5" />
+        <ActivityIndicator size="large" color={getThemeColor(colors, "primary-600")} />
       ) : (
         <>
-          <Text className="text-6xl mb-4">📅</Text>
-          <Text className="text-gray-900 text-lg font-semibold mb-2">
+          <View className="w-16 h-16 rounded-3xl bg-primary-100 items-center justify-center mb-4">
+            <CalendarIcon color={getThemeColor(colors, "primary-600")} />
+          </View>
+          <Text className="text-typography-900 text-lg font-semibold mb-2">
             No events yet
           </Text>
-          <Text className="text-gray-500 text-center px-8">
+          <Text className="text-typography-500 text-center px-8">
             Create your first event to start tracking important dates
           </Text>
         </>
@@ -187,12 +193,12 @@ export default function EventsScreen() {
   const ListFooter = () =>
     isLoadingMore ? (
       <View className="py-4">
-        <ActivityIndicator size="small" color="#4F46E5" />
+        <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
       </View>
     ) : null;
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <View className="flex-1 bg-background-50">
       <FlatList
         data={events}
         keyExtractor={(item) => item.id}
@@ -204,7 +210,7 @@ export default function EventsScreen() {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            tintColor="#4F46E5"
+            tintColor={getThemeColor(colors, "primary-600")}
           />
         }
         onEndReached={handleLoadMore}
@@ -212,13 +218,16 @@ export default function EventsScreen() {
         contentContainerStyle={{ flexGrow: 1 }}
       />
 
-      {/* FAB */}
       <Pressable
         onPress={() => router.push("/event/new")}
         className="absolute bottom-6 right-6 w-14 h-14 bg-primary-600 rounded-full items-center justify-center shadow-lg active:bg-primary-700"
       >
-        <Text className="text-white text-2xl">+</Text>
+        <Plus size={22} color={getThemeColor(colors, "typography-0")} />
       </Pressable>
     </View>
   );
+}
+
+function CalendarIcon({ color }: { color: string }) {
+  return <CalendarDays size={26} color={color} />;
 }

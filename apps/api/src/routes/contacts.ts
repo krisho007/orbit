@@ -2,7 +2,18 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { eq, and, desc, asc, sql, ilike, or, inArray } from "drizzle-orm";
-import { db, contacts, contactTags, tags, contactImages, socialLinks } from "../db";
+import {
+  db,
+  contacts,
+  contactTags,
+  tags,
+  contactImages,
+  socialLinks,
+  conversations,
+  conversationParticipants,
+  events,
+  eventParticipants,
+} from "../db";
 import { authMiddleware } from "../middleware/auth";
 
 const app = new Hono();
@@ -13,6 +24,27 @@ app.use("/*", authMiddleware);
 const PAGE_SIZE = 20;
 
 // Validation schemas
+const conversationMediums = [
+  "PHONE_CALL",
+  "WHATSAPP",
+  "EMAIL",
+  "CHANCE_ENCOUNTER",
+  "ONLINE_MEETING",
+  "IN_PERSON_MEETING",
+  "OTHER",
+] as const;
+
+const eventTypes = [
+  "MEETING",
+  "CALL",
+  "BIRTHDAY",
+  "ANNIVERSARY",
+  "CONFERENCE",
+  "SOCIAL",
+  "FAMILY_EVENT",
+  "OTHER",
+] as const;
+
 const createContactSchema = z.object({
   displayName: z.string().min(1, "Display name is required"),
   primaryPhone: z.string().optional(),
@@ -42,29 +74,48 @@ app.get("/", async (c) => {
 
     if (search) {
       // Fuzzy search using trigram similarity
-      contactsList = await db.execute(sql`
-        SELECT
-          c.*,
-          GREATEST(
-            similarity(c."displayName", ${search}),
-            word_similarity(${search}, c."displayName"),
-            COALESCE(similarity(c.company, ${search}), 0),
-            COALESCE(word_similarity(${search}, c.company), 0)
-          ) as similarity
-        FROM contacts c
-        WHERE
-          c."userId" = ${userId}
-          AND (
-            similarity(c."displayName", ${search}) > 0.3
-            OR word_similarity(${search}, c."displayName") > 0.3
-            OR similarity(c.company, ${search}) > 0.3
-            OR word_similarity(${search}, c.company) > 0.3
-            OR c."displayName" ILIKE ${"%" + search + "%"}
-            OR c.company ILIKE ${"%" + search + "%"}
+      const similarityExpr = sql<number>`
+        GREATEST(
+          similarity(${contacts.displayName}, ${search}),
+          word_similarity(${search}, ${contacts.displayName}),
+          COALESCE(similarity(${contacts.company}, ${search}), 0),
+          COALESCE(word_similarity(${search}, ${contacts.company}), 0)
+        )
+      `;
+      contactsList = await db
+        .select({
+          id: contacts.id,
+          userId: contacts.userId,
+          displayName: contacts.displayName,
+          googleContactName: contacts.googleContactName,
+          primaryPhone: contacts.primaryPhone,
+          primaryEmail: contacts.primaryEmail,
+          dateOfBirth: contacts.dateOfBirth,
+          gender: contacts.gender,
+          company: contacts.company,
+          jobTitle: contacts.jobTitle,
+          location: contacts.location,
+          notes: contacts.notes,
+          createdAt: contacts.createdAt,
+          updatedAt: contacts.updatedAt,
+          similarity: similarityExpr,
+        })
+        .from(contacts)
+        .where(
+          and(
+            eq(contacts.userId, userId),
+            or(
+              sql`similarity(${contacts.displayName}, ${search}) > 0.3`,
+              sql`word_similarity(${search}, ${contacts.displayName}) > 0.3`,
+              sql`similarity(${contacts.company}, ${search}) > 0.3`,
+              sql`word_similarity(${search}, ${contacts.company}) > 0.3`,
+              ilike(contacts.displayName, `%${search}%`),
+              ilike(contacts.company, `%${search}%`)
+            )!
           )
-        ORDER BY similarity DESC
-        LIMIT ${limit + 1}
-      `);
+        )
+        .orderBy(desc(similarityExpr))
+        .limit(limit + 1);
     } else {
       // Regular paginated list
       if (cursor) {
@@ -91,7 +142,7 @@ app.get("/", async (c) => {
 
     // Check if there are more results
     let nextCursor: string | null = null;
-    const results = Array.isArray(contactsList) ? contactsList : contactsList.rows || [];
+    const results = contactsList;
     
     if (results.length > limit) {
       const nextItem = results.pop();
@@ -154,6 +205,404 @@ app.get("/", async (c) => {
   } catch (error) {
     console.error("Error fetching contacts:", error);
     return c.json({ error: "Failed to fetch contacts" }, 500);
+  }
+});
+
+// GET /api/contacts/search/phone - Find contact by phone number
+app.get("/search/phone", async (c) => {
+  const userId = c.get("userId");
+  const phone = c.req.query("phone") || "";
+  const includeRaw = c.req.query("include") || "";
+  const include = includeRaw
+    .split(",")
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0);
+  const conversationsLimit = parseInt(c.req.query("conversationsLimit") || "10");
+  const eventsLimit = parseInt(c.req.query("eventsLimit") || "10");
+
+  const normalized = phone.replace(/\D/g, "");
+  if (!phone || normalized.length < 3) {
+    return c.json({ error: "phone query param is required" }, 400);
+  }
+
+  try {
+    const normalizedLike = `%${normalized}%`;
+    const normalizedPhoneExpr = sql`regexp_replace(${contacts.primaryPhone}, '\\D', '', 'g')`;
+    const candidates = await db
+      .select()
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.userId, userId),
+          or(
+            ilike(contacts.primaryPhone, `%${phone}%`),
+            sql`${normalizedPhoneExpr} = ${normalized}`,
+            sql`${normalizedPhoneExpr} LIKE ${normalizedLike}`
+          )!
+        )
+      )
+      .orderBy(
+        sql`
+          CASE
+            WHEN ${normalizedPhoneExpr} = ${normalized} THEN 0
+            WHEN ${normalizedPhoneExpr} LIKE ${normalizedLike} THEN 1
+            ELSE 2
+          END
+        `,
+        sql`length(${contacts.primaryPhone}) ASC`
+      )
+      .limit(5);
+    const contact = candidates.length > 0 ? candidates[0] : null;
+
+    if (!contact) {
+      return c.json({ contact: null, candidates: [] });
+    }
+
+    const response: any = { contact, candidates };
+
+    if (include.includes("conversations")) {
+      const convIdsResult = await db
+        .select({ conversationId: conversationParticipants.conversationId })
+        .from(conversationParticipants)
+        .where(eq(conversationParticipants.contactId, contact.id));
+
+      const convIds = convIdsResult.map((r) => r.conversationId);
+
+      if (convIds.length === 0) {
+        response.conversations = [];
+      } else {
+        const conversationsList = await db
+          .select()
+          .from(conversations)
+          .where(
+            and(eq(conversations.userId, userId), inArray(conversations.id, convIds))
+          )
+          .orderBy(desc(conversations.happenedAt))
+          .limit(conversationsLimit);
+
+        const conversationIds = conversationsList.map((conv) => conv.id);
+
+        const [participantsData, eventsData] = await Promise.all([
+          conversationIds.length > 0
+            ? db
+                .select()
+                .from(conversationParticipants)
+                .innerJoin(contacts, eq(conversationParticipants.contactId, contacts.id))
+                .where(inArray(conversationParticipants.conversationId, conversationIds))
+            : [],
+          conversationIds.length > 0
+            ? db
+                .select({ id: events.id, title: events.title, conversationEventId: conversations.id })
+                .from(events)
+                .innerJoin(conversations, eq(conversations.eventId, events.id))
+                .where(inArray(conversations.id, conversationIds))
+            : [],
+        ]);
+
+        response.conversations = conversationsList.map((conv) => ({
+          ...conv,
+          participants: participantsData
+            .filter((p: any) => p.conversation_participants.conversationId === conv.id)
+            .map((p: any) => ({
+              ...p.conversation_participants,
+              contact: p.contacts,
+            })),
+          event: eventsData.find((e: any) => conv.eventId === e.id) || null,
+        }));
+      }
+    }
+
+    if (include.includes("events")) {
+      const eventIdsResult = await db
+        .select({ eventId: eventParticipants.eventId })
+        .from(eventParticipants)
+        .where(eq(eventParticipants.contactId, contact.id));
+
+      const eventIds = eventIdsResult.map((r) => r.eventId);
+
+      if (eventIds.length === 0) {
+        response.events = [];
+      } else {
+        const eventsList = await db
+          .select()
+          .from(events)
+          .where(and(eq(events.userId, userId), inArray(events.id, eventIds)))
+          .orderBy(desc(events.startAt))
+          .limit(eventsLimit);
+
+        const eventIdsPage = eventsList.map((evt) => evt.id);
+
+        const [participantsData, conversationCounts] = await Promise.all([
+          eventIdsPage.length > 0
+            ? db
+                .select()
+                .from(eventParticipants)
+                .innerJoin(contacts, eq(eventParticipants.contactId, contacts.id))
+                .where(inArray(eventParticipants.eventId, eventIdsPage))
+            : [],
+          eventIdsPage.length > 0
+            ? db
+                .select({
+                  eventId: conversations.eventId,
+                  count: sql<number>`count(*)`,
+                })
+                .from(conversations)
+                .where(inArray(conversations.eventId, eventIdsPage))
+                .groupBy(conversations.eventId)
+            : [],
+        ]);
+
+        response.events = eventsList.map((evt) => ({
+          ...evt,
+          participants: participantsData
+            .filter((p: any) => p.event_participants.eventId === evt.id)
+            .map((p: any) => ({
+              ...p.event_participants,
+              contact: p.contacts,
+            })),
+          _count: {
+            conversations:
+              conversationCounts.find((cc: any) => cc.eventId === evt.id)?.count || 0,
+          },
+        }));
+      }
+    }
+
+    return c.json(response);
+  } catch (error) {
+    console.error("Error searching contact by phone:", error);
+    return c.json({ error: "Failed to search contacts" }, 500);
+  }
+});
+
+// GET /api/contacts/:id/conversations - List conversations for a contact
+app.get("/:id/conversations", async (c) => {
+  const userId = c.get("userId");
+  const contactId = c.req.param("id");
+  const cursor = c.req.query("cursor");
+  const search = c.req.query("search") || "";
+  const medium = c.req.query("medium");
+  const limit = parseInt(c.req.query("limit") || String(PAGE_SIZE));
+
+  try {
+    const [contact] = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(and(eq(contacts.id, contactId), eq(contacts.userId, userId)));
+
+    if (!contact) {
+      return c.json({ error: "Contact not found" }, 404);
+    }
+
+    const convIdsResult = await db
+      .select({ conversationId: conversationParticipants.conversationId })
+      .from(conversationParticipants)
+      .where(eq(conversationParticipants.contactId, contactId));
+
+    const convIds = convIdsResult.map((r) => r.conversationId);
+
+    if (convIds.length === 0) {
+      return c.json({ conversations: [], nextCursor: null });
+    }
+
+    const conditions = [
+      eq(conversations.userId, userId),
+      inArray(conversations.id, convIds),
+    ];
+
+    if (medium && conversationMediums.includes(medium as any)) {
+      conditions.push(eq(conversations.medium, medium as any));
+    }
+
+    if (search) {
+      conditions.push(ilike(conversations.content, `%${search}%`));
+    }
+
+    let conversationsList;
+    if (cursor) {
+      conversationsList = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            ...conditions,
+            sql`${conversations.happenedAt} < (SELECT "happenedAt" FROM conversations WHERE id = ${cursor})`
+          )
+        )
+        .orderBy(desc(conversations.happenedAt))
+        .limit(limit + 1);
+    } else {
+      conversationsList = await db
+        .select()
+        .from(conversations)
+        .where(and(...conditions))
+        .orderBy(desc(conversations.happenedAt))
+        .limit(limit + 1);
+    }
+
+    let nextCursor: string | null = null;
+    if (conversationsList.length > limit) {
+      const nextItem = conversationsList.pop();
+      nextCursor = nextItem?.id || null;
+    }
+
+    const conversationIds = conversationsList.map((conv) => conv.id);
+
+    const [participantsData, eventsData] = await Promise.all([
+      conversationIds.length > 0
+        ? db
+            .select()
+            .from(conversationParticipants)
+            .innerJoin(contacts, eq(conversationParticipants.contactId, contacts.id))
+            .where(inArray(conversationParticipants.conversationId, conversationIds))
+        : [],
+      conversationIds.length > 0
+        ? db
+            .select({ id: events.id, title: events.title, conversationEventId: conversations.id })
+            .from(events)
+            .innerJoin(conversations, eq(conversations.eventId, events.id))
+            .where(inArray(conversations.id, conversationIds))
+        : [],
+    ]);
+
+    const enrichedConversations = conversationsList.map((conv) => ({
+      ...conv,
+      participants: participantsData
+        .filter((p: any) => p.conversation_participants.conversationId === conv.id)
+        .map((p: any) => ({
+          ...p.conversation_participants,
+          contact: p.contacts,
+        })),
+      event: eventsData.find((e: any) => conv.eventId === e.id) || null,
+    }));
+
+    return c.json({
+      conversations: enrichedConversations,
+      nextCursor,
+    });
+  } catch (error) {
+    console.error("Error fetching contact conversations:", error);
+    return c.json({ error: "Failed to fetch conversations" }, 500);
+  }
+});
+
+// GET /api/contacts/:id/events - List events for a contact
+app.get("/:id/events", async (c) => {
+  const userId = c.get("userId");
+  const contactId = c.req.param("id");
+  const cursor = c.req.query("cursor");
+  const search = c.req.query("search") || "";
+  const eventType = c.req.query("eventType");
+  const limit = parseInt(c.req.query("limit") || String(PAGE_SIZE));
+
+  try {
+    const [contact] = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(and(eq(contacts.id, contactId), eq(contacts.userId, userId)));
+
+    if (!contact) {
+      return c.json({ error: "Contact not found" }, 404);
+    }
+
+    const eventIdsResult = await db
+      .select({ eventId: eventParticipants.eventId })
+      .from(eventParticipants)
+      .where(eq(eventParticipants.contactId, contactId));
+
+    const eventIds = eventIdsResult.map((r) => r.eventId);
+
+    if (eventIds.length === 0) {
+      return c.json({ events: [], nextCursor: null });
+    }
+
+    const conditions = [eq(events.userId, userId), inArray(events.id, eventIds)];
+
+    if (eventType && eventTypes.includes(eventType as any)) {
+      conditions.push(eq(events.eventType, eventType as any));
+    }
+
+    if (search) {
+      conditions.push(
+        or(
+          ilike(events.title, `%${search}%`),
+          ilike(events.description, `%${search}%`),
+          ilike(events.location, `%${search}%`)
+        )!
+      );
+    }
+
+    let eventsList;
+    if (cursor) {
+      eventsList = await db
+        .select()
+        .from(events)
+        .where(
+          and(
+            ...conditions,
+            sql`${events.startAt} < (SELECT "startAt" FROM events WHERE id = ${cursor})`
+          )
+        )
+        .orderBy(desc(events.startAt))
+        .limit(limit + 1);
+    } else {
+      eventsList = await db
+        .select()
+        .from(events)
+        .where(and(...conditions))
+        .orderBy(desc(events.startAt))
+        .limit(limit + 1);
+    }
+
+    let nextCursor: string | null = null;
+    if (eventsList.length > limit) {
+      const nextItem = eventsList.pop();
+      nextCursor = nextItem?.id || null;
+    }
+
+    const eventIdsPage = eventsList.map((evt) => evt.id);
+
+    const [participantsData, conversationCounts] = await Promise.all([
+      eventIdsPage.length > 0
+        ? db
+            .select()
+            .from(eventParticipants)
+            .innerJoin(contacts, eq(eventParticipants.contactId, contacts.id))
+            .where(inArray(eventParticipants.eventId, eventIdsPage))
+        : [],
+      eventIdsPage.length > 0
+        ? db
+            .select({
+              eventId: conversations.eventId,
+              count: sql<number>`count(*)`,
+            })
+            .from(conversations)
+            .where(inArray(conversations.eventId, eventIdsPage))
+            .groupBy(conversations.eventId)
+        : [],
+    ]);
+
+    const enrichedEvents = eventsList.map((evt) => ({
+      ...evt,
+      participants: participantsData
+        .filter((p: any) => p.event_participants.eventId === evt.id)
+        .map((p: any) => ({
+          ...p.event_participants,
+          contact: p.contacts,
+        })),
+      _count: {
+        conversations:
+          conversationCounts.find((cc: any) => cc.eventId === evt.id)?.count || 0,
+      },
+    }));
+
+    return c.json({
+      events: enrichedEvents,
+      nextCursor,
+    });
+  } catch (error) {
+    console.error("Error fetching contact events:", error);
+    return c.json({ error: "Failed to fetch events" }, 500);
   }
 });
 
@@ -415,26 +864,32 @@ app.get("/search/fuzzy", async (c) => {
   }
 
   try {
-    const results = await db.execute(sql`
-      SELECT
-        id,
-        "displayName",
-        GREATEST(
-          similarity("displayName", ${name}),
-          word_similarity(${name}, "displayName")
-        ) as similarity
-      FROM contacts
-      WHERE
-        "userId" = ${userId}
-        AND (
-          similarity("displayName", ${name}) > 0.3
-          OR word_similarity(${name}, "displayName") > 0.3
+    const similarityExpr = sql<number>`
+      GREATEST(
+        similarity(${contacts.displayName}, ${name}),
+        word_similarity(${name}, ${contacts.displayName})
+      )
+    `;
+    const contactsResult = await db
+      .select({
+        id: contacts.id,
+        displayName: contacts.displayName,
+        similarity: similarityExpr,
+      })
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.userId, userId),
+          or(
+            sql`similarity(${contacts.displayName}, ${name}) > 0.3`,
+            sql`word_similarity(${name}, ${contacts.displayName}) > 0.3`
+          )!
         )
-      ORDER BY similarity DESC
-      LIMIT ${limit}
-    `);
+      )
+      .orderBy(desc(similarityExpr))
+      .limit(limit);
 
-    return c.json({ contacts: results.rows || results });
+    return c.json({ contacts: contactsResult });
   } catch (error) {
     console.error("Error in fuzzy search:", error);
     // Fallback to ILIKE

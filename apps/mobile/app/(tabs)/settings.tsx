@@ -1,11 +1,26 @@
-import { View, Text, Pressable, Alert, ScrollView } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { View, Text, Pressable, Alert, ScrollView, Switch } from "react-native";
+import type { ComponentType } from "react";
 import { useAuth } from "../../lib/auth";
 import { useRouter } from "expo-router";
+import {
+  User,
+  Tags,
+  Bell,
+  Palette,
+  HelpCircle,
+  Shield,
+  FileText,
+  LogOut,
+  ChevronRight,
+} from "lucide-react-native";
+import { getThemeColor, useThemeColors, useThemeMode } from "../../lib/theme";
 
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
+  const colors = useThemeColors();
+  const { mode, setMode } = useThemeMode();
+  const isDarkMode = mode === "dark";
 
   const handleSignOut = async () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -25,13 +40,13 @@ export default function SettingsScreen() {
   };
 
   const SettingRow = ({
-    icon,
+    icon: Icon,
     title,
     subtitle,
     onPress,
     danger = false,
   }: {
-    icon: string;
+    icon: ComponentType<{ size?: number; color?: string }>;
     title: string;
     subtitle?: string;
     onPress?: () => void;
@@ -40,109 +55,129 @@ export default function SettingsScreen() {
     <Pressable
       onPress={onPress}
       disabled={!onPress}
-      className="flex-row items-center p-4 bg-white border-b border-gray-100 active:bg-gray-50"
+      className="flex-row items-center p-4 bg-background-0 border-b border-border-100 active:bg-background-50"
     >
-      <View className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center mr-4">
-        <Text className="text-lg">{icon}</Text>
+      <View
+        className={`w-10 h-10 rounded-2xl items-center justify-center mr-4 ${
+          danger ? "bg-error-50" : "bg-primary-100"
+        }`}
+      >
+        <Icon
+          size={18}
+          color={
+            danger
+              ? getThemeColor(colors, "error-600")
+              : getThemeColor(colors, "primary-600")
+          }
+        />
       </View>
       <View className="flex-1">
-        <Text className={`text-base ${danger ? "text-red-600" : "text-gray-900"}`}>
+        <Text
+          className={`text-base ${
+            danger ? "text-error-600" : "text-typography-900"
+          }`}
+        >
           {title}
         </Text>
-        {subtitle && <Text className="text-gray-500 text-sm">{subtitle}</Text>}
+        {subtitle && <Text className="text-typography-500 text-sm">{subtitle}</Text>}
       </View>
-      {onPress && <Text className="text-gray-400">›</Text>}
+      {onPress && (
+        <ChevronRight size={16} color={getThemeColor(colors, "typography-400")} />
+      )}
     </Pressable>
   );
 
   return (
-    <ScrollView className="flex-1 bg-gray-50">
-      {/* Profile Section */}
-      <View className="bg-white p-6 items-center border-b border-gray-100">
-        <View className="w-20 h-20 rounded-full bg-primary-100 items-center justify-center mb-4">
+    <ScrollView className="flex-1 bg-background-50">
+      <View className="bg-background-0 p-4 border-b border-border-100">
+        <View className="flex-row items-center justify-between">
+          <View>
+            <Text className="text-typography-900 text-base font-semibold">
+              Dark Mode
+            </Text>
+            <Text className="text-typography-500 text-sm">
+              Follow system when off
+            </Text>
+          </View>
+          <Switch
+            value={isDarkMode}
+            onValueChange={(value) => setMode(value ? "dark" : "system")}
+            trackColor={{
+              false: getThemeColor(colors, "border-300"),
+              true: getThemeColor(colors, "primary-500"),
+            }}
+            thumbColor={
+              isDarkMode
+                ? getThemeColor(colors, "primary-700")
+                : getThemeColor(colors, "background-0")
+            }
+            ios_backgroundColor={getThemeColor(colors, "border-300")}
+          />
+        </View>
+      </View>
+      <View className="bg-background-0 p-6 items-center border-b border-border-100">
+        <View className="w-20 h-20 rounded-3xl bg-primary-100 items-center justify-center mb-4">
           <Text className="text-primary-700 text-3xl font-bold">
             {user?.email?.charAt(0).toUpperCase() || "U"}
           </Text>
         </View>
-        <Text className="text-gray-900 text-xl font-semibold">
+        <Text className="text-typography-900 text-xl font-semibold">
           {user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}
         </Text>
-        <Text className="text-gray-500">{user?.email}</Text>
+        <Text className="text-typography-500">{user?.email}</Text>
       </View>
 
-      {/* Account Section */}
       <View className="mt-6">
-        <Text className="text-gray-500 text-sm font-medium px-4 pb-2 uppercase">
+        <Text className="text-typography-500 text-sm font-medium px-4 pb-2 uppercase">
           Account
         </Text>
         <SettingRow
-          icon="👤"
+          icon={User}
           title="Edit Profile"
           subtitle="Update your personal information"
           onPress={() => router.push("/settings/profile")}
         />
         <SettingRow
-          icon="🏷️"
+          icon={Tags}
           title="Manage Tags"
           subtitle="Create and edit contact tags"
           onPress={() => router.push("/settings/tags")}
         />
       </View>
 
-      {/* App Section */}
       <View className="mt-6">
-        <Text className="text-gray-500 text-sm font-medium px-4 pb-2 uppercase">
+        <Text className="text-typography-500 text-sm font-medium px-4 pb-2 uppercase">
           App
         </Text>
         <SettingRow
-          icon="🔔"
+          icon={Bell}
           title="Notifications"
           subtitle="Manage notification preferences"
           onPress={() => {}}
         />
         <SettingRow
-          icon="🎨"
+          icon={Palette}
           title="Appearance"
           subtitle="Theme and display settings"
           onPress={() => {}}
         />
       </View>
 
-      {/* Support Section */}
       <View className="mt-6">
-        <Text className="text-gray-500 text-sm font-medium px-4 pb-2 uppercase">
+        <Text className="text-typography-500 text-sm font-medium px-4 pb-2 uppercase">
           Support
         </Text>
-        <SettingRow
-          icon="❓"
-          title="Help & Support"
-          onPress={() => {}}
-        />
-        <SettingRow
-          icon="📜"
-          title="Privacy Policy"
-          onPress={() => {}}
-        />
-        <SettingRow
-          icon="📋"
-          title="Terms of Service"
-          onPress={() => {}}
-        />
+        <SettingRow icon={HelpCircle} title="Help & Support" onPress={() => {}} />
+        <SettingRow icon={Shield} title="Privacy Policy" onPress={() => {}} />
+        <SettingRow icon={FileText} title="Terms of Service" onPress={() => {}} />
       </View>
 
-      {/* Sign Out */}
       <View className="mt-6 mb-8">
-        <SettingRow
-          icon="🚪"
-          title="Sign Out"
-          onPress={handleSignOut}
-          danger
-        />
+        <SettingRow icon={LogOut} title="Sign Out" onPress={handleSignOut} danger />
       </View>
 
-      {/* App Version */}
       <View className="items-center pb-8">
-        <Text className="text-gray-400 text-sm">Orbit v1.0.0</Text>
+        <Text className="text-typography-400 text-sm">Orbit v1.0.0</Text>
       </View>
     </ScrollView>
   );

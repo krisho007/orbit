@@ -10,7 +10,7 @@ export interface SpinnerProps extends Omit<ActivityIndicatorProps, "size"> {
 
 export function Spinner({ size = "small", color, className, ...props }: SpinnerProps) {
   // Default to primary color if no color is specified
-  const spinnerColor = color || "#4F46E5";
+  const spinnerColor = color || "#0D9488";
 
   return (
     <ActivityIndicator

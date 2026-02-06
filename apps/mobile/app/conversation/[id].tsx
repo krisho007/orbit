@@ -1,0 +1,215 @@
+import { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { format } from "date-fns";
+import {
+  Phone,
+  MessageCircle,
+  Mail,
+  Handshake,
+  Monitor,
+  Building2,
+  FileText,
+  ChevronLeft,
+  Pencil,
+  Trash2,
+} from "lucide-react-native";
+import { conversationsApi, Conversation } from "../../lib/api";
+import { getThemeColor, useThemeColors } from "../../lib/theme";
+
+const MEDIUM_META: Record<
+  string,
+  { label: string; icon: typeof Phone }
+> = {
+  PHONE_CALL: { label: "Phone Call", icon: Phone },
+  WHATSAPP: { label: "WhatsApp", icon: MessageCircle },
+  EMAIL: { label: "Email", icon: Mail },
+  CHANCE_ENCOUNTER: { label: "Chance Encounter", icon: Handshake },
+  ONLINE_MEETING: { label: "Online Meeting", icon: Monitor },
+  IN_PERSON_MEETING: { label: "In-Person Meeting", icon: Building2 },
+  OTHER: { label: "Other", icon: FileText },
+};
+
+export default function ConversationDetailScreen() {
+  const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const colors = useThemeColors();
+  const [conversation, setConversation] = useState<Conversation | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadConversation();
+  }, [id]);
+
+  const loadConversation = async () => {
+    try {
+      setIsLoading(true);
+      const data = await conversationsApi.get(id);
+      setConversation(data);
+    } catch (error) {
+      console.error("Failed to load conversation:", error);
+      Alert.alert("Error", "Failed to load conversation details");
+      router.back();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    Alert.alert("Delete Conversation", "Are you sure you want to delete this conversation?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await conversationsApi.delete(id);
+            router.back();
+          } catch (error) {
+            console.error("Failed to delete conversation:", error);
+            Alert.alert("Error", "Failed to delete conversation");
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleEdit = () => {
+    Alert.alert("Coming soon", "Conversation editing is not available yet.");
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView className="flex-1 bg-background-0">
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color={getThemeColor(colors, "primary-600")} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!conversation) {
+    return (
+      <SafeAreaView className="flex-1 bg-background-0">
+        <View className="flex-1 items-center justify-center">
+          <Text className="text-typography-500">Conversation not found</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const participants =
+    conversation.participants?.map((p) => p.contact.displayName).filter(Boolean) || [];
+  const medium = MEDIUM_META[conversation.medium] || MEDIUM_META.OTHER;
+  const MediumIcon = medium.icon;
+  const happenedAt = new Date(conversation.happenedAt);
+  const happenedAtLabel = Number.isNaN(happenedAt.getTime())
+    ? "Date unknown"
+    : format(happenedAt, "MMM d, yyyy h:mm a");
+
+  return (
+    <SafeAreaView className="flex-1 bg-background-0">
+      <View className="flex-row items-center justify-between px-4 py-3 border-b border-border-200">
+        <Pressable onPress={() => router.back()} className="p-2">
+          <ChevronLeft size={22} color={getThemeColor(colors, "primary-600")} />
+        </Pressable>
+        <Text className="text-lg font-semibold text-typography-900">Conversation</Text>
+        <View className="flex-row items-center">
+          <Pressable onPress={handleDelete} className="p-2 mr-1">
+            <Trash2 size={20} color={getThemeColor(colors, "error-500")} />
+          </Pressable>
+          <Pressable onPress={handleEdit} className="p-2">
+            <Pencil size={20} color={getThemeColor(colors, "primary-600")} />
+          </Pressable>
+        </View>
+      </View>
+
+      <ScrollView className="flex-1">
+        <View className="px-4 py-6 border-b border-border-200">
+          <View className="flex-row items-center">
+            <View className="w-12 h-12 rounded-2xl bg-primary-100 items-center justify-center mr-3">
+              <MediumIcon size={20} color={getThemeColor(colors, "primary-600")} />
+            </View>
+            <View className="flex-1">
+              <Text className="text-typography-900 text-lg font-semibold">
+                {participants.length > 0 ? participants.join(", ") : "Unknown"}
+              </Text>
+              <Text className="text-typography-500 text-sm mt-1">
+                {medium.label} · {happenedAtLabel}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {conversation.content && (
+          <View className="px-4 py-6 border-b border-border-200">
+            <Text className="text-typography-500 text-sm font-medium mb-2">
+              Notes
+            </Text>
+            <View className="bg-background-50 rounded-lg p-4">
+              <Text className="text-typography-900 text-base">
+                {conversation.content}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {conversation.followUpAt && (
+          <View className="px-4 py-6 border-b border-border-200">
+            <Text className="text-typography-500 text-sm font-medium mb-2">
+              Follow-up
+            </Text>
+            <View className="bg-background-50 rounded-lg p-4">
+              <Text className="text-typography-900 text-base">
+                {format(new Date(conversation.followUpAt), "MMM d, yyyy")}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {participants.length > 0 && (
+          <View className="px-4 py-6">
+            <Text className="text-typography-500 text-sm font-medium mb-2">
+              Participants
+            </Text>
+            <View className="flex-row flex-wrap">
+              {participants.map((name) => (
+                <View
+                  key={name}
+                  className="px-3 py-1.5 rounded-full bg-primary-50 mr-2 mb-2"
+                >
+                  <Text className="text-primary-700 text-sm font-medium">{name}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {conversation.event && (
+          <View className="px-4 pb-8">
+            <Text className="text-typography-500 text-sm font-medium mb-2">
+              Linked Event
+            </Text>
+            <Pressable
+              onPress={() => router.push(`/event/${conversation.event!.id}`)}
+              className="bg-background-50 rounded-lg p-4 active:bg-background-100"
+            >
+              <Text className="text-typography-900 text-base font-semibold">
+                {conversation.event.title}
+              </Text>
+              <Text className="text-primary-600 text-sm mt-1">View event</Text>
+            </Pressable>
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}

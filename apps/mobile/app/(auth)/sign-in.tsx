@@ -1,10 +1,13 @@
-import { View, Text, Pressable, Image } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../lib/auth";
 import { useState } from "react";
+import { Users, MessageCircle, CalendarDays, Sparkles } from "lucide-react-native";
+import { getThemeColor, useThemeColors } from "../../lib/theme";
 
 export default function SignIn() {
   const { signInWithGoogle } = useAuth();
+  const colors = useThemeColors();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,81 +25,77 @@ export default function SignIn() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-gradient-to-b from-primary-50 to-white">
+    <SafeAreaView className="flex-1 bg-background-50">
+      <View className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-primary-100" />
+      <View className="absolute -bottom-20 -left-16 w-56 h-56 rounded-full bg-secondary-100" />
+
       <View className="flex-1 justify-center items-center px-8">
-        {/* Logo/Brand */}
-        <View className="mb-12 items-center">
-          <View className="w-24 h-24 bg-primary-600 rounded-3xl items-center justify-center mb-6 shadow-lg">
-            <Text className="text-white text-4xl font-bold">O</Text>
+        <View className="mb-10 items-center">
+          <View className="w-20 h-20 bg-primary-600 rounded-3xl items-center justify-center mb-6 shadow-lg">
+            <Sparkles size={28} color={getThemeColor(colors, "typography-0")} />
           </View>
-          <Text className="text-4xl font-bold text-gray-900 mb-2">Orbit</Text>
-          <Text className="text-lg text-gray-500 text-center">
-            Your Personal CRM
+          <Text className="text-4xl font-bold text-typography-900 mb-2">Orbit</Text>
+          <Text className="text-lg text-typography-600 text-center">
+            Your personal CRM for real relationships
           </Text>
         </View>
 
-        {/* Features */}
-        <View className="mb-12 w-full">
+        <View className="mb-10 w-full">
           <View className="flex-row items-center mb-4">
-            <View className="w-10 h-10 bg-primary-100 rounded-full items-center justify-center mr-4">
-              <Text className="text-primary-600">👥</Text>
+            <View className="w-10 h-10 bg-primary-100 rounded-2xl items-center justify-center mr-4">
+              <Users size={18} color={getThemeColor(colors, "primary-600")} />
             </View>
-            <Text className="text-gray-700 flex-1">
-              Manage your contacts effectively
+            <Text className="text-typography-700 flex-1">
+              Keep your network organized and warm
             </Text>
           </View>
           <View className="flex-row items-center mb-4">
-            <View className="w-10 h-10 bg-primary-100 rounded-full items-center justify-center mr-4">
-              <Text className="text-primary-600">💬</Text>
+            <View className="w-10 h-10 bg-primary-100 rounded-2xl items-center justify-center mr-4">
+              <MessageCircle size={18} color={getThemeColor(colors, "primary-600")} />
             </View>
-            <Text className="text-gray-700 flex-1">
-              Track conversations and follow-ups
+            <Text className="text-typography-700 flex-1">
+              Capture conversations and follow-ups
             </Text>
           </View>
           <View className="flex-row items-center">
-            <View className="w-10 h-10 bg-primary-100 rounded-full items-center justify-center mr-4">
-              <Text className="text-primary-600">📅</Text>
+            <View className="w-10 h-10 bg-primary-100 rounded-2xl items-center justify-center mr-4">
+              <CalendarDays size={18} color={getThemeColor(colors, "primary-600")} />
             </View>
-            <Text className="text-gray-700 flex-1">
-              Never miss important events
+            <Text className="text-typography-700 flex-1">
+              Track important moments effortlessly
             </Text>
           </View>
         </View>
 
-        {/* Error Message */}
         {error && (
-          <View className="w-full mb-4 p-4 bg-red-50 rounded-lg">
-            <Text className="text-red-600 text-center">{error}</Text>
+          <View className="w-full mb-4 p-4 bg-background-error rounded-xl border border-error-100">
+            <Text className="text-error-600 text-center">{error}</Text>
           </View>
         )}
 
-        {/* Sign In Button */}
         <Pressable
           onPress={handleGoogleSignIn}
           disabled={isLoading}
-          className={`w-full flex-row items-center justify-center py-4 px-6 rounded-xl shadow-sm ${
-            isLoading ? "bg-gray-100" : "bg-white border border-gray-200"
+          className={`w-full flex-row items-center justify-center py-4 px-6 rounded-2xl shadow-sm ${
+            isLoading ? "bg-background-100" : "bg-background-0 border border-border-200"
           }`}
-          style={({ pressed }) => [
-            { opacity: pressed ? 0.8 : 1 },
-          ]}
+          style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
         >
           {!isLoading && (
-            <View className="w-6 h-6 mr-3">
-              <Text className="text-xl">🔵</Text>
+            <View className="w-8 h-8 mr-3 rounded-full bg-secondary-100 items-center justify-center">
+              <Text className="text-secondary-700 font-semibold">G</Text>
             </View>
           )}
           <Text
             className={`text-lg font-semibold ${
-              isLoading ? "text-gray-400" : "text-gray-700"
+              isLoading ? "text-typography-400" : "text-typography-700"
             }`}
           >
             {isLoading ? "Signing in..." : "Continue with Google"}
           </Text>
         </Pressable>
 
-        {/* Terms */}
-        <Text className="text-gray-400 text-sm text-center mt-8 px-4">
+        <Text className="text-typography-400 text-sm text-center mt-8 px-4">
           By continuing, you agree to our Terms of Service and Privacy Policy
         </Text>
       </View>

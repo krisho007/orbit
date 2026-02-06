@@ -8,6 +8,7 @@ import {
   type ViewProps,
 } from "react-native";
 import { tv, type VariantProps } from "tailwind-variants";
+import { getThemeColor, useThemeColors } from "../../../lib/theme";
 
 // Input container styles
 const inputContainerStyle = tv({
@@ -142,13 +143,14 @@ export function InputField({
   ...props
 }: InputFieldProps) {
   const { size, isDisabled, isReadOnly, setIsFocused } = useContext(InputContext);
+  const colors = useThemeColors();
 
   return (
     <TextInput
       className={inputFieldStyle({ size, class: className })}
       editable={!isDisabled && !isReadOnly}
       secureTextEntry={type === "password"}
-      placeholderTextColor="#94A3B8"
+      placeholderTextColor={getThemeColor(colors, "typography-500")}
       onFocus={(e) => {
         setIsFocused?.(true);
         onFocus?.(e);
@@ -184,11 +186,12 @@ export interface InputIconProps {
 
 export function InputIcon({ as: Icon, className }: InputIconProps) {
   const { isInvalid, isFocused } = useContext(InputContext);
+  const colors = useThemeColors();
   
   const getIconColor = () => {
-    if (isInvalid) return "#DC2626";
-    if (isFocused) return "#4F46E5";
-    return "#94A3B8";
+    if (isInvalid) return getThemeColor(colors, "error-600");
+    if (isFocused) return getThemeColor(colors, "primary-600");
+    return getThemeColor(colors, "typography-400");
   };
 
   return (

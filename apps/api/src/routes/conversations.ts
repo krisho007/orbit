@@ -39,6 +39,138 @@ const createConversationSchema = z.object({
 
 const updateConversationSchema = createConversationSchema.partial();
 
+// GET /api/conversations/by-contacts - List conversations involving all provided contacts
+app.get("/by-contacts", async (c) => {
+  const userId = c.get("userId");
+  const contactIdsRaw = c.req.query("contactIds") || "";
+  const cursor = c.req.query("cursor");
+  const search = c.req.query("search") || "";
+  const medium = c.req.query("medium");
+  const limit = parseInt(c.req.query("limit") || String(PAGE_SIZE));
+
+  const contactIds = [
+    ...new Set(
+      contactIdsRaw
+        .split(",")
+        .map((id) => id.trim())
+        .filter((id) => id.length > 0)
+    ),
+  ];
+
+  if (contactIds.length === 0) {
+    return c.json({ error: "contactIds query param is required" }, 400);
+  }
+
+  try {
+    // Verify contacts belong to user
+    const ownedContacts = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(and(eq(contacts.userId, userId), inArray(contacts.id, contactIds)));
+
+    if (ownedContacts.length !== contactIds.length) {
+      return c.json({ error: "Contact not found" }, 404);
+    }
+
+    // Find conversations that include all requested contacts.
+    const convIdsResult = await db
+      .select({
+        conversationId: conversationParticipants.conversationId,
+      })
+      .from(conversationParticipants)
+      .where(inArray(conversationParticipants.contactId, contactIds))
+      .groupBy(conversationParticipants.conversationId)
+      .having(
+        sql`COUNT(DISTINCT ${conversationParticipants.contactId}) = ${contactIds.length}`
+      );
+
+    const convIds = convIdsResult.map((row) => row.conversationId);
+
+    if (convIds.length === 0) {
+      return c.json({ conversations: [], nextCursor: null });
+    }
+
+    const conditions = [
+      eq(conversations.userId, userId),
+      inArray(conversations.id, convIds),
+    ];
+
+    if (medium && conversationMediums.includes(medium as any)) {
+      conditions.push(eq(conversations.medium, medium as any));
+    }
+
+    if (search) {
+      conditions.push(ilike(conversations.content, `%${search}%`));
+    }
+
+    let conversationsList;
+    if (cursor) {
+      conversationsList = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            ...conditions,
+            sql`${conversations.happenedAt} < (SELECT "happenedAt" FROM conversations WHERE id = ${cursor})`
+          )
+        )
+        .orderBy(desc(conversations.happenedAt))
+        .limit(limit + 1);
+    } else {
+      conversationsList = await db
+        .select()
+        .from(conversations)
+        .where(and(...conditions))
+        .orderBy(desc(conversations.happenedAt))
+        .limit(limit + 1);
+    }
+
+    let nextCursor: string | null = null;
+    if (conversationsList.length > limit) {
+      const nextItem = conversationsList.pop();
+      nextCursor = nextItem?.id || null;
+    }
+
+    const conversationIds = conversationsList.map((conv) => conv.id);
+
+    const [participantsData, eventsData] = await Promise.all([
+      conversationIds.length > 0
+        ? db
+            .select()
+            .from(conversationParticipants)
+            .innerJoin(contacts, eq(conversationParticipants.contactId, contacts.id))
+            .where(inArray(conversationParticipants.conversationId, conversationIds))
+        : [],
+      conversationIds.length > 0
+        ? db
+            .select({ id: events.id, title: events.title, conversationEventId: conversations.id })
+            .from(events)
+            .innerJoin(conversations, eq(conversations.eventId, events.id))
+            .where(inArray(conversations.id, conversationIds))
+        : [],
+    ]);
+
+    const enrichedConversations = conversationsList.map((conv) => ({
+      ...conv,
+      participants: participantsData
+        .filter((p: any) => p.conversation_participants.conversationId === conv.id)
+        .map((p: any) => ({
+          ...p.conversation_participants,
+          contact: p.contacts,
+        })),
+      event: eventsData.find((e: any) => conv.eventId === e.id) || null,
+    }));
+
+    return c.json({
+      conversations: enrichedConversations,
+      nextCursor,
+    });
+  } catch (error) {
+    console.error("Error fetching conversations by contacts:", error);
+    return c.json({ error: "Failed to fetch conversations" }, 500);
+  }
+});
+
 // GET /api/conversations - List conversations with pagination
 app.get("/", async (c) => {
   const userId = c.get("userId");

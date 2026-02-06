@@ -20,7 +20,9 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.1",
     "@supabase/supabase-js": "^2.91.1",
+    "ai": "^6.0.3",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.11.5",
     "postgres": "^3.4.8",

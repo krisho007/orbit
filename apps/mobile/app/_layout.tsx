@@ -6,12 +6,17 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../lib/auth";
 import { View, ActivityIndicator } from "react-native";
-import { GluestackUIProvider } from "../components/ui/gluestack-ui-provider";
+import {
+  GluestackUIProvider,
+  useGluestackUI,
+} from "../components/ui/gluestack-ui-provider";
+import { getThemeColor, ThemeModeProvider, useThemeColors, useThemeMode } from "../lib/theme";
 
 function RootLayoutNav() {
   const { user, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const colors = useThemeColors();
 
   useEffect(() => {
     if (isLoading) return;
@@ -30,7 +35,7 @@ function RootLayoutNav() {
   if (isLoading) {
     return (
       <View className="flex-1 items-center justify-center bg-background-0">
-        <ActivityIndicator size="large" color="#4F46E5" />
+        <ActivityIndicator size="large" color={getThemeColor(colors, "primary-600")} />
       </View>
     );
   }
@@ -38,16 +43,39 @@ function RootLayoutNav() {
   return <Slot />;
 }
 
+function ThemedStatusBar() {
+  const { resolvedColorMode } = useGluestackUI();
+  return <StatusBar style={resolvedColorMode === "dark" ? "light" : "dark"} />;
+}
+
+function AppShell() {
+  const { mode, isReady } = useThemeMode();
+
+  if (!isReady) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background-0">
+        <ActivityIndicator size="large" color="#0D9488" />
+      </View>
+    );
+  }
+
+  return (
+    <GluestackUIProvider mode={mode}>
+      <AuthProvider>
+        <ThemedStatusBar />
+        <RootLayoutNav />
+      </AuthProvider>
+    </GluestackUIProvider>
+  );
+}
+
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <GluestackUIProvider mode="system">
-          <AuthProvider>
-            <StatusBar style="auto" />
-            <RootLayoutNav />
-          </AuthProvider>
-        </GluestackUIProvider>
+        <ThemeModeProvider>
+          <AppShell />
+        </ThemeModeProvider>
       </GestureHandlerRootView>
     </SafeAreaProvider>
   );

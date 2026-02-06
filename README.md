@@ -43,7 +43,7 @@ npm start
 ## Development
 
 - API runs on `http://localhost:3000`
-- Mobile dev server uses Expo Go or simulators
+- OAuth is not supported in Expo Go. For local OAuth testing, use `npx expo run:android` (or an iOS simulator build) instead of Expo Go.
 
 ## Deployment
 

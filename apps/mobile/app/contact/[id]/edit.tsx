@@ -11,10 +11,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { contactsApi, Contact } from "../../../lib/api";
+import { getThemeColor, useThemeColors } from "../../../lib/theme";
 
 export default function EditContactScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const colors = useThemeColors();
+  const placeholderColor = getThemeColor(colors, "typography-500");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -78,22 +81,22 @@ export default function EditContactScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-white">
+      <SafeAreaView className="flex-1 bg-background-0">
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#4F46E5" />
+          <ActivityIndicator size="large" color={getThemeColor(colors, "primary-600")} />
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-background-0">
       {/* Header */}
-      <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-200">
+      <View className="flex-row items-center justify-between px-4 py-3 border-b border-border-200">
         <Pressable onPress={() => router.back()} className="p-2">
           <Text className="text-primary-600 text-base">Cancel</Text>
         </Pressable>
-        <Text className="text-lg font-semibold text-gray-900">Edit Contact</Text>
+        <Text className="text-lg font-semibold text-typography-900">Edit Contact</Text>
         <Pressable
           onPress={handleSubmit}
           disabled={isSubmitting}
@@ -101,7 +104,7 @@ export default function EditContactScreen() {
         >
           <Text
             className={`text-base ${
-              isSubmitting ? "text-gray-400" : "text-primary-600"
+              isSubmitting ? "text-typography-400" : "text-primary-600"
             }`}
           >
             {isSubmitting ? "Saving..." : "Save"}
@@ -112,12 +115,13 @@ export default function EditContactScreen() {
       <ScrollView className="flex-1 px-4 py-6">
         {/* Name */}
         <View className="mb-4">
-          <Text className="text-gray-700 text-sm font-medium mb-2">
+          <Text className="text-typography-700 text-sm font-medium mb-2">
             Name *
           </Text>
           <TextInput
-            className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 text-base border border-gray-200"
+            className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="John Doe"
+            placeholderTextColor={placeholderColor}
             value={formData.displayName}
             onChangeText={(text) =>
               setFormData({ ...formData, displayName: text })
@@ -128,12 +132,13 @@ export default function EditContactScreen() {
 
         {/* Company */}
         <View className="mb-4">
-          <Text className="text-gray-700 text-sm font-medium mb-2">
+          <Text className="text-typography-700 text-sm font-medium mb-2">
             Company
           </Text>
           <TextInput
-            className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 text-base border border-gray-200"
+            className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="Acme Inc"
+            placeholderTextColor={placeholderColor}
             value={formData.company}
             onChangeText={(text) => setFormData({ ...formData, company: text })}
             autoCapitalize="words"
@@ -142,12 +147,13 @@ export default function EditContactScreen() {
 
         {/* Job Title */}
         <View className="mb-4">
-          <Text className="text-gray-700 text-sm font-medium mb-2">
+          <Text className="text-typography-700 text-sm font-medium mb-2">
             Job Title
           </Text>
           <TextInput
-            className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 text-base border border-gray-200"
+            className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="Software Engineer"
+            placeholderTextColor={placeholderColor}
             value={formData.jobTitle}
             onChangeText={(text) =>
               setFormData({ ...formData, jobTitle: text })
@@ -158,10 +164,11 @@ export default function EditContactScreen() {
 
         {/* Phone */}
         <View className="mb-4">
-          <Text className="text-gray-700 text-sm font-medium mb-2">Phone</Text>
+          <Text className="text-typography-700 text-sm font-medium mb-2">Phone</Text>
           <TextInput
-            className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 text-base border border-gray-200"
+            className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="+1 (555) 123-4567"
+            placeholderTextColor={placeholderColor}
             value={formData.primaryPhone}
             onChangeText={(text) =>
               setFormData({ ...formData, primaryPhone: text })
@@ -172,10 +179,11 @@ export default function EditContactScreen() {
 
         {/* Email */}
         <View className="mb-4">
-          <Text className="text-gray-700 text-sm font-medium mb-2">Email</Text>
+          <Text className="text-typography-700 text-sm font-medium mb-2">Email</Text>
           <TextInput
-            className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 text-base border border-gray-200"
+            className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="john@example.com"
+            placeholderTextColor={placeholderColor}
             value={formData.primaryEmail}
             onChangeText={(text) =>
               setFormData({ ...formData, primaryEmail: text })
@@ -187,10 +195,11 @@ export default function EditContactScreen() {
 
         {/* Notes */}
         <View className="mb-4">
-          <Text className="text-gray-700 text-sm font-medium mb-2">Notes</Text>
+          <Text className="text-typography-700 text-sm font-medium mb-2">Notes</Text>
           <TextInput
-            className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 text-base border border-gray-200"
+            className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="Add notes..."
+            placeholderTextColor={placeholderColor}
             value={formData.notes}
             onChangeText={(text) => setFormData({ ...formData, notes: text })}
             multiline

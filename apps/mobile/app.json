@@ -26,7 +26,10 @@
       "edgeToEdgeEnabled": true,
       "package": "com.orbit.app",
       "versionCode": 1,
-      "permissions": []
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "READ_PHONE_STATE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",

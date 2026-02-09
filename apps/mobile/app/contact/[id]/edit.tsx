@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -17,9 +17,11 @@ import { getThemeColor, useThemeColors } from "../../../lib/theme";
 
 export default function EditContactScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, focus } = useLocalSearchParams<{ id: string; focus?: string }>();
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
+  const notesInputRef = useRef<TextInput>(null);
+  const shouldFocusNotes = focus === "notes";
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [existingImage, setExistingImage] = useState<ContactImage | null>(null);
@@ -37,6 +39,16 @@ export default function EditContactScreen() {
   useEffect(() => {
     loadContact();
   }, [id]);
+
+  useEffect(() => {
+    if (!shouldFocusNotes || isLoading) return;
+
+    const timer = setTimeout(() => {
+      notesInputRef.current?.focus();
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [isLoading, shouldFocusNotes]);
 
   const loadContact = async () => {
     try {
@@ -298,11 +310,13 @@ export default function EditContactScreen() {
         <View className="mb-4">
           <Text className="text-typography-700 text-sm font-medium mb-2">Notes</Text>
           <TextInput
+            ref={notesInputRef}
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="Add notes..."
             placeholderTextColor={placeholderColor}
             value={formData.notes}
             onChangeText={(text) => setFormData({ ...formData, notes: text })}
+            autoFocus={shouldFocusNotes}
             multiline
             numberOfLines={4}
             textAlignVertical="top"

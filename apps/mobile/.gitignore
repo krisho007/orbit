@@ -39,6 +39,24 @@ yarn-error.*
 # generated native folders
 /ios
 /android
-
-# Google Play service account key (sensitive)
+!/android/
+/android/*
+!/android/app/
+/android/app/*
+!/android/app/src/
+/android/app/src/*
+!/android/app/src/main/
+/android/app/src/main/*
+!/android/app/src/main/AndroidManifest.xml
+!/android/app/src/main/java/
+/android/app/src/main/java/*
+!/android/app/src/main/java/com/
+/android/app/src/main/java/com/*
+!/android/app/src/main/java/com/orbit/
+/android/app/src/main/java/com/orbit/*
+!/android/app/src/main/java/com/orbit/app/
+/android/app/src/main/java/com/orbit/app/*
+!/android/app/src/main/java/com/orbit/app/MainActivity.kt
+!/android/app/src/main/java/com/orbit/app/MainApplication.kt
+!/android/app/src/main/java/com/orbit/app/PhoneStateReceiver.kt# Google Play service account key (sensitive)
 google-service-account.json

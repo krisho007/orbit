@@ -5,7 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../lib/auth";
-import { View, ActivityIndicator } from "react-native";
+import { View, ActivityIndicator, PermissionsAndroid, Platform } from "react-native";
 import {
   GluestackUIProvider,
   useGluestackUI,
@@ -49,12 +49,30 @@ function RootLayoutNav() {
   }, [user?.id, segments[0]]);
 
   useEffect(() => {
+    if (Platform.OS !== "android") return;
+
+    const requestAndroidPermissions = async () => {
+      try {
+        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_PHONE_STATE);
+        if (typeof Platform.Version === "number" && Platform.Version >= 33) {
+          await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+        }
+      } catch (error) {
+        console.error("Failed to request Android permissions:", error);
+      }
+    };
+
+    requestAndroidPermissions();
+  }, []);
+
+  useEffect(() => {
     if (isLoading || onboardingState === "checking") return;
 
     const firstSegment = String(segments[0] || "");
     const inAuthGroup = firstSegment === "(auth)";
     const inOnboardingWelcome = firstSegment === "welcome";
     const inGoogleImportScreen = firstSegment === "google-import";
+    const inIncomingCallScreen = firstSegment === "incoming-call";
     const inTabsGroup = firstSegment === "(tabs)";
     const inOnboardingFlow = inOnboardingWelcome || inGoogleImportScreen;
 
@@ -65,6 +83,7 @@ function RootLayoutNav() {
       user?.id &&
       onboardingState === "required" &&
       !inOnboardingFlow &&
+      !inIncomingCallScreen &&
       !inTabsGroup
     ) {
       router.replace("/welcome" as any);

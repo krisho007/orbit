@@ -138,6 +138,21 @@ export const contactsApi = {
       overrideExisting,
     }),
 
+  searchByPhone: (params: {
+    phone: string;
+    include?: ("conversations" | "events" | "reminders")[];
+    conversationsLimit?: number;
+    eventsLimit?: number;
+    remindersLimit?: number;
+  }) =>
+    api.get<ContactPhoneSearchResponse>("/api/contacts/search/phone", {
+      phone: params.phone,
+      include: params.include?.join(","),
+      conversationsLimit: params.conversationsLimit,
+      eventsLimit: params.eventsLimit,
+      remindersLimit: params.remindersLimit,
+    }),
+
   delete: (id: string) => api.delete(`/api/contacts/${id}`),
 };
 
@@ -339,6 +354,14 @@ export type Contact = {
   updatedAt: string;
   tags?: Tag[];
   images?: ContactImage[];
+};
+
+export type ContactPhoneSearchResponse = {
+  contact: Contact | null;
+  candidates: Contact[];
+  conversations?: Conversation[];
+  events?: Event[];
+  reminders?: Reminder[];
 };
 
 export type CreateContactData = {

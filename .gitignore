@@ -40,3 +40,16 @@ web-build/
 # iOS/Android (Expo managed)
 ios/
 android/
+
+# Keep selected Android native sources in apps/mobile under version control
+!apps/mobile/android/
+!apps/mobile/android/app/
+!apps/mobile/android/app/src/
+!apps/mobile/android/app/src/main/
+!apps/mobile/android/app/src/main/AndroidManifest.xml
+!apps/mobile/android/app/src/main/java/
+!apps/mobile/android/app/src/main/java/com/
+!apps/mobile/android/app/src/main/java/com/orbit/
+!apps/mobile/android/app/src/main/java/com/orbit/app/
+!apps/mobile/android/app/src/main/java/com/orbit/app/MainActivity.kt
+!apps/mobile/android/app/src/main/java/com/orbit/app/PhoneStateReceiver.kt

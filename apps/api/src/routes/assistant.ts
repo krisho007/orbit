@@ -134,6 +134,7 @@ function mapReminderStatus(text: string): (typeof reminderStatuses)[number] {
 
 // Fuzzy search for contacts
 async function findBestContactMatch(userId: string, name: string) {
+  console.log(`[assistant:tool] findBestContactMatch — searching for "${name}"`);
   try {
     const similarityExpr = sql<number>`
       GREATEST(
@@ -161,6 +162,7 @@ async function findBestContactMatch(userId: string, name: string) {
       .limit(1);
 
     if (rows.length > 0) {
+      console.log(`[assistant:tool] findBestContactMatch — found: "${rows[0].displayName}" (similarity match)`);
       return rows[0] as { id: string; displayName: string };
     }
 
@@ -171,8 +173,14 @@ async function findBestContactMatch(userId: string, name: string) {
       .where(and(eq(contacts.userId, userId), ilike(contacts.displayName, `%${name}%`)))
       .limit(1);
 
+    if (contact) {
+      console.log(`[assistant:tool] findBestContactMatch — found: "${contact.displayName}" (ILIKE fallback)`);
+    } else {
+      console.log(`[assistant:tool] findBestContactMatch — no match found for "${name}"`);
+    }
     return contact || null;
-  } catch {
+  } catch (err) {
+    console.warn(`[assistant:tool] findBestContactMatch — trigram error, falling back to ILIKE:`, err);
     // Fallback to ILIKE if trigram not available
     const [contact] = await db
       .select({ id: contacts.id, displayName: contacts.displayName })
@@ -180,6 +188,11 @@ async function findBestContactMatch(userId: string, name: string) {
       .where(and(eq(contacts.userId, userId), ilike(contacts.displayName, `%${name}%`)))
       .limit(1);
 
+    if (contact) {
+      console.log(`[assistant:tool] findBestContactMatch — found: "${contact.displayName}" (ILIKE after error)`);
+    } else {
+      console.log(`[assistant:tool] findBestContactMatch — no match found for "${name}" (after error)`);
+    }
     return contact || null;
   }
 }
@@ -687,6 +700,7 @@ async function queryConversations(
   medium?: string,
   limit?: number
 ): Promise<ToolResult> {
+  console.log(`[assistant:tool] queryConversations — participant="${participantName || "any"}", medium="${medium || "any"}", limit=${limit || 10}`);
   const takeLimit = Math.min(limit || 10, 10);
   const conditions = [eq(conversations.userId, userId)];
 
@@ -695,6 +709,9 @@ async function queryConversations(
     const contact = await findBestContactMatch(userId, participantName);
     if (contact) {
       contactFilter = contact.id;
+      console.log(`[assistant:tool] queryConversations — filtering by contact: ${contact.displayName} (${contact.id})`);
+    } else {
+      console.log(`[assistant:tool] queryConversations — no contact found for "${participantName}", returning unfiltered`);
     }
   }
 
@@ -717,19 +734,28 @@ async function queryConversations(
       .where(eq(conversationParticipants.contactId, contactFilter));
 
     const convIds = participantConvIds.map((p) => p.conversationId);
+    const beforeCount = conversationsList.length;
     conversationsList = conversationsList.filter((c) => convIds.includes(c.id));
+    console.log(`[assistant:tool] queryConversations — filtered ${beforeCount} → ${conversationsList.length} conversations for contact`);
   }
 
   // Get participants for each conversation
   const convIds = conversationsList.map((c) => c.id);
-  const participants =
-    convIds.length > 0
-      ? await db
-          .select()
-          .from(conversationParticipants)
-          .innerJoin(contacts, eq(conversationParticipants.contactId, contacts.id))
-          .where(sql`${conversationParticipants.conversationId} = ANY(${convIds})`)
-      : [];
+  let participants: any[] = [];
+  try {
+    participants =
+      convIds.length > 0
+        ? await db
+            .select()
+            .from(conversationParticipants)
+            .innerJoin(contacts, eq(conversationParticipants.contactId, contacts.id))
+            .where(inArray(conversationParticipants.conversationId, convIds))
+        : [];
+  } catch (err) {
+    console.error(`[assistant:tool] queryConversations — error fetching participants:`, err);
+  }
+
+  console.log(`[assistant:tool] queryConversations — returning ${conversationsList.length} conversation(s)`);
 
   return {
     type: "conversations_found",
@@ -844,12 +870,16 @@ async function queryEvents(
   participantName?: string,
   limit?: number
 ): Promise<ToolResult> {
+  console.log(`[assistant:tool] queryEvents — participant="${participantName || "any"}", limit=${limit || 10}`);
   const takeLimit = Math.min(limit || 10, 10);
   let contactFilter: string | null = null;
   if (participantName) {
     const contact = await findBestContactMatch(userId, participantName);
     if (contact) {
       contactFilter = contact.id;
+      console.log(`[assistant:tool] queryEvents — filtering by contact: ${contact.displayName} (${contact.id})`);
+    } else {
+      console.log(`[assistant:tool] queryEvents — no contact found for "${participantName}", returning unfiltered`);
     }
   }
 
@@ -868,7 +898,9 @@ async function queryEvents(
       .where(eq(eventParticipants.contactId, contactFilter));
 
     const eventIds = participantEventIds.map((p) => p.eventId);
+    const beforeCount = eventsList.length;
     eventsList = eventsList.filter((e) => eventIds.includes(e.id));
+    console.log(`[assistant:tool] queryEvents — filtered ${beforeCount} → ${eventsList.length} events for contact`);
   }
 
   // Get participants for each event
@@ -881,6 +913,8 @@ async function queryEvents(
           .innerJoin(contacts, eq(eventParticipants.contactId, contacts.id))
           .where(sql`${eventParticipants.eventId} = ANY(${eventIds})`)
       : [];
+
+  console.log(`[assistant:tool] queryEvents — returning ${eventsList.length} event(s)`);
 
   return {
     type: "events_found",
@@ -4254,7 +4288,11 @@ export async function processMessageLLM(
     content: m.content,
   }));
 
+  console.log(`[assistant:llm] Starting LLM processing with ${modelMessages.length} message(s)`);
+  console.log(`[assistant:llm] Model: gemini-2.0-flash`);
+
   let capturedToolResults: Array<{ output?: ToolResult }> = [];
+  let stepIndex = 0;
 
   const result = await generate({
     model: google("gemini-2.0-flash"),
@@ -4262,9 +4300,35 @@ export async function processMessageLLM(
     messages: modelMessages,
     tools,
     stopWhen: stepCountIs(8),
+    onStepFinish: (event) => {
+      stepIndex++;
+      const toolCalls = event.toolCalls || [];
+      const toolResultsList = event.toolResults || [];
+
+      if (toolCalls.length > 0) {
+        console.log(`[assistant:llm] Step ${stepIndex} — ${toolCalls.length} tool call(s):`);
+        for (const tc of toolCalls) {
+          const argsPreview = tc.args ? JSON.stringify(tc.args).substring(0, 300) : "(no args)";
+          console.log(`  ↳ ${tc.toolName}(${argsPreview})`);
+        }
+        for (const tr of toolResultsList) {
+          const resultObj = tr as { output?: ToolResult };
+          if (resultObj.output) {
+            const typeInfo = resultObj.output.type || "unknown";
+            console.log(`  ← result type: ${typeInfo}`);
+          }
+        }
+      } else if (event.text) {
+        const preview = event.text.substring(0, 200);
+        console.log(`[assistant:llm] Step ${stepIndex} — text response: "${preview}${event.text.length > 200 ? "..." : ""}"`);
+      } else {
+        console.log(`[assistant:llm] Step ${stepIndex} — (no tool calls or text)`);
+      }
+    },
     onFinish: (event) => {
       const stepResults = event.steps.flatMap((step) => step.toolResults || []);
       capturedToolResults = stepResults as Array<{ output?: ToolResult }>;
+      console.log(`[assistant:llm] Finished — ${event.steps.length} step(s), ${capturedToolResults.length} tool result(s)`);
     },
   });
 
@@ -4272,6 +4336,8 @@ export async function processMessageLLM(
   const toolResults = capturedToolResults.length > 0 ? capturedToolResults : fallbackToolResults;
   const ui = buildUiFromToolResults(toolResults);
   const text = summarizeUiText(ui, result.text);
+
+  console.log(`[assistant:llm] Final text (${text.length} chars), UI: ${ui ? ui.kind : "none"}`);
 
   return { text, ui };
 }
@@ -4283,6 +4349,7 @@ app.post("/", async (c) => {
 
   const validation = chatSchema.safeParse(body);
   if (!validation.success) {
+    console.warn("[assistant] Invalid request body:", JSON.stringify(validation.error.issues));
     return c.json({ error: validation.error.issues }, 400);
   }
 
@@ -4292,11 +4359,26 @@ app.post("/", async (c) => {
   const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
 
   if (!lastUserMessage) {
+    console.warn("[assistant] No user message found in request");
     return c.json({ error: "No user message provided" }, 400);
   }
 
+  console.log(`\n${"=".repeat(70)}`);
+  console.log(`[assistant] 💬 User question: "${lastUserMessage.content}"`);
+  console.log(`[assistant] Chat history: ${messages.length} message(s)`);
+  console.log(`${"=".repeat(70)}`);
+
+  const startTime = Date.now();
+
   try {
     const response = await processMessageLLM(userId, messages as ChatMessage[]);
+
+    const elapsed = Date.now() - startTime;
+    console.log(`[assistant] ✅ Response (${elapsed}ms): "${response.text.substring(0, 200)}${response.text.length > 200 ? "..." : ""}"`);
+    if (response.ui) {
+      console.log(`[assistant] 🎨 UI attached: kind=${response.ui.kind}`);
+    }
+    console.log(`${"=".repeat(70)}\n`);
 
     return c.json({
       role: "assistant",
@@ -4304,7 +4386,8 @@ app.post("/", async (c) => {
       ui: response.ui,
     });
   } catch (error) {
-    console.error("Assistant error:", error);
+    const elapsed = Date.now() - startTime;
+    console.error(`[assistant] ❌ Error after ${elapsed}ms:`, error);
     const message = error instanceof Error ? error.message : "Unknown error";
     return c.json({ error: `Failed to process message: ${message}` }, 500);
   }

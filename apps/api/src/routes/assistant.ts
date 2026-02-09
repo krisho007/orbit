@@ -7,6 +7,7 @@ import { google } from "@ai-sdk/google";
 import { eq, and, desc, sql, ilike, asc, or, inArray } from "drizzle-orm";
 import {
   db,
+  users,
   contacts,
   conversations,
   conversationParticipants,
@@ -195,6 +196,47 @@ async function findBestContactMatch(userId: string, name: string) {
     }
     return contact || null;
   }
+}
+
+// Fetch user context (name, email, primary contact) for system prompt
+type UserContext = {
+  userName: string | null;
+  userEmail: string;
+  primaryContactId: string | null;
+  primaryContactName: string | null;
+};
+
+async function getUserContext(userId: string): Promise<UserContext> {
+  const [user] = await db
+    .select({
+      name: users.name,
+      email: users.email,
+      primaryContactId: users.primaryContactId,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!user) {
+    return { userName: null, userEmail: "", primaryContactId: null, primaryContactName: null };
+  }
+
+  let primaryContactName: string | null = null;
+  if (user.primaryContactId) {
+    const [contact] = await db
+      .select({ displayName: contacts.displayName })
+      .from(contacts)
+      .where(and(eq(contacts.id, user.primaryContactId), eq(contacts.userId, userId)))
+      .limit(1);
+    primaryContactName = contact?.displayName ?? null;
+  }
+
+  return {
+    userName: user.name,
+    userEmail: user.email,
+    primaryContactId: user.primaryContactId,
+    primaryContactName,
+  };
 }
 
 // Parse comma-separated names
@@ -3160,12 +3202,224 @@ async function deleteRelationshipById(
   return { type: "relationship_deleted", id: relationshipId };
 }
 
-function buildSystemPrompt(): string {
+// Set the user's primary contact (links "me"/"I" to a contact record)
+async function setMyContact(
+  userId: string,
+  contactId: string
+): Promise<ToolResult> {
+  const [contact] = await db
+    .select({ id: contacts.id, displayName: contacts.displayName })
+    .from(contacts)
+    .where(and(eq(contacts.id, contactId), eq(contacts.userId, userId)))
+    .limit(1);
+
+  if (!contact) {
+    return { type: "error", message: "Contact not found" };
+  }
+
+  await db
+    .update(users)
+    .set({ primaryContactId: contactId, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+
+  return {
+    type: "my_contact_set",
+    contactId: contact.id,
+    displayName: contact.displayName,
+  };
+}
+
+// Resolve a contact name to a contact, reusing the existing fuzzy search.
+// Returns the best match if clear, or top 5 candidates for disambiguation.
+async function resolveContactByName(
+  userId: string,
+  name: string
+): Promise<ToolResult> {
+  const result = await searchContactsFuzzy(userId, name, 5);
+  const matches = (result as any).contacts as Array<{
+    id: string;
+    displayName: string;
+    similarity?: number;
+  }>;
+
+  if (!matches || matches.length === 0) {
+    return {
+      type: "contact_not_found",
+      message: `No contacts found matching "${name}". You can create a new contact if needed.`,
+      searchedName: name,
+    };
+  }
+
+  // If there's a single strong match (similarity >= 0.6), return it directly
+  const topMatch = matches[0]!;
+  if (matches.length === 1 || (topMatch.similarity && topMatch.similarity >= 0.6)) {
+    return {
+      type: "contact_resolved",
+      contact: { id: topMatch.id, displayName: topMatch.displayName },
+    };
+  }
+
+  // Multiple possible matches — return top 5 for disambiguation
+  return {
+    type: "contact_ambiguous",
+    message: `Multiple contacts match "${name}". Please ask the user which one they mean.`,
+    candidates: matches.map((m) => ({
+      id: m.id,
+      displayName: m.displayName,
+    })),
+  };
+}
+
+// Resolve a relationship type by name, returning top matches when ambiguous
+async function resolveRelationshipTypeByName(
+  userId: string,
+  typeName: string
+): Promise<ToolResult> {
+  // Try exact match first (case-insensitive)
+  const [exactMatch] = await db
+    .select({ id: relationshipTypes.id, name: relationshipTypes.name })
+    .from(relationshipTypes)
+    .where(
+      and(
+        eq(relationshipTypes.userId, userId),
+        sql`LOWER(${relationshipTypes.name}) = LOWER(${typeName})`
+      )
+    )
+    .limit(1);
+
+  if (exactMatch) {
+    return {
+      type: "relationship_type_resolved",
+      relationshipType: { id: exactMatch.id, name: exactMatch.name },
+    };
+  }
+
+  // Try partial match
+  const partialMatches = await db
+    .select({ id: relationshipTypes.id, name: relationshipTypes.name })
+    .from(relationshipTypes)
+    .where(
+      and(
+        eq(relationshipTypes.userId, userId),
+        ilike(relationshipTypes.name, `%${typeName}%`)
+      )
+    )
+    .limit(5);
+
+  if (partialMatches.length === 1) {
+    const match = partialMatches[0]!;
+    return {
+      type: "relationship_type_resolved",
+      relationshipType: { id: match.id, name: match.name },
+    };
+  }
+
+  if (partialMatches.length > 1) {
+    return {
+      type: "relationship_type_ambiguous",
+      message: `Multiple relationship types match "${typeName}". Ask the user which one they mean.`,
+      candidates: partialMatches.map((t) => ({ id: t.id, name: t.name })),
+    };
+  }
+
+  return {
+    type: "relationship_type_not_found",
+    message: `No relationship type found matching "${typeName}". You can create one using the create_relationship_type tool.`,
+    searchedName: typeName,
+  };
+}
+
+// Smart relationship creation using names instead of IDs
+async function createRelationshipByNames(
+  userId: string,
+  payload: {
+    fromContactName?: string;
+    fromContactId?: string;
+    toContactName?: string;
+    toContactId?: string;
+    relationshipTypeName?: string;
+    relationshipTypeId?: string;
+    notes?: string;
+  }
+): Promise<ToolResult> {
+  // Resolve "from" contact
+  let fromId = payload.fromContactId;
+  if (!fromId && payload.fromContactName) {
+    const result = await resolveContactByName(userId, payload.fromContactName);
+    if (result.type === "contact_resolved") {
+      fromId = (result as any).contact.id;
+    } else {
+      return result; // Return ambiguous/not_found result to the LLM
+    }
+  }
+
+  // Resolve "to" contact
+  let toId = payload.toContactId;
+  if (!toId && payload.toContactName) {
+    const result = await resolveContactByName(userId, payload.toContactName);
+    if (result.type === "contact_resolved") {
+      toId = (result as any).contact.id;
+    } else {
+      return result; // Return ambiguous/not_found result to the LLM
+    }
+  }
+
+  if (!fromId || !toId) {
+    return { type: "error", message: "Both from and to contacts are required" };
+  }
+
+  // Resolve relationship type
+  let typeId = payload.relationshipTypeId;
+  if (!typeId && payload.relationshipTypeName) {
+    const result = await resolveRelationshipTypeByName(userId, payload.relationshipTypeName);
+    if (result.type === "relationship_type_resolved") {
+      typeId = (result as any).relationshipType.id;
+    } else {
+      return result; // Return ambiguous/not_found result to the LLM
+    }
+  }
+
+  if (!typeId) {
+    return { type: "error", message: "Relationship type is required" };
+  }
+
+  // Now create the relationship using the resolved IDs
+  return createRelationship(userId, {
+    fromContactId: fromId,
+    toContactId: toId,
+    typeId,
+    notes: payload.notes,
+  });
+}
+
+function buildSystemPrompt(userContext: UserContext): string {
   const today = formatToday(new Date());
+
+  let userSection = "";
+  if (userContext.primaryContactId && userContext.primaryContactName) {
+    userSection = `
+## Current User
+The logged-in user is "${userContext.userName || userContext.userEmail}" (email: ${userContext.userEmail}).
+Their contact record in the CRM is: "${userContext.primaryContactName}" (ID: ${userContext.primaryContactId}).
+When the user says "I", "me", "my", "mine", they are referring to this contact.
+For example, "Abhinav is my son" means: create a relationship from the user's contact to Abhinav with type "Son".`;
+  } else {
+    userSection = `
+## Current User
+The logged-in user is "${userContext.userName || userContext.userEmail}" (email: ${userContext.userEmail}).
+IMPORTANT: The user has NOT yet linked their contact record. If the user refers to themselves ("I", "me", "my") in the context of contacts or relationships, you MUST:
+1. Search for contacts matching their name "${userContext.userName || ""}" using query_contacts or search_contacts_fuzzy.
+2. Present the top matches (up to 5) and ask them to confirm which one is them, OR offer to create a new contact for them.
+3. Once they confirm, use the set_my_contact tool to link their contact, so future requests will work seamlessly.
+Do NOT ask for raw IDs — always resolve names to contacts automatically.`;
+  }
+
   return `You are a helpful assistant for Orbit, a personal CRM app. Help users manage their contacts, conversations, events, and reminders.
 
 Today's date is ${today}.
+${userSection}
 
+## Capabilities
 You can:
 - Create, update, delete, and look up contacts (including tags, images, and relationships)
 - Search contacts (fuzzy search or by phone number)
@@ -3175,13 +3429,27 @@ You can:
 - Manage tags
 - Manage relationships and relationship types
 
-When users describe interactions or meetings, extract the relevant information and use the appropriate functions.
-When users ask about contact information like phone numbers, use the get_contact_details tool to retrieve it.
-When users ask to find, search, show, or list contacts, conversations, events, reminders, tags, or relationships, always call the corresponding query tool.
-Keep responses brief when tool results are available; the client will render result cards.
-When returning lists of contacts, conversations, events, or reminders, keep results to 10 or fewer.
-When users mention relative dates like "today", "tomorrow", "yesterday", "next week", etc., convert them to actual dates based on today's date. If no date is mentioned, assume it's for today.
-Be conversational and friendly.`;
+## Contact Resolution
+IMPORTANT: Never ask the user for raw IDs. Always resolve contact names automatically:
+- When the user mentions a person's name, use search_contacts_fuzzy or query_contacts to find matching contacts.
+- If there's exactly one strong match, use it automatically.
+- If there are multiple possible matches, present the top candidates (up to 5) and ask the user to pick one.
+- If no match is found, offer to create a new contact.
+
+## Relationship Creation
+When the user describes a relationship (e.g., "Abhinav is my son", "Sarah is John's wife"):
+1. Resolve both contact names to contact IDs (use the user's own contact for "I"/"me"/"my").
+2. Use list_relationship_types to find the matching relationship type, or create one if needed.
+3. Use create_relationship_smart to create the relationship using names — it handles fuzzy resolution automatically.
+
+## General Guidelines
+- When users describe interactions or meetings, extract the relevant information and use the appropriate functions.
+- When users ask about contact information like phone numbers, use the get_contact_details tool to retrieve it.
+- When users ask to find, search, show, or list contacts, conversations, events, reminders, tags, or relationships, always call the corresponding query tool.
+- Keep responses brief when tool results are available; the client will render result cards.
+- When returning lists of contacts, conversations, events, or reminders, keep results to 10 or fewer.
+- When users mention relative dates like "today", "tomorrow", "yesterday", "next week", etc., convert them to actual dates based on today's date. If no date is mentioned, assume it's for today.
+- Be conversational and friendly.`;
 }
 
 function buildUiFromToolResults(
@@ -4281,7 +4549,82 @@ export async function processMessageLLM(
       }),
       execute: async ({ typeId }) => deleteRelationshipTypeById(userId, typeId),
     }),
+
+    // --- Smart tools (name-based, with disambiguation) ---
+
+    set_my_contact: tool({
+      description:
+        "Link the logged-in user to their own contact record. Use this when the user confirms which contact is theirs, so future 'I'/'me'/'my' references resolve automatically.",
+      inputSchema: z.object({
+        contactId: z
+          .string()
+          .describe("The contact ID to link as the user's own contact"),
+      }),
+      execute: async ({ contactId }) => setMyContact(userId, contactId),
+    }),
+
+    resolve_contact: tool({
+      description:
+        "Resolve a person's name to a contact record. Returns the best match if clear, or top 5 candidates if ambiguous. Use this before creating relationships or when you need a contact ID from a name.",
+      inputSchema: z.object({
+        name: z.string().describe("The person's name to search for"),
+      }),
+      execute: async ({ name }) => resolveContactByName(userId, name),
+    }),
+
+    create_relationship_smart: tool({
+      description:
+        "Create a relationship between two contacts using names instead of IDs. Automatically resolves contact names and relationship type names via fuzzy matching. Use the user's contact ID for 'I'/'me'/'my' when available from the system prompt. If a contact or type can't be resolved, it returns candidates for disambiguation.",
+      inputSchema: z.object({
+        fromContactName: z
+          .string()
+          .optional()
+          .describe("Name of the 'from' contact (e.g., the user's name)"),
+        fromContactId: z
+          .string()
+          .optional()
+          .describe("ID of the 'from' contact (use if already known, e.g., user's own contact ID from system prompt)"),
+        toContactName: z
+          .string()
+          .optional()
+          .describe("Name of the 'to' contact (e.g., 'Abhinav')"),
+        toContactId: z
+          .string()
+          .optional()
+          .describe("ID of the 'to' contact (use if already known)"),
+        relationshipTypeName: z
+          .string()
+          .optional()
+          .describe("Name of the relationship type (e.g., 'Son', 'Spouse', 'Colleague')"),
+        relationshipTypeId: z
+          .string()
+          .optional()
+          .describe("ID of the relationship type (use if already known)"),
+        notes: z.string().optional().describe("Optional notes about the relationship"),
+      }),
+      execute: async ({
+        fromContactName,
+        fromContactId,
+        toContactName,
+        toContactId,
+        relationshipTypeName,
+        relationshipTypeId,
+        notes,
+      }) =>
+        createRelationshipByNames(userId, {
+          fromContactName,
+          fromContactId,
+          toContactName,
+          toContactId,
+          relationshipTypeName,
+          relationshipTypeId,
+          notes,
+        }),
+    }),
   };
+
+  // Fetch user context for personalized system prompt
+  const userContext = await getUserContext(userId);
 
   const modelMessages = messages.map((m) => ({
     role: m.role,
@@ -4289,6 +4632,7 @@ export async function processMessageLLM(
   }));
 
   console.log(`[assistant:llm] Starting LLM processing with ${modelMessages.length} message(s)`);
+  console.log(`[assistant:llm] User context: ${userContext.userName || "(no name)"}, primaryContact: ${userContext.primaryContactId || "(not set)"}`);
   console.log(`[assistant:llm] Model: gemini-2.0-flash`);
 
   let capturedToolResults: Array<{ output?: ToolResult }> = [];
@@ -4296,7 +4640,7 @@ export async function processMessageLLM(
 
   const result = await generate({
     model: google("gemini-2.0-flash"),
-    system: buildSystemPrompt(),
+    system: buildSystemPrompt(userContext),
     messages: modelMessages,
     tools,
     stopWhen: stepCountIs(8),

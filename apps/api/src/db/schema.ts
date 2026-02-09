@@ -67,6 +67,9 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   emailVerified: timestamp("emailVerified", { mode: "date" }),
   image: text("image"),
+  // Links the user to their own contact record in the CRM.
+  // When set, the assistant knows who "I" / "me" / "my" refers to.
+  primaryContactId: text("primaryContactId"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
 });

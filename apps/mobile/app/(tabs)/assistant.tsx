@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import type { ComponentType } from "react";
 import {
   View,
@@ -11,7 +11,7 @@ import {
   Platform,
   ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useNavigation } from "expo-router";
 import { format } from "date-fns";
 import {
   Sparkles,
@@ -26,6 +26,7 @@ import {
   CalendarDays,
   MapPin,
   Bell,
+  SquarePen,
 } from "lucide-react-native";
 import {
   assistantApi,
@@ -93,6 +94,7 @@ const REMINDER_STATUS_META: Record<string, string> = {
 
 export default function AssistantScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const colors = useThemeColors();
   const { resolvedColorMode } = useGluestackUI();
   const scrollIndicatorStyle = resolvedColorMode === "dark" ? "white" : "black";
@@ -122,6 +124,30 @@ export default function AssistantScreen() {
     },
     []
   );
+
+  const resetChat = useCallback(() => {
+    setMessages([]);
+    setInput("");
+    setIsLoading(false);
+    isSendingRef.current = false;
+    messageSequenceRef.current = 0;
+    assistantDraftState.messages = [];
+    assistantDraftState.input = "";
+    assistantDraftState.messageSequence = 0;
+  }, []);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable
+          onPress={resetChat}
+          className="mr-4 w-9 h-9 rounded-xl items-center justify-center active:bg-background-100"
+        >
+          <SquarePen size={20} color={getThemeColor(colors, "typography-700")} />
+        </Pressable>
+      ),
+    });
+  }, [navigation, resetChat, colors]);
 
   const nextMessageId = useCallback((prefix: string) => {
     messageSequenceRef.current += 1;

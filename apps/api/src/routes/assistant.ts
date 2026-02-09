@@ -3428,6 +3428,7 @@ You can:
 - Create, update, complete, delete, and query reminders
 - Manage tags
 - Manage relationships and relationship types
+Note: All deletions require user confirmation (see Deletion Safety rules below).
 
 ## Contact Resolution
 IMPORTANT: Never ask the user for raw IDs. Always resolve contact names automatically:
@@ -3441,6 +3442,15 @@ When the user describes a relationship (e.g., "Abhinav is my son", "Sarah is Joh
 1. Resolve both contact names to contact IDs (use the user's own contact for "I"/"me"/"my").
 2. Use list_relationship_types to find the matching relationship type, or create one if needed.
 3. Use create_relationship_smart to create the relationship using names — it handles fuzzy resolution automatically.
+
+## Deletion Safety — CRITICAL
+When a user asks to delete ANYTHING (contact, conversation, event, reminder, tag, relationship, relationship type, or image):
+1. NEVER call a delete tool immediately. First, search for matching objects using the appropriate query/search tool.
+2. Present the matching results to the user (the client will render them as cards).
+3. If multiple matches are found, ask the user to select which one to delete.
+4. If exactly one match is found, still show it and ask: "Should I go ahead and delete this?"
+5. ONLY call the actual delete tool AFTER the user explicitly confirms in a subsequent message (e.g., "yes", "go ahead", "delete it", "confirm").
+6. If the user does not confirm or says "no" / "cancel", do NOT delete and acknowledge the cancellation.
 
 ## General Guidelines
 - When users describe interactions or meetings, extract the relevant information and use the appropriate functions.
@@ -4004,7 +4014,7 @@ export async function processMessageLLM(
     }),
 
     delete_contact: tool({
-      description: "Delete a contact by id",
+      description: "Delete a contact by id. IMPORTANT: Only call this AFTER the user has explicitly confirmed the deletion in a previous message. Never call this without prior confirmation.",
       inputSchema: z.object({
         contactId: z.string().describe("Contact id"),
       }),
@@ -4023,7 +4033,7 @@ export async function processMessageLLM(
     }),
 
     delete_contact_image: tool({
-      description: "Delete a contact image by id",
+      description: "Delete a contact image by id. IMPORTANT: Only call this AFTER the user has explicitly confirmed the deletion in a previous message. Never call this without prior confirmation.",
       inputSchema: z.object({
         contactId: z.string().describe("Contact id"),
         imageId: z.string().describe("Image id"),
@@ -4169,7 +4179,7 @@ export async function processMessageLLM(
     }),
 
     delete_conversation: tool({
-      description: "Delete a conversation by id",
+      description: "Delete a conversation by id. IMPORTANT: Only call this AFTER the user has explicitly confirmed the deletion in a previous message. Never call this without prior confirmation.",
       inputSchema: z.object({
         conversationId: z.string().describe("Conversation id"),
       }),
@@ -4274,7 +4284,7 @@ export async function processMessageLLM(
     }),
 
     delete_event: tool({
-      description: "Delete an event by id",
+      description: "Delete an event by id. IMPORTANT: Only call this AFTER the user has explicitly confirmed the deletion in a previous message. Never call this without prior confirmation.",
       inputSchema: z.object({
         eventId: z.string().describe("Event id"),
       }),
@@ -4387,7 +4397,7 @@ export async function processMessageLLM(
     }),
 
     delete_reminder: tool({
-      description: "Delete a reminder by id",
+      description: "Delete a reminder by id. IMPORTANT: Only call this AFTER the user has explicitly confirmed the deletion in a previous message. Never call this without prior confirmation.",
       inputSchema: z.object({
         reminderId: z.string().describe("Reminder id"),
       }),
@@ -4437,7 +4447,7 @@ export async function processMessageLLM(
     }),
 
     delete_tag: tool({
-      description: "Delete a tag by id",
+      description: "Delete a tag by id. IMPORTANT: Only call this AFTER the user has explicitly confirmed the deletion in a previous message. Never call this without prior confirmation.",
       inputSchema: z.object({
         tagId: z.string().describe("Tag id"),
       }),
@@ -4476,7 +4486,7 @@ export async function processMessageLLM(
     }),
 
     delete_relationship: tool({
-      description: "Delete a relationship by id",
+      description: "Delete a relationship by id. IMPORTANT: Only call this AFTER the user has explicitly confirmed the deletion in a previous message. Never call this without prior confirmation.",
       inputSchema: z.object({
         relationshipId: z.string().describe("Relationship id"),
       }),
@@ -4543,7 +4553,7 @@ export async function processMessageLLM(
     }),
 
     delete_relationship_type: tool({
-      description: "Delete a relationship type by id",
+      description: "Delete a relationship type by id. IMPORTANT: Only call this AFTER the user has explicitly confirmed the deletion in a previous message. Never call this without prior confirmation.",
       inputSchema: z.object({
         typeId: z.string().describe("Type id"),
       }),

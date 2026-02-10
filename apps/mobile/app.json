@@ -43,7 +43,8 @@
         {
           "photosPermission": "Allow Orbit to access your photos so you can set contact avatars."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

@@ -24,9 +24,12 @@ import {
   ChevronLeft,
   Pencil,
   Trash2,
+  Bell,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react-native";
 import Svg, { Path } from "react-native-svg";
-import { contactsApi, conversationsApi, Contact, Conversation } from "../../lib/api";
+import { contactsApi, conversationsApi, remindersApi, Contact, Conversation, Reminder, ReminderStatus } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
 
 function WhatsAppIcon({ size = 20, color = "#25D366" }: { size?: number; color?: string }) {
@@ -50,6 +53,15 @@ const MEDIUM_META: Record<
   OTHER: { label: "Other", icon: FileText },
 };
 
+const REMINDER_STATUS_META: Record<
+  ReminderStatus,
+  { label: string; icon: typeof Bell }
+> = {
+  OPEN: { label: "Open", icon: Bell },
+  DONE: { label: "Done", icon: CheckCircle2 },
+  CANCELED: { label: "Canceled", icon: XCircle },
+};
+
 export default function ContactDetailScreen() {
   const router = useRouter();
   const { id, from } = useLocalSearchParams<{
@@ -65,6 +77,10 @@ export default function ContactDetailScreen() {
     null
   );
   const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [isLoadingReminders, setIsLoadingReminders] = useState(true);
+  const [nextReminderCursor, setNextReminderCursor] = useState<string | null>(null);
+  const [isLoadingMoreReminders, setIsLoadingMoreReminders] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   const handleBack = useCallback(() => {
@@ -81,6 +97,10 @@ export default function ContactDetailScreen() {
 
   useEffect(() => {
     loadConversations();
+  }, [id]);
+
+  useEffect(() => {
+    loadReminders();
   }, [id]);
 
   useEffect(() => {
@@ -142,6 +162,46 @@ export default function ContactDetailScreen() {
       setNextConversationCursor(null);
     } finally {
       setIsLoadingMoreConversations(false);
+    }
+  };
+
+  const loadReminders = async () => {
+    try {
+      setIsLoadingReminders(true);
+      const data = await remindersApi.list({
+        contactId: id,
+        limit: 10,
+      });
+      setReminders(data.reminders);
+      setNextReminderCursor(data.nextCursor);
+    } catch (error) {
+      console.error("Failed to load contact reminders:", error);
+      setReminders([]);
+      setNextReminderCursor(null);
+    } finally {
+      setIsLoadingReminders(false);
+    }
+  };
+
+  const loadMoreReminders = async () => {
+    if (!nextReminderCursor || isLoadingMoreReminders) {
+      return;
+    }
+
+    try {
+      setIsLoadingMoreReminders(true);
+      const data = await remindersApi.list({
+        contactId: id,
+        cursor: nextReminderCursor,
+        limit: 10,
+      });
+      setReminders((prev) => [...prev, ...data.reminders]);
+      setNextReminderCursor(data.nextCursor);
+    } catch (error) {
+      console.error("Failed to load more contact reminders:", error);
+      setNextReminderCursor(null);
+    } finally {
+      setIsLoadingMoreReminders(false);
     }
   };
 
@@ -421,6 +481,104 @@ export default function ContactDetailScreen() {
                   ) : (
                     <Text className="text-primary-600 text-center text-sm font-medium">
                       Load more conversations
+                    </Text>
+                  )}
+                </Pressable>
+              )}
+            </>
+          )}
+        </View>
+
+        {/* Reminders */}
+        <View className="px-4 py-4 border-t border-border-200">
+          <View className="mb-3">
+            <Text className="text-typography-900 text-base font-semibold">Reminders</Text>
+          </View>
+
+          {isLoadingReminders ? (
+            <View className="py-8 items-center">
+              <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
+            </View>
+          ) : reminders.length === 0 ? (
+            <View className="py-6 px-4 bg-background-50 rounded-xl">
+              <Text className="text-typography-600 text-sm">
+                No reminders for this contact yet.
+              </Text>
+            </View>
+          ) : (
+            <>
+              {reminders.map((reminder) => {
+                const statusMeta = REMINDER_STATUS_META[reminder.status] || REMINDER_STATUS_META.OPEN;
+                const StatusIcon = statusMeta.icon;
+                const dueDate = new Date(reminder.dueAt);
+                const dueLabel = Number.isNaN(dueDate.getTime())
+                  ? "Due date unknown"
+                  : format(dueDate, "MMM d, yyyy");
+                const iconColor =
+                  reminder.status === "DONE"
+                    ? getThemeColor(colors, "success-600")
+                    : reminder.status === "CANCELED"
+                      ? getThemeColor(colors, "error-500")
+                      : getThemeColor(colors, "primary-600");
+
+                return (
+                  <Pressable
+                    key={reminder.id}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/reminder/[id]",
+                        params: { id: reminder.id, from: `/contact/${id}` },
+                      })
+                    }
+                    className="mb-3 p-4 rounded-xl border border-border-200 bg-background-50 active:bg-background-100"
+                  >
+                    <View className="flex-row items-start">
+                      <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mr-3">
+                        <StatusIcon size={18} color={iconColor} />
+                      </View>
+
+                      <View className="flex-1">
+                        <View className="flex-row items-center justify-between mb-1">
+                          <Text className="text-typography-900 text-sm font-semibold flex-1" numberOfLines={1}>
+                            {reminder.title}
+                          </Text>
+                          <Text className="text-typography-400 text-xs ml-2">
+                            {dueLabel}
+                          </Text>
+                        </View>
+
+                        {reminder.notes ? (
+                          <Text
+                            className="text-typography-700 text-sm"
+                            numberOfLines={2}
+                          >
+                            {reminder.notes}
+                          </Text>
+                        ) : (
+                          <Text className="text-typography-400 text-sm italic">
+                            No notes
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  </Pressable>
+                );
+              })}
+
+              {nextReminderCursor && (
+                <Pressable
+                  onPress={loadMoreReminders}
+                  disabled={isLoadingMoreReminders}
+                  className="mt-1 py-3 rounded-lg bg-background-100 active:bg-background-200"
+                >
+                  {isLoadingMoreReminders ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={getThemeColor(colors, "primary-600")}
+                    />
+                  ) : (
+                    <Text className="text-primary-600 text-center text-sm font-medium">
+                      Load more reminders
                     </Text>
                   )}
                 </Pressable>

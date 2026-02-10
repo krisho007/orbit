@@ -7,10 +7,12 @@ import {
   Pressable,
   Alert,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { format } from "date-fns";
+import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import {
   Contact,
   Reminder,
@@ -20,20 +22,6 @@ import {
   remindersApi,
 } from "../../../lib/api";
 import { getThemeColor, useThemeColors } from "../../../lib/theme";
-
-function formatDateInput(value?: string | null): string {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return format(date, "yyyy-MM-dd HH:mm");
-}
-
-function parseDateInput(value: string): string | null {
-  const normalized = value.trim().replace(" ", "T");
-  const date = new Date(normalized);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString();
-}
 
 const STATUS_OPTIONS: ReminderStatus[] = ["OPEN", "DONE", "CANCELED"];
 const RECURRENCE_OPTIONS: Array<{ value: ReminderRecurrence; label: string }> = [
@@ -51,22 +39,29 @@ export default function EditReminderScreen() {
   const placeholderColor = getThemeColor(colors, "typography-500");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const [reminder, setReminder] = useState<Reminder | null>(null);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
+  const [contactSearch, setContactSearch] = useState("");
+  const [isSearchingContacts, setIsSearchingContacts] = useState(false);
+  const [contactResults, setContactResults] = useState<Contact[]>([]);
+  const [selectedParticipants, setSelectedParticipants] = useState<Contact[]>([]);
+
+  const [dueDate, setDueDate] = useState(new Date());
+  const [showDueDatePicker, setShowDueDatePicker] = useState(false);
+  const [showDueTimePicker, setShowDueTimePicker] = useState(false);
+  const [recurrenceEndsAt, setRecurrenceEndsAt] = useState<Date | null>(null);
+  const [showRecEndDatePicker, setShowRecEndDatePicker] = useState(false);
+  const [showRecEndTimePicker, setShowRecEndTimePicker] = useState(false);
+
   const [formData, setFormData] = useState({
     title: "",
     notes: "",
-    dueAt: "",
     status: "OPEN" as ReminderStatus,
     recurrence: "NONE" as ReminderRecurrence,
     recurrenceInterval: "1",
-    recurrenceEndsAt: "",
   });
 
   useEffect(() => {
-    Promise.all([loadReminder(), loadContacts()]);
+    loadReminder();
   }, [id]);
 
   const loadReminder = async () => {
@@ -74,15 +69,17 @@ export default function EditReminderScreen() {
       setIsLoading(true);
       const data = await remindersApi.get(id);
       setReminder(data);
-      setSelectedParticipantIds(data.participants?.map((p) => p.contact.id) || []);
+      setSelectedParticipants(
+        data.participants?.map((p) => p.contact) || []
+      );
+      setDueDate(data.dueAt ? new Date(data.dueAt) : new Date());
+      setRecurrenceEndsAt(data.recurrenceEndsAt ? new Date(data.recurrenceEndsAt) : null);
       setFormData({
         title: data.title || "",
         notes: data.notes || "",
-        dueAt: formatDateInput(data.dueAt),
         status: data.status,
         recurrence: data.recurrence || "NONE",
         recurrenceInterval: String(data.recurrenceInterval || 1),
-        recurrenceEndsAt: formatDateInput(data.recurrenceEndsAt),
       });
     } catch (error) {
       console.error("Failed to load reminder:", error);
@@ -93,33 +90,60 @@ export default function EditReminderScreen() {
     }
   };
 
-  const loadContacts = async () => {
-    try {
-      setIsLoadingContacts(true);
-      const data = await contactsApi.list({ limit: 100 });
-      setContacts(data.contacts);
-    } catch (error) {
-      console.error("Failed to load contacts:", error);
-    } finally {
-      setIsLoadingContacts(false);
+  useEffect(() => {
+    if (contactSearch.trim().length < 2) {
+      setContactResults([]);
+      return;
     }
+    const timeout = setTimeout(async () => {
+      try {
+        setIsSearchingContacts(true);
+        const data = await contactsApi.list({ search: contactSearch.trim(), limit: 10 });
+        setContactResults(data.contacts);
+      } catch (error) {
+        console.error("Failed to search contacts:", error);
+      } finally {
+        setIsSearchingContacts(false);
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [contactSearch]);
+
+  const addParticipant = (contact: Contact) => {
+    if (!selectedParticipants.some((p) => p.id === contact.id)) {
+      setSelectedParticipants((prev) => [...prev, contact]);
+    }
+    setContactSearch("");
+    setContactResults([]);
   };
 
-  const toggleParticipant = (contactId: string) => {
-    setSelectedParticipantIds((prev) =>
-      prev.includes(contactId) ? prev.filter((id) => id !== contactId) : [...prev, contactId]
-    );
+  const removeParticipant = (contactId: string) => {
+    setSelectedParticipants((prev) => prev.filter((p) => p.id !== contactId));
+  };
+
+  const onDueDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setShowDueDatePicker(false);
+    if (selected) setDueDate(selected);
+  };
+
+  const onDueTimeChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setShowDueTimePicker(false);
+    if (selected) setDueDate(selected);
+  };
+
+  const onRecEndDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setShowRecEndDatePicker(false);
+    if (selected) setRecurrenceEndsAt(selected);
+  };
+
+  const onRecEndTimeChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setShowRecEndTimePicker(false);
+    if (selected) setRecurrenceEndsAt(selected);
   };
 
   const handleSubmit = async () => {
     if (!formData.title.trim()) {
       Alert.alert("Error", "Title is required");
-      return;
-    }
-
-    const dueAt = parseDateInput(formData.dueAt);
-    if (!dueAt) {
-      Alert.alert("Error", "Enter a valid due date/time");
       return;
     }
 
@@ -129,25 +153,18 @@ export default function EditReminderScreen() {
       return;
     }
 
-    const recurrenceEndsAt = formData.recurrenceEndsAt.trim()
-      ? parseDateInput(formData.recurrenceEndsAt)
-      : null;
-    if (formData.recurrenceEndsAt.trim() && !recurrenceEndsAt) {
-      Alert.alert("Error", "Enter a valid recurrence end date/time");
-      return;
-    }
-
     try {
       setIsSubmitting(true);
       await remindersApi.update(id, {
         title: formData.title.trim(),
         notes: formData.notes.trim() || undefined,
-        dueAt,
+        dueAt: dueDate.toISOString(),
         status: formData.status,
         recurrence: formData.recurrence,
         recurrenceInterval: formData.recurrence === "NONE" ? 1 : recurrenceInterval,
-        recurrenceEndsAt: formData.recurrence === "NONE" ? null : recurrenceEndsAt || null,
-        participantIds: selectedParticipantIds,
+        recurrenceEndsAt:
+          formData.recurrence === "NONE" ? null : recurrenceEndsAt?.toISOString() || null,
+        participantIds: selectedParticipants.map((p) => p.id),
       });
       router.back();
     } catch (error) {
@@ -200,13 +217,40 @@ export default function EditReminderScreen() {
 
         <View className="mb-4">
           <Text className="text-typography-700 text-sm font-medium mb-2">Due At *</Text>
-          <TextInput
-            className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
-            placeholder="YYYY-MM-DD HH:mm"
-            placeholderTextColor={placeholderColor}
-            value={formData.dueAt}
-            onChangeText={(text) => setFormData({ ...formData, dueAt: text })}
-          />
+          <View className="flex-row">
+            <Pressable
+              onPress={() => setShowDueDatePicker(true)}
+              className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+            >
+              <Text className="text-typography-900 text-base">
+                {format(dueDate, "MMM d, yyyy")}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setShowDueTimePicker(true)}
+              className="px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+            >
+              <Text className="text-typography-900 text-base">
+                {format(dueDate, "HH:mm")}
+              </Text>
+            </Pressable>
+          </View>
+          {showDueDatePicker && (
+            <DateTimePicker
+              value={dueDate}
+              mode="date"
+              display={Platform.OS === "ios" ? "inline" : "default"}
+              onChange={onDueDateChange}
+            />
+          )}
+          {showDueTimePicker && (
+            <DateTimePicker
+              value={dueDate}
+              mode="time"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={onDueTimeChange}
+            />
+          )}
         </View>
 
         <View className="mb-4">
@@ -284,13 +328,55 @@ export default function EditReminderScreen() {
 
             <View className="mb-4">
               <Text className="text-typography-700 text-sm font-medium mb-2">Repeat Until</Text>
-              <TextInput
-                className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
-                placeholder="YYYY-MM-DD HH:mm (optional)"
-                placeholderTextColor={placeholderColor}
-                value={formData.recurrenceEndsAt}
-                onChangeText={(text) => setFormData({ ...formData, recurrenceEndsAt: text })}
-              />
+              {recurrenceEndsAt ? (
+                <View className="flex-row items-center">
+                  <Pressable
+                    onPress={() => setShowRecEndDatePicker(true)}
+                    className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+                  >
+                    <Text className="text-typography-900 text-base">
+                      {format(recurrenceEndsAt, "MMM d, yyyy")}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setShowRecEndTimePicker(true)}
+                    className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 mr-2"
+                  >
+                    <Text className="text-typography-900 text-base">
+                      {format(recurrenceEndsAt, "HH:mm")}
+                    </Text>
+                  </Pressable>
+                  <Pressable onPress={() => setRecurrenceEndsAt(null)} className="p-2">
+                    <Text className="text-error-600 text-sm font-medium">Clear</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={() => {
+                    setRecurrenceEndsAt(new Date(dueDate.getTime() + 30 * 24 * 60 * 60 * 1000));
+                    setShowRecEndDatePicker(true);
+                  }}
+                  className="px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+                >
+                  <Text className="text-typography-500 text-base">Set end date (optional)</Text>
+                </Pressable>
+              )}
+              {showRecEndDatePicker && recurrenceEndsAt && (
+                <DateTimePicker
+                  value={recurrenceEndsAt}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "inline" : "default"}
+                  onChange={onRecEndDateChange}
+                />
+              )}
+              {showRecEndTimePicker && recurrenceEndsAt && (
+                <DateTimePicker
+                  value={recurrenceEndsAt}
+                  mode="time"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  onChange={onRecEndTimeChange}
+                />
+              )}
             </View>
           </>
         )}
@@ -299,12 +385,13 @@ export default function EditReminderScreen() {
           <Text className="text-typography-700 text-sm font-medium mb-2">Notes</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
+            style={{ minHeight: 160 }}
             placeholder="Reminder notes..."
             placeholderTextColor={placeholderColor}
             value={formData.notes}
             onChangeText={(text) => setFormData({ ...formData, notes: text })}
             multiline
-            numberOfLines={5}
+            numberOfLines={10}
             textAlignVertical="top"
           />
         </View>
@@ -313,45 +400,51 @@ export default function EditReminderScreen() {
           <Text className="text-typography-700 text-sm font-medium mb-2">
             Link Contacts (Optional)
           </Text>
-          {selectedParticipantIds.length > 0 && (
-            <Text className="text-typography-500 text-sm mb-2">
-              {selectedParticipantIds.length} contact
-              {selectedParticipantIds.length !== 1 ? "s" : ""} selected
-            </Text>
+          {selectedParticipants.length > 0 && (
+            <View className="flex-row flex-wrap mb-2">
+              {selectedParticipants.map((contact) => (
+                <Pressable
+                  key={contact.id}
+                  onPress={() => removeParticipant(contact.id)}
+                  className="flex-row items-center px-3 py-1.5 rounded-full mr-2 mb-2 bg-primary-100 border border-primary-300"
+                >
+                  <Text className="text-sm font-medium text-primary-700">
+                    {contact.displayName}
+                  </Text>
+                  <Text className="text-primary-700 ml-1.5 text-xs font-bold">✕</Text>
+                </Pressable>
+              ))}
+            </View>
           )}
-          {isLoadingContacts ? (
-            <View className="py-4">
+          <TextInput
+            className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
+            placeholder="Type a contact name to search..."
+            placeholderTextColor={placeholderColor}
+            value={contactSearch}
+            onChangeText={setContactSearch}
+          />
+          {isSearchingContacts && (
+            <View className="py-2">
               <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
             </View>
-          ) : contacts.length === 0 ? (
-            <Text className="text-typography-500 text-sm">
-              No contacts available. You can keep this reminder unlinked.
-            </Text>
-          ) : (
-            <View className="flex-row flex-wrap">
-              {contacts.map((contact) => {
-                const isActive = selectedParticipantIds.includes(contact.id);
-                return (
+          )}
+          {contactResults.length > 0 && (
+            <View className="mt-2 border border-border-200 rounded-lg bg-background-50">
+              {contactResults
+                .filter((c) => !selectedParticipants.some((p) => p.id === c.id))
+                .map((contact, index, filtered) => (
                   <Pressable
                     key={contact.id}
-                    onPress={() => toggleParticipant(contact.id)}
-                    className={`px-3 py-1.5 rounded-full mr-2 mb-2 border ${
-                      isActive
-                        ? "bg-primary-100 border-primary-300"
-                        : "bg-background-50 border-border-200"
-                    }`}
+                    onPress={() => addParticipant(contact)}
+                    className={`px-4 py-3 ${index < filtered.length - 1 ? "border-b border-border-200" : ""}`}
                   >
-                    <Text
-                      className={`text-sm font-medium ${
-                        isActive ? "text-primary-700" : "text-typography-700"
-                      }`}
-                    >
-                      {contact.displayName}
-                    </Text>
+                    <Text className="text-typography-900 text-base">{contact.displayName}</Text>
                   </Pressable>
-                );
-              })}
+                ))}
             </View>
+          )}
+          {contactSearch.trim().length >= 2 && !isSearchingContacts && contactResults.filter((c) => !selectedParticipants.some((p) => p.id === c.id)).length === 0 && (
+            <Text className="text-typography-500 text-sm mt-2">No contacts found.</Text>
           )}
         </View>
 

@@ -3692,11 +3692,12 @@ function buildUiFromToolResults(
 function summarizeUiText(ui: AssistantUi | null, fallback: string): string {
   if (!ui) return fallback;
 
-  if (ui.kind === "created") {
-    if (fallback.trim().length > 0) {
-      return fallback;
-    }
+  // If the LLM provided meaningful text, prefer it over generic summaries.
+  // The LLM text carries conversational context (disambiguation, follow-up
+  // questions, explanations) that a generic "Showing N items." message loses.
+  if (fallback && fallback.trim().length > 0) return fallback;
 
+  if (ui.kind === "created") {
     const contactCount = ui.cards.filter((card) => card.kind === "contact").length;
     const conversationCount = ui.cards.filter((card) => card.kind === "conversation").length;
     const eventCount = ui.cards.filter((card) => card.kind === "event").length;

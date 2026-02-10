@@ -109,7 +109,12 @@ export default function RemindersScreen() {
 
     return (
       <Pressable
-        onPress={() => router.push(`/reminder/${item.id}`)}
+        onPress={() =>
+          router.push({
+            pathname: "/reminder/[id]",
+            params: { id: item.id, from: "/(tabs)/reminders" },
+          })
+        }
         className="p-4 bg-background-0 border-b border-border-100 active:bg-background-50"
       >
         <View className="flex-row items-start">

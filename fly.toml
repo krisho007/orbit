@@ -8,6 +8,11 @@ primary_region = "sjc"
   # Build from repo root to access both apps/api and apps/mobile
   dockerfile = "apps/api/Dockerfile"
 
+  [build.args]
+    EXPO_PUBLIC_SUPABASE_URL = "https://ghjqmkvsnwvppbpfnoii.supabase.co"
+    EXPO_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_wyT6ebepitJ3_4k1YvC8MQ_1Va3fmJb"
+    EXPO_PUBLIC_API_URL = ""
+
 [env]
   PORT = "3000"
   NODE_ENV = "production"

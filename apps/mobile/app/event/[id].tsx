@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  BackHandler,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -62,8 +63,12 @@ const CONVERSATION_MEDIUM_META: Record<
 
 export default function EventDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{
+    id: string;
+    from?: string | string[];
+  }>();
   const colors = useThemeColors();
+  const backHref = Array.isArray(from) ? from[0] : from;
   const [event, setEvent] = useState<Event | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
@@ -73,6 +78,14 @@ export default function EventDetailScreen() {
   const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  const handleBack = useCallback(() => {
+    if (backHref) {
+      router.replace(backHref as any);
+      return;
+    }
+    router.back();
+  }, [backHref, router]);
+
   useEffect(() => {
     loadEvent();
   }, [id]);
@@ -80,6 +93,14 @@ export default function EventDetailScreen() {
   useEffect(() => {
     loadEventConversations();
   }, [id]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      handleBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [handleBack]);
 
   const loadEvent = async () => {
     try {
@@ -89,7 +110,7 @@ export default function EventDetailScreen() {
     } catch (error) {
       console.error("Failed to load event:", error);
       Alert.alert("Error", "Failed to load event details");
-      router.back();
+      handleBack();
     } finally {
       setIsLoading(false);
     }
@@ -142,7 +163,7 @@ export default function EventDetailScreen() {
         onPress: async () => {
           try {
             await eventsApi.delete(id);
-            router.back();
+            handleBack();
           } catch (error) {
             console.error("Failed to delete event:", error);
             Alert.alert("Error", "Failed to delete event");
@@ -189,7 +210,7 @@ export default function EventDetailScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background-0">
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-border-200">
-        <Pressable onPress={() => router.back()} className="p-2">
+        <Pressable onPress={handleBack} className="p-2">
           <ChevronLeft size={22} color={getThemeColor(colors, "primary-600")} />
         </Pressable>
         <Text className="text-lg font-semibold text-typography-900">Event</Text>

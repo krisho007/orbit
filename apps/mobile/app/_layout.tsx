@@ -70,14 +70,16 @@ function RootLayoutNav() {
 
     const firstSegment = String(segments[0] || "");
     const inAuthGroup = firstSegment === "(auth)";
+    const inAuthCallback = firstSegment === "auth"; // orbit://auth/callback deep link route
     const inOnboardingWelcome = firstSegment === "welcome";
     const inGoogleImportScreen = firstSegment === "google-import";
     const inIncomingCallScreen = firstSegment === "incoming-call";
     const inTabsGroup = firstSegment === "(tabs)";
     const inOnboardingFlow = inOnboardingWelcome || inGoogleImportScreen;
 
-    if (!user?.id && !inAuthGroup) {
+    if (!user?.id && !inAuthGroup && !inAuthCallback) {
       // Redirect to sign-in if not authenticated
+      // (don't redirect away from auth/callback while OAuth code exchange is in progress)
       router.replace("/(auth)/sign-in");
     } else if (
       user?.id &&
@@ -87,7 +89,7 @@ function RootLayoutNav() {
       !inTabsGroup
     ) {
       router.replace("/welcome" as any);
-    } else if (user?.id && onboardingState === "complete" && (inAuthGroup || inOnboardingWelcome)) {
+    } else if (user?.id && onboardingState === "complete" && (inAuthGroup || inAuthCallback || inOnboardingWelcome)) {
       // Redirect to assistant if authenticated
       router.replace("/(tabs)/assistant");
     }

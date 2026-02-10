@@ -156,7 +156,12 @@ export default function ContactsScreen() {
 
   const renderContact = ({ item }: { item: Contact }) => (
     <Pressable
-      onPress={() => router.push(`/contact/${item.id}`)}
+      onPress={() =>
+        router.push({
+          pathname: "/contact/[id]",
+          params: { id: item.id, from: "/(tabs)/index" },
+        })
+      }
       className="flex-row items-center px-4 py-4 bg-background-0 border border-border-100 rounded-2xl mx-4 mb-3 active:bg-background-50"
     >
       {item.images?.[0]?.imageUrl ? (

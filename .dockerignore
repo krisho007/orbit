@@ -1,9 +1,5 @@
 # Root level dockerignore
-node_modules
 .git
-*.md
-.env
-.env.*
 *.log
 .DS_Store
 
@@ -21,5 +17,22 @@ postcss.config.mjs
 tsconfig.json
 capacitor/
 
-# Keep apps folder
-!apps/
+# Ignore node_modules everywhere (including inside apps/)
+**/node_modules
+
+# Ignore env files
+**/.env
+**/.env.*
+
+# Ignore markdown files (except we might need some)
+*.md
+**/*.md
+
+# Ignore mobile-specific build artifacts
+apps/mobile/.expo
+apps/mobile/android
+apps/mobile/ios
+apps/mobile/dist
+
+# Ignore API build artifacts
+apps/api/drizzle

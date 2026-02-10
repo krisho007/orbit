@@ -41,6 +41,7 @@ export default function TabsLayout() {
   return (
     <Tabs
       initialRouteName="assistant"
+      backBehavior="history"
       screenOptions={{
         headerShown: true,
         headerStyle: {
@@ -58,6 +59,7 @@ export default function TabsLayout() {
           height: Platform.OS === "ios" ? 86 : 68,
           paddingBottom: Platform.OS === "ios" ? 20 : 12,
         },
+        tabBarHideOnKeyboard: true,
         tabBarShowLabel: false,
       }}
     >

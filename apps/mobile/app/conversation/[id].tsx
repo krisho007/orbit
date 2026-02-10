@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  BackHandler,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -40,14 +41,34 @@ const MEDIUM_META: Record<
 
 export default function ConversationDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{
+    id: string;
+    from?: string | string[];
+  }>();
   const colors = useThemeColors();
+  const backHref = Array.isArray(from) ? from[0] : from;
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const handleBack = useCallback(() => {
+    if (backHref) {
+      router.replace(backHref as any);
+      return;
+    }
+    router.back();
+  }, [backHref, router]);
 
   useEffect(() => {
     loadConversation();
   }, [id]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      handleBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [handleBack]);
 
   const loadConversation = async () => {
     try {
@@ -57,7 +78,7 @@ export default function ConversationDetailScreen() {
     } catch (error) {
       console.error("Failed to load conversation:", error);
       Alert.alert("Error", "Failed to load conversation details");
-      router.back();
+      handleBack();
     } finally {
       setIsLoading(false);
     }
@@ -72,7 +93,7 @@ export default function ConversationDetailScreen() {
         onPress: async () => {
           try {
             await conversationsApi.delete(id);
-            router.back();
+            handleBack();
           } catch (error) {
             console.error("Failed to delete conversation:", error);
             Alert.alert("Error", "Failed to delete conversation");
@@ -118,7 +139,7 @@ export default function ConversationDetailScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background-0">
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-border-200">
-        <Pressable onPress={() => router.back()} className="p-2">
+        <Pressable onPress={handleBack} className="p-2">
           <ChevronLeft size={22} color={getThemeColor(colors, "primary-600")} />
         </Pressable>
         <Text className="text-lg font-semibold text-typography-900">Conversation</Text>

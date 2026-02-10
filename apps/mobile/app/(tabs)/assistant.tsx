@@ -8,10 +8,13 @@ import {
   FlatList,
   ScrollView,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   ActivityIndicator,
 } from "react-native";
-import { useRouter, useNavigation } from "expo-router";
+import { useRouter, useNavigation, useFocusEffect } from "expo-router";
+import { useHeaderHeight } from "@react-navigation/elements";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { format } from "date-fns";
 import {
   Sparkles,
@@ -95,6 +98,8 @@ const REMINDER_STATUS_META: Record<string, string> = {
 export default function AssistantScreen() {
   const router = useRouter();
   const navigation = useNavigation();
+  const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { resolvedColorMode } = useGluestackUI();
   const scrollIndicatorStyle = resolvedColorMode === "dark" ? "white" : "black";
@@ -148,6 +153,17 @@ export default function AssistantScreen() {
       ),
     });
   }, [navigation, resetChat, colors]);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Scroll chat to the bottom when the screen regains focus
+      // (e.g. returning from a contact/conversation/event/reminder detail screen).
+      const timer = setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 100);
+      return () => clearTimeout(timer);
+    }, [])
+  );
 
   const nextMessageId = useCallback((prefix: string) => {
     messageSequenceRef.current += 1;
@@ -247,7 +263,12 @@ export default function AssistantScreen() {
     return (
       <Pressable
         key={contact.id}
-        onPress={() => router.push(`/contact/${contact.id}`)}
+        onPress={() =>
+          router.push({
+            pathname: "/contact/[id]",
+            params: { id: contact.id, from: "/(tabs)/assistant" },
+          })
+        }
         className="bg-background-0 border border-border-100 rounded-2xl p-4 mb-3 active:bg-background-50"
       >
         <View className="flex-row items-center">
@@ -290,7 +311,12 @@ export default function AssistantScreen() {
     return (
       <Pressable
         key={conversation.id}
-        onPress={() => router.push(`/conversation/${conversation.id}`)}
+        onPress={() =>
+          router.push({
+            pathname: "/conversation/[id]",
+            params: { id: conversation.id, from: "/(tabs)/assistant" },
+          })
+        }
         className="bg-background-0 border border-border-100 rounded-2xl p-4 mb-3 active:bg-background-50"
       >
         <View className="flex-row items-start">
@@ -323,7 +349,12 @@ export default function AssistantScreen() {
     return (
       <Pressable
         key={event.id}
-        onPress={() => router.push(`/event/${event.id}`)}
+        onPress={() =>
+          router.push({
+            pathname: "/event/[id]",
+            params: { id: event.id, from: "/(tabs)/assistant" },
+          })
+        }
         className="bg-background-0 border border-border-100 rounded-2xl p-4 mb-3 active:bg-background-50"
       >
         <View className="flex-row items-start">
@@ -368,7 +399,12 @@ export default function AssistantScreen() {
     return (
       <Pressable
         key={reminder.id}
-        onPress={() => router.push(`/reminder/${reminder.id}`)}
+        onPress={() =>
+          router.push({
+            pathname: "/reminder/[id]",
+            params: { id: reminder.id, from: "/(tabs)/assistant" },
+          })
+        }
         className="bg-background-0 border border-border-100 rounded-2xl p-4 mb-3 active:bg-background-50"
       >
         <View className="flex-row items-start">
@@ -683,12 +719,13 @@ export default function AssistantScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior="padding"
       className="flex-1 bg-background-50"
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+      keyboardVerticalOffset={headerHeight}
     >
       <FlatList
         ref={flatListRef}
+        style={{ flex: 1 }}
         data={messages}
         keyExtractor={(item) => item.id}
         renderItem={renderMessage}
@@ -702,7 +739,10 @@ export default function AssistantScreen() {
         }
       />
 
-      <View className="border-t border-border-200 px-4 pt-3 pb-4 bg-background-0">
+      <View
+        className="border-t border-border-200 px-4 pt-3 bg-background-0"
+        style={{ paddingBottom: Math.max(insets.bottom, 12) }}
+      >
         <View className="flex-row items-end rounded-3xl border border-border-200 bg-background-50 px-3 py-3">
           <View className="flex-1 mr-2">
             <TextInput

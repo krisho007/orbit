@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  BackHandler,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -58,15 +59,35 @@ function getRecurrenceLabel(reminder: Reminder): string {
 
 export default function ReminderDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{
+    id: string;
+    from?: string | string[];
+  }>();
   const colors = useThemeColors();
+  const backHref = Array.isArray(from) ? from[0] : from;
   const [reminder, setReminder] = useState<Reminder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
+  const handleBack = useCallback(() => {
+    if (backHref) {
+      router.replace(backHref as any);
+      return;
+    }
+    router.back();
+  }, [backHref, router]);
+
   useEffect(() => {
     loadReminder();
   }, [id]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      handleBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [handleBack]);
 
   const loadReminder = async () => {
     try {
@@ -76,7 +97,7 @@ export default function ReminderDetailScreen() {
     } catch (error) {
       console.error("Failed to load reminder:", error);
       Alert.alert("Error", "Failed to load reminder details");
-      router.back();
+      handleBack();
     } finally {
       setIsLoading(false);
     }
@@ -106,7 +127,7 @@ export default function ReminderDetailScreen() {
         onPress: async () => {
           try {
             await remindersApi.delete(reminder.id);
-            router.back();
+            handleBack();
           } catch (error) {
             console.error("Failed to delete reminder:", error);
             Alert.alert("Error", "Failed to delete reminder");
@@ -155,7 +176,7 @@ export default function ReminderDetailScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background-0">
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-border-200">
-        <Pressable onPress={() => router.back()} className="p-2">
+        <Pressable onPress={handleBack} className="p-2">
           <ChevronLeft size={22} color={getThemeColor(colors, "primary-600")} />
         </Pressable>
         <Text className="text-lg font-semibold text-typography-900">Reminder</Text>

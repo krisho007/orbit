@@ -107,7 +107,12 @@ export default function EventsScreen() {
 
     return (
       <Pressable
-        onPress={() => router.push(`/event/${item.id}`)}
+        onPress={() =>
+          router.push({
+            pathname: "/event/[id]",
+            params: { id: item.id, from: "/(tabs)/events" },
+          })
+        }
         className={`p-4 bg-background-0 border-b border-border-100 active:bg-background-50 ${
           isPastEvent ? "opacity-60" : ""
         }`}

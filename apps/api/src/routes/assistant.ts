@@ -3505,7 +3505,11 @@ function buildUiFromToolResults(
           happenedAt: String(output.happenedAt || ""),
           content: (output.content as string | null | undefined) ?? null,
           participants: Array.isArray(output.participants)
-            ? output.participants.map((p: any) => String(p))
+            ? output.participants.map((p: any) =>
+                p?.contact?.displayName
+                  ? String(p.contact.displayName)
+                  : String(p)
+              )
             : [],
         },
       });
@@ -3525,7 +3529,11 @@ function buildUiFromToolResults(
           startAt: String(output.startAt || ""),
           location: (output.location as string | null | undefined) ?? null,
           participants: Array.isArray(output.participants)
-            ? output.participants.map((p: any) => String(p))
+            ? output.participants.map((p: any) =>
+                p?.contact?.displayName
+                  ? String(p.contact.displayName)
+                  : String(p)
+              )
             : [],
         },
       });
@@ -3603,7 +3611,11 @@ function buildUiFromToolResults(
           happenedAt: String(conversation.happenedAt || ""),
           content: conversation.content ?? null,
           participants: Array.isArray(conversation.participants)
-            ? conversation.participants.map((p: any) => String(p))
+            ? conversation.participants.map((p: any) =>
+                p?.contact?.displayName
+                  ? String(p.contact.displayName)
+                  : String(p)
+              )
             : [],
         })),
       };
@@ -3620,7 +3632,11 @@ function buildUiFromToolResults(
           startAt: String(event.startAt || ""),
           location: event.location ?? null,
           participants: Array.isArray(event.participants)
-            ? event.participants.map((p: any) => String(p))
+            ? event.participants.map((p: any) =>
+                p?.contact?.displayName
+                  ? String(p.contact.displayName)
+                  : String(p)
+              )
             : [],
         })),
       };
@@ -4643,13 +4659,14 @@ export async function processMessageLLM(
 
   console.log(`[assistant:llm] Starting LLM processing with ${modelMessages.length} message(s)`);
   console.log(`[assistant:llm] User context: ${userContext.userName || "(no name)"}, primaryContact: ${userContext.primaryContactId || "(not set)"}`);
-  console.log(`[assistant:llm] Model: gemini-2.0-flash`);
+  const aiModel = process.env.AI_MODEL || "gemini-flash-lite-latest";
+  console.log(`[assistant:llm] Model: ${aiModel}`);
 
   let capturedToolResults: Array<{ output?: ToolResult }> = [];
   let stepIndex = 0;
 
   const result = await generate({
-    model: google("gemini-2.0-flash"),
+    model: google(aiModel),
     system: buildSystemPrompt(userContext),
     messages: modelMessages,
     tools,

@@ -175,62 +175,183 @@ This runs all pending migrations against the database specified by `DATABASE_URL
 
 ---
 
-### 4. Running on Your Personal Mobile Phone
+### 4. Mobile App Builds
 
-You have two options depending on what you need:
+#### Build Profiles Overview
 
-#### Option A: Development Build (recommended for testing)
+| Profile | Purpose | Output | Use Case |
+|---------|---------|--------|----------|
+| `development` | Testing with Expo dev tools | APK | Debug issues, test new features with dev menu |
+| `preview` | Clean testing build | APK | Share with testers, install directly on phone |
+| `production` | Play Store release | AAB | Submit to Google Play Store |
 
-This creates an APK you can install directly on your phone.
+All profiles connect to the **same backend** (Fly.io) and **same database** (Supabase). The difference is only in the build type, not the environment.
+
+---
+
+#### Development Build
+
+Use development builds when actively developing the mobile app. They enable **instant hot reload** — you can edit code on your computer and see changes on your phone immediately without rebuilding.
+
+**How it works:** The development APK is a "shell" containing only the native runtime (React Native engine, native modules, Expo SDK). Your JavaScript/TypeScript code is **not bundled into the APK**. Instead, it's streamed from your local Expo dev server each time the app loads. This is why:
+- Code changes appear instantly (hot reload)
+- You need the dev server running to use the app
+- You only rebuild the APK when native dependencies change
+
+**Step 1: Configure environment**
+
+Ensure `apps/mobile/.env` has your Fly.io URL:
+```
+EXPO_PUBLIC_API_URL="https://orbit-app.fly.dev"
+```
+
+**Step 2: Build and install the development APK**
 
 ```bash
 cd apps/mobile
-
-# Build a preview APK (installable directly, no Play Store needed)
-eas build --platform android --profile preview
+eas build --profile development --platform android
 ```
 
-Once the build completes:
-1. Open the link that EAS prints, or go to [expo.dev](https://expo.dev) → your project → Builds
-2. Download the `.apk` file to your phone
-3. Open it to install (you may need to allow "Install from unknown sources" in Android settings)
+Once the build completes, scan the QR code shown in the terminal to download and install the APK on your phone. You may need to allow "Install from unknown sources" in Android settings.
 
-> **Make sure** your `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_SUPABASE_URL` EAS secrets point
-> to your production Fly.io and Supabase URLs:
-> ```bash
-> eas secret:create --name EXPO_PUBLIC_API_URL --value "https://orbit-app.fly.dev"
-> eas secret:create --name EXPO_PUBLIC_SUPABASE_URL --value "https://your-project.supabase.co"
-> eas secret:create --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value "your-anon-key"
-> ```
+**Step 3: Start the local Expo dev server**
 
-#### Option B: Production Build (Play Store)
+```bash
+cd apps/mobile
+bun run start
+```
 
-See [apps/mobile/PLAY_STORE_DEPLOYMENT.md](apps/mobile/PLAY_STORE_DEPLOYMENT.md) for the full Play Store submission guide.
+This starts the Metro bundler and displays a QR code in the terminal.
+
+**Step 4: Connect the app to the dev server**
+
+1. Open the development build app on your phone
+2. On the home screen, tap to select a development server
+3. Use the in-app scanner to scan the QR code from Step 3
+
+Your phone must be on the same WiFi network as your computer.
+
+**Step 5: Start developing**
+
+The app will load and connect to the Fly.io backend (per your `.env`). Any code changes you make will hot-reload automatically.
+
+> **Note:** You only need to rebuild the APK (Step 2) when you change native code or dependencies. For JavaScript changes, just save and the app will reload.
+
+**Switching to local API server**
+
+To test against your local API instead of Fly.io, change `apps/mobile/.env`:
+
+```bash
+# Comment out the Fly.io URL
+# EXPO_PUBLIC_API_URL="https://orbit-app.fly.dev"
+
+# For physical device on same WiFi (use your computer's WiFi IP):
+EXPO_PUBLIC_API_URL="http://192.168.x.x:3001"
+
+# For Android emulator only (10.0.2.2 = host machine's localhost):
+# EXPO_PUBLIC_API_URL="http://10.0.2.2:3001"
+```
+
+> **Tip:** Find your computer's WiFi IP with: `ipconfig getifaddr en0` (macOS)
+
+Then start your local API server:
+
+```bash
+cd apps/api
+bun run dev
+```
+
+With development builds, **no rebuild is needed**. Restart the Expo dev server with cache cleared and force-close/reopen the app on your phone:
+
+```bash
+cd apps/mobile
+bun run start --clear
+```
+
+Then **force-close the app on your phone** (swipe it away from recent apps) and reopen it. A simple reload is not enough — the app must be fully restarted to pick up `.env` changes.
+
+> **Important:** For preview/production builds, changing `.env` requires a full rebuild since the values are baked into the APK at build time.
+
+---
+
+#### Preview Build
+
+Use preview builds to test the app as a **standalone APK** without needing a dev server. This is ideal for:
+- Sharing with testers who don't have a development environment
+- Testing on your own phone without running anything on your computer
+- Verifying the app works correctly before a production release
+
+**How it works:** Unlike development builds, preview builds **bundle all JavaScript code into the APK**. The app is fully self-contained and connects directly to your Fly.io backend. No local server required.
+
+```bash
+# 1. Deploy any pending backend changes (from repo root)
+fly deploy
+
+# 2. Build preview APK (from apps/mobile)
+cd apps/mobile
+eas build --profile preview --platform android
+```
+
+Scan the QR code to download and install. The app will work immediately.
+
+---
+
+#### Production Build (Play Store)
+
+Use production builds for **publishing to the Google Play Store**.
+
+**How it works:** Like preview builds, production builds bundle all JavaScript into the app. The difference is the output format (AAB instead of APK) and optimizations for release:
+- **AAB format**: Required by Play Store, allows Google to optimize delivery for each device
+- **Code signing**: Uses your upload key for Play Store verification
+- **Optimizations**: Minified, tree-shaken, no dev tools or debug code
 
 ```bash
 cd apps/mobile
 
 # Build production AAB
-eas build --platform android --profile production
+eas build --profile production --platform android
 
 # Submit to Play Store (requires service account setup)
 eas submit --platform android --profile production
 ```
 
-#### Option C: Local Development on Phone
+See [apps/mobile/PLAY_STORE_DEPLOYMENT.md](apps/mobile/PLAY_STORE_DEPLOYMENT.md) for the full Play Store submission guide.
 
-If you want to run the dev version on your phone (with hot reload):
+---
 
-1. Connect your phone via USB and enable USB debugging
-2. Run:
-   ```bash
-   cd apps/mobile
-   bun run android
-   ```
-3. This installs a development build on your phone that connects to your local dev server
+#### Local Development (Android Studio Emulator)
 
-> Your phone and computer must be on the same network. The mobile app's `EXPO_PUBLIC_API_URL`
-> should point to your computer's local IP (e.g. `http://192.168.1.100:3001`).
+For testing with hot reload against your local API server (no EAS build needed).
+
+**1. Update `.env` to point to local API:**
+
+In `apps/mobile/.env`, change the API URL:
+
+```bash
+# 10.0.2.2 is the Android emulator's special address for host machine's localhost
+EXPO_PUBLIC_API_URL="http://10.0.2.2:3001"
+```
+
+**2. Start the local API server:**
+
+```bash
+cd apps/api
+bun run dev
+```
+
+**3. Run the app in the emulator:**
+
+```bash
+cd apps/mobile
+bun run android
+```
+
+> **Switching back to production:** When done with local testing, change `.env` back to:
+> ```
+> EXPO_PUBLIC_API_URL="https://orbit-app.fly.dev"
+> ```
+
+> **Note:** Local development on a physical phone is possible if your phone is on the same WiFi network as your computer. Use your computer's local IP (e.g., `http://192.168.1.100:3001`). However, for physical device testing, it's usually easier to just deploy to Fly.io and use a development or preview build.
 
 ---
 
@@ -238,9 +359,26 @@ If you want to run the dev version on your phone (with hot reload):
 
 | I changed... | What to do |
 |---|---|
-| Only mobile UI code | `./scripts/deploy-fly.sh` (rebuilds web + API image) |
-| Only API code | `./scripts/deploy-fly.sh` |
+| Only mobile UI code | `fly deploy` (rebuilds web + API image) |
+| Only API code | `fly deploy` |
 | Only DB schema | `cd apps/api && bun run db:generate && bun run db:migrate` |
-| DB schema + API code | Migrate first, then deploy: `cd apps/api && bun run db:migrate && cd ../.. && ./scripts/deploy-fly.sh` |
-| Mobile-only features (no web) | `cd apps/mobile && eas build --platform android --profile preview` |
-| Everything | Migrate → Deploy Fly.io → Build mobile |
+| DB schema + API code | Migrate first, then deploy: `cd apps/api && bun run db:migrate && cd ../.. && fly deploy` |
+| Mobile app (testing) | `fly deploy` then `cd apps/mobile && eas build --profile development --platform android` |
+| Mobile app (release) | `fly deploy` then `cd apps/mobile && eas build --profile production --platform android` |
+| Everything | Migrate → `fly deploy` → `eas build` |
+
+## Quick Reference: Build Commands
+
+```bash
+# Backend + Web UI (from repo root)
+fly deploy
+
+# Mobile - Development build (from apps/mobile)
+eas build --profile development --platform android
+
+# Mobile - Preview build (from apps/mobile)
+eas build --profile preview --platform android
+
+# Mobile - Production build (from apps/mobile)
+eas build --profile production --platform android
+```

@@ -102,7 +102,12 @@ export default function ConversationsScreen() {
 
     return (
       <Pressable
-        onPress={() => router.push(`/conversation/${item.id}`)}
+        onPress={() =>
+          router.push({
+            pathname: "/conversation/[id]",
+            params: { id: item.id, from: "/(tabs)/conversations" },
+          })
+        }
         className="p-4 bg-background-0 border-b border-border-100 active:bg-background-50"
       >
         <View className="flex-row items-start">

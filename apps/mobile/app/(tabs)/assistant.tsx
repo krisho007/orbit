@@ -12,6 +12,8 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
 } from "react-native";
 import { useRouter, useNavigation, useFocusEffect } from "expo-router";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -84,6 +86,7 @@ const CAPABILITY_TAGS = [
 ];
 
 const RESULT_CARD_LIMIT = 10;
+const RECORDING_AUTO_STOP_MS = 15_000;
 
 const MEDIUM_META: Record<
   string,
@@ -123,6 +126,9 @@ export default function AssistantScreen() {
   const flatListRef = useRef<FlatList>(null);
   const isSendingRef = useRef(false);
   const messageSequenceRef = useRef(assistantDraftState.messageSequence);
+  const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isStoppingRecordingRef = useRef(false);
+  const recordingPulseAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Keep only stable messages in cache so returning from detail pages restores results.
@@ -154,30 +160,18 @@ export default function AssistantScreen() {
     assistantDraftState.messageSequence = 0;
   }, []);
 
-  const startRecording = useCallback(async () => {
-    try {
-      console.log("[STT] Requesting microphone permission...");
-      const status = await AudioModule.requestRecordingPermissionsAsync();
-      console.log("[STT] Permission granted:", status.granted);
-      if (!status.granted) {
-        Alert.alert(
-          "Permission needed",
-          "Microphone access is required for speech-to-text."
-        );
-        return;
-      }
-
-      console.log("[STT] Preparing recorder...");
-      await audioRecorder.prepareToRecordAsync();
-      audioRecorder.record();
-      console.log("[STT] Recording started");
-    } catch (err) {
-      console.error("[STT] Failed to start recording:", err);
-      Alert.alert("Error", "Could not start recording.");
-    }
-  }, [audioRecorder]);
+  const clearRecordingTimeout = useCallback(() => {
+    if (!recordingTimeoutRef.current) return;
+    clearTimeout(recordingTimeoutRef.current);
+    recordingTimeoutRef.current = null;
+  }, []);
 
   const stopRecordingAndTranscribe = useCallback(async () => {
+    if (isStoppingRecordingRef.current) {
+      return;
+    }
+    isStoppingRecordingRef.current = true;
+    clearRecordingTimeout();
     setIsTranscribing(true);
 
     try {
@@ -205,8 +199,36 @@ export default function AssistantScreen() {
       Alert.alert("Error", "Could not transcribe audio. Please try again.");
     } finally {
       setIsTranscribing(false);
+      isStoppingRecordingRef.current = false;
     }
-  }, [audioRecorder]);
+  }, [audioRecorder, clearRecordingTimeout]);
+
+  const startRecording = useCallback(async () => {
+    try {
+      console.log("[STT] Requesting microphone permission...");
+      const status = await AudioModule.requestRecordingPermissionsAsync();
+      console.log("[STT] Permission granted:", status.granted);
+      if (!status.granted) {
+        Alert.alert(
+          "Permission needed",
+          "Microphone access is required for speech-to-text."
+        );
+        return;
+      }
+
+      console.log("[STT] Preparing recorder...");
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+      clearRecordingTimeout();
+      recordingTimeoutRef.current = setTimeout(() => {
+        stopRecordingAndTranscribe();
+      }, RECORDING_AUTO_STOP_MS);
+      console.log("[STT] Recording started");
+    } catch (err) {
+      console.error("[STT] Failed to start recording:", err);
+      Alert.alert("Error", "Could not start recording.");
+    }
+  }, [audioRecorder, clearRecordingTimeout, stopRecordingAndTranscribe]);
 
   const toggleRecording = useCallback(() => {
     if (isRecording) {
@@ -215,6 +237,41 @@ export default function AssistantScreen() {
       startRecording();
     }
   }, [isRecording, startRecording, stopRecordingAndTranscribe]);
+
+  useEffect(
+    () => () => {
+      clearRecordingTimeout();
+    },
+    [clearRecordingTimeout]
+  );
+
+  useEffect(() => {
+    if (!isRecording) {
+      recordingPulseAnim.stopAnimation();
+      recordingPulseAnim.setValue(0);
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(recordingPulseAnim, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(recordingPulseAnim, {
+          toValue: 0,
+          duration: 900,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    loop.start();
+    return () => loop.stop();
+  }, [isRecording, recordingPulseAnim]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -838,7 +895,7 @@ export default function AssistantScreen() {
           </View>
           <Pressable
             onPress={toggleRecording}
-            disabled={isLoading}
+            disabled={isLoading || isTranscribing}
             className={`w-11 h-11 rounded-2xl items-center justify-center mr-1 ${
               isRecording
                 ? "bg-red-500 active:bg-red-600"
@@ -882,6 +939,57 @@ export default function AssistantScreen() {
           </Pressable>
         </View>
       </View>
+      {isRecording && (
+        <Pressable
+          onPress={toggleRecording}
+          className="absolute inset-0 items-center justify-center px-8"
+          style={{ backgroundColor: "rgba(0, 0, 0, 0.45)" }}
+        >
+          <View className="items-center justify-center">
+            <Animated.View
+              className="absolute w-36 h-36 rounded-full bg-red-400"
+              style={{
+                opacity: recordingPulseAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.35, 0],
+                }),
+                transform: [
+                  {
+                    scale: recordingPulseAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 1.4],
+                    }),
+                  },
+                ],
+              }}
+            />
+            <Animated.View
+              className="absolute w-32 h-32 rounded-full bg-red-400"
+              style={{
+                opacity: recordingPulseAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.22, 0.38],
+                }),
+              }}
+            />
+            <View className="w-28 h-28 rounded-full bg-red-500 items-center justify-center">
+              <Mic size={44} color={getThemeColor(colors, "typography-0")} />
+            </View>
+          </View>
+          <Text
+            className="mt-6 text-center text-base font-semibold"
+            style={{ color: getThemeColor(colors, "typography-0") }}
+          >
+            Listening...
+          </Text>
+          <Text
+            className="mt-2 text-center text-sm"
+            style={{ color: "rgba(255, 255, 255, 0.9)" }}
+          >
+            Tap to stop
+          </Text>
+        </Pressable>
+      )}
     </KeyboardAvoidingView>
   );
 }

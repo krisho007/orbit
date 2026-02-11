@@ -3,11 +3,15 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "scripts": {
-    "dev": "expo run:android",
+    "dev": "bun run android:local",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "web:local": "EXPO_PUBLIC_API_URL=http://localhost:3001 expo start --web",
+    "android:local": "EXPO_PUBLIC_API_URL=http://10.0.2.2:3001 expo run:android",
+    "ios:local": "EXPO_PUBLIC_API_URL=http://127.0.0.1:3001 expo run:ios",
+    "start:preview": "EXPO_PUBLIC_API_URL=https://orbit-app.fly.dev expo start",
     "lint": "eslint .",
     "prebuild": "expo prebuild"
   },
@@ -45,8 +49,11 @@
   "devDependencies": {
     "@babel/core": "^7.28.6",
     "@types/react": "~19.1.0",
+    "eslint": "^10.0.0",
+    "globals": "^17.3.0",
     "prettier": "^3.8.1",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "typescript-eslint": "^8.55.0"
   },
   "private": true
 }

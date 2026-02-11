@@ -3,14 +3,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import { Platform } from "react-native";
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-// Debug: Log to ensure env vars are loaded
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("Missing Supabase environment variables!");
-  console.log("URL:", supabaseUrl);
-  console.log("Key exists:", !!supabaseAnonKey);
+  console.error(
+    "Missing Supabase environment variables! " +
+    "Ensure EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY are set. " +
+    "For EAS builds, set them as EAS secrets or commit the .env file."
+  );
+  console.error("EXPO_PUBLIC_SUPABASE_URL:", supabaseUrl ?? "(not set)");
+  console.error("EXPO_PUBLIC_SUPABASE_ANON_KEY:", supabaseAnonKey ? "(set)" : "(not set)");
 }
 
 const webStorage = {
@@ -37,12 +40,16 @@ const storage = Platform.OS === "web" ? webStorage : AsyncStorage;
 // Disable detectSessionInUrl - we'll handle the code exchange manually
 // Use implicit flow for native (returns tokens directly in URL hash, no PKCE verifier needed)
 // Use PKCE for web (more secure in browser environment)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false, // Disable auto-detection to prevent race conditions
-    flowType: Platform.OS === "web" ? "pkce" : "implicit",
-  },
-});
+export const supabase = createClient(
+  supabaseUrl || "https://placeholder.supabase.co",
+  supabaseAnonKey || "placeholder-key",
+  {
+    auth: {
+      storage,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false, // Disable auto-detection to prevent race conditions
+      flowType: Platform.OS === "web" ? "pkce" : "implicit",
+    },
+  }
+);

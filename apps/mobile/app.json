@@ -44,7 +44,8 @@
           "photosPermission": "Allow Orbit to access your photos so you can set contact avatars."
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

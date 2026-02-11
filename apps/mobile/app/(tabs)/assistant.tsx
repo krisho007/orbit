@@ -11,14 +11,22 @@ import {
   Keyboard,
   Platform,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useRouter, useNavigation, useFocusEffect } from "expo-router";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { format } from "date-fns";
 import {
+  useAudioRecorder,
+  AudioModule,
+  RecordingPresets,
+  useAudioRecorderState,
+} from "expo-audio";
+import {
   Sparkles,
   SendHorizonal,
+  Mic,
   Phone,
   MessageCircle,
   Mail,
@@ -33,6 +41,7 @@ import {
 } from "lucide-react-native";
 import {
   assistantApi,
+  speechApi,
   ChatMessage,
   AssistantUi,
   AssistantContactCard,
@@ -107,6 +116,10 @@ export default function AssistantScreen() {
   const [messages, setMessages] = useState<Message[]>(assistantDraftState.messages);
   const [input, setInput] = useState(assistantDraftState.input);
   const [isLoading, setIsLoading] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(audioRecorder);
+  const isRecording = recorderState.isRecording;
   const flatListRef = useRef<FlatList>(null);
   const isSendingRef = useRef(false);
   const messageSequenceRef = useRef(assistantDraftState.messageSequence);
@@ -140,6 +153,68 @@ export default function AssistantScreen() {
     assistantDraftState.input = "";
     assistantDraftState.messageSequence = 0;
   }, []);
+
+  const startRecording = useCallback(async () => {
+    try {
+      console.log("[STT] Requesting microphone permission...");
+      const status = await AudioModule.requestRecordingPermissionsAsync();
+      console.log("[STT] Permission granted:", status.granted);
+      if (!status.granted) {
+        Alert.alert(
+          "Permission needed",
+          "Microphone access is required for speech-to-text."
+        );
+        return;
+      }
+
+      console.log("[STT] Preparing recorder...");
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+      console.log("[STT] Recording started");
+    } catch (err) {
+      console.error("[STT] Failed to start recording:", err);
+      Alert.alert("Error", "Could not start recording.");
+    }
+  }, [audioRecorder]);
+
+  const stopRecordingAndTranscribe = useCallback(async () => {
+    setIsTranscribing(true);
+
+    try {
+      console.log("[STT] Stopping recording...");
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
+      console.log("[STT] Recording URI:", uri);
+
+      if (!uri) {
+        Alert.alert("Error", "No audio was captured.");
+        setIsTranscribing(false);
+        return;
+      }
+
+      console.log("[STT] Sending to transcription API...");
+      const transcript = await speechApi.transcribe(uri);
+      console.log("[STT] Transcript received:", transcript);
+      if (transcript) {
+        setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+      } else {
+        console.warn("[STT] Empty transcript returned");
+      }
+    } catch (err) {
+      console.error("[STT] Transcription failed:", err);
+      Alert.alert("Error", "Could not transcribe audio. Please try again.");
+    } finally {
+      setIsTranscribing(false);
+    }
+  }, [audioRecorder]);
+
+  const toggleRecording = useCallback(() => {
+    if (isRecording) {
+      stopRecordingAndTranscribe();
+    } else {
+      startRecording();
+    }
+  }, [isRecording, startRecording, stopRecordingAndTranscribe]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -761,6 +836,28 @@ export default function AssistantScreen() {
               returnKeyType="send"
             />
           </View>
+          <Pressable
+            onPress={toggleRecording}
+            disabled={isLoading}
+            className={`w-11 h-11 rounded-2xl items-center justify-center mr-1 ${
+              isRecording
+                ? "bg-red-500 active:bg-red-600"
+                : "bg-border-200 active:bg-border-300"
+            }`}
+          >
+            {isTranscribing ? (
+              <ActivityIndicator size="small" color={getThemeColor(colors, "typography-500")} />
+            ) : (
+              <Mic
+                size={18}
+                color={
+                  isRecording
+                    ? getThemeColor(colors, "typography-0")
+                    : getThemeColor(colors, "typography-500")
+                }
+              />
+            )}
+          </Pressable>
           <Pressable
             onPress={() => sendMessage(input)}
             disabled={!input.trim() || isLoading}

@@ -14,6 +14,7 @@ import relationshipsRouter from "./routes/relationships";
 import assistantRouter from "./routes/assistant";
 import remindersRouter from "./routes/reminders";
 import usersRouter from "./routes/users";
+import speechRouter from "./routes/speech";
 
 const app = new Hono();
 
@@ -55,6 +56,7 @@ app.route("/api/relationships", relationshipsRouter);
 app.route("/api/assistant", assistantRouter);
 app.route("/api/reminders", remindersRouter);
 app.route("/api/users", usersRouter);
+app.route("/api/speech", speechRouter);
 
 // Global error handler
 app.onError((err, c) => {

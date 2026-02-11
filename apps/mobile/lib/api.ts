@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { supabase } from "./supabase";
 
 // Prefer explicit env for native builds; on web use relative URLs by default
@@ -333,6 +334,68 @@ export type ChatMessage = {
 export const assistantApi = {
   chat: (messages: ChatMessage[]) =>
     api.post<ChatMessage>("/api/assistant", { messages }),
+};
+
+export const speechApi = {
+  /**
+   * Send a recorded audio file to the backend for transcription via Sarvam AI.
+   * @param uri - Local file URI of the recorded audio (from expo-av).
+   * @returns The transcribed text.
+   */
+  transcribe: async (uri: string): Promise<string> => {
+    console.log("[speechApi] transcribe called with uri:", uri);
+
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log("[speechApi] auth session exists:", !!session?.access_token);
+
+    const formData = new FormData();
+
+    if (Platform.OS === "web") {
+      // On web, expo-av returns a blob: URL -- fetch it and append as a File
+      console.log("[speechApi] Web platform: fetching blob from URI...");
+      const blobResponse = await fetch(uri);
+      const blob = await blobResponse.blob();
+      console.log("[speechApi] Blob size:", blob.size, "type:", blob.type);
+      const file = new File([blob], "recording.webm", {
+        type: blob.type || "audio/webm",
+      });
+      formData.append("audio", file);
+    } else {
+      // React Native FormData accepts { uri, name, type } objects for file uploads
+      formData.append("audio", {
+        uri,
+        name: "recording.m4a",
+        type: "audio/m4a",
+      } as any);
+    }
+
+    const baseUrl = API_URL || "";
+    const url = baseUrl ? `${baseUrl}/api/speech/transcribe` : "/api/speech/transcribe";
+    console.log("[speechApi] Sending POST to:", url);
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...(session?.access_token
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : {}),
+        // Let fetch set Content-Type with boundary for multipart/form-data
+      },
+      body: formData,
+    });
+
+    console.log("[speechApi] Response status:", response.status);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      console.error("[speechApi] Error response:", error);
+      throw new Error(error.error || `Transcription failed (${response.status})`);
+    }
+
+    const result = await response.json();
+    console.log("[speechApi] Result:", result);
+    return result.transcript || "";
+  },
 };
 
 // ============================================

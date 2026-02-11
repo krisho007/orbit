@@ -12,6 +12,7 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Linking,
   Animated,
   Easing,
 } from "react-native";
@@ -22,7 +23,10 @@ import { format } from "date-fns";
 import {
   useAudioRecorder,
   AudioModule,
-  RecordingPresets,
+  AudioQuality,
+  IOSOutputFormat,
+  RecordingOptions,
+  setAudioModeAsync,
   useAudioRecorderState,
 } from "expo-audio";
 import {
@@ -51,6 +55,8 @@ import {
   AssistantEventCard,
   AssistantReminderCard,
 } from "../../lib/api";
+import { useAuth } from "../../lib/auth";
+import { isAssistantCoachmarkSeen, markAssistantCoachmarkSeen } from "../../lib/onboarding";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
 import { useGluestackUI } from "../../components/ui/gluestack-ui-provider";
 
@@ -87,6 +93,28 @@ const CAPABILITY_TAGS = [
 
 const RESULT_CARD_LIMIT = 10;
 const RECORDING_AUTO_STOP_MS = 15_000;
+const STT_RECORDING_OPTIONS: RecordingOptions = {
+  extension: ".m4a",
+  sampleRate: 44100,
+  numberOfChannels: 1,
+  bitRate: 128000,
+  isMeteringEnabled: true,
+  android: {
+    extension: ".m4a",
+    outputFormat: "mpeg4",
+    audioEncoder: "aac",
+    audioSource: "mic",
+  },
+  ios: {
+    extension: ".m4a",
+    outputFormat: IOSOutputFormat.MPEG4AAC,
+    audioQuality: AudioQuality.MAX,
+  },
+  web: {
+    mimeType: "audio/webm",
+    bitsPerSecond: 128000,
+  },
+};
 
 const MEDIUM_META: Record<
   string,
@@ -110,6 +138,7 @@ const REMINDER_STATUS_META: Record<string, string> = {
 export default function AssistantScreen() {
   const router = useRouter();
   const navigation = useNavigation();
+  const { user } = useAuth();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
@@ -120,7 +149,8 @@ export default function AssistantScreen() {
   const [input, setInput] = useState(assistantDraftState.input);
   const [isLoading, setIsLoading] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const [showCoachmark, setShowCoachmark] = useState(false);
+  const audioRecorder = useAudioRecorder(STT_RECORDING_OPTIONS);
   const recorderState = useAudioRecorderState(audioRecorder);
   const isRecording = recorderState.isRecording;
   const flatListRef = useRef<FlatList>(null);
@@ -148,6 +178,51 @@ export default function AssistantScreen() {
     },
     []
   );
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadCoachmarkState = async () => {
+      if (!user?.id) {
+        if (!isCancelled) {
+          setShowCoachmark(false);
+        }
+        return;
+      }
+
+      try {
+        const seen = await isAssistantCoachmarkSeen(user.id);
+        if (!isCancelled) {
+          setShowCoachmark(!seen);
+        }
+      } catch (error) {
+        console.error("Failed to load coachmark state:", error);
+      }
+    };
+
+    loadCoachmarkState();
+    return () => {
+      isCancelled = true;
+    };
+  }, [user?.id]);
+
+  const dismissCoachmark = useCallback(async () => {
+    if (!showCoachmark) {
+      return;
+    }
+
+    setShowCoachmark(false);
+
+    if (!user?.id) {
+      return;
+    }
+
+    try {
+      await markAssistantCoachmarkSeen(user.id);
+    } catch (error) {
+      console.error("Failed to mark coachmark as seen:", error);
+    }
+  }, [showCoachmark, user?.id]);
 
   const resetChat = useCallback(() => {
     setMessages([]);
@@ -206,18 +281,59 @@ export default function AssistantScreen() {
   const startRecording = useCallback(async () => {
     try {
       console.log("[STT] Requesting microphone permission...");
+      const currentPermission = await AudioModule.getRecordingPermissionsAsync();
+      console.log("[STT] Current mic permission:", currentPermission);
       const status = await AudioModule.requestRecordingPermissionsAsync();
-      console.log("[STT] Permission granted:", status.granted);
+      console.log("[STT] Permission response:", status);
       if (!status.granted) {
-        Alert.alert(
-          "Permission needed",
-          "Microphone access is required for speech-to-text."
-        );
+        if (!status.canAskAgain) {
+          Alert.alert(
+            "Microphone permission blocked",
+            "Enable microphone access for Orbit from your phone settings.",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Open Settings",
+                onPress: () => {
+                  Linking.openSettings().catch((err) => {
+                    console.warn("[STT] Failed to open settings:", err);
+                  });
+                },
+              },
+            ]
+          );
+        } else {
+          Alert.alert(
+            "Permission needed",
+            "Microphone access is required for speech-to-text."
+          );
+        }
         return;
       }
 
       console.log("[STT] Preparing recorder...");
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+        interruptionMode: "doNotMix",
+        shouldRouteThroughEarpiece: false,
+      });
       await audioRecorder.prepareToRecordAsync();
+      const availableInputs = audioRecorder.getAvailableInputs();
+      console.log("[STT] Available recording inputs:", availableInputs);
+      const preferredInput =
+        availableInputs.find((input) =>
+          /built|microphone|mic/i.test(`${input.name} ${input.type}`)
+        ) || availableInputs[0];
+      if (preferredInput?.uid) {
+        audioRecorder.setInput(preferredInput.uid);
+        console.log("[STT] Selected recording input:", preferredInput);
+      }
+      const currentInput = await audioRecorder.getCurrentInput().catch((err) => {
+        console.warn("[STT] Could not read current input:", err);
+        return null;
+      });
+      console.log("[STT] Current recording input:", currentInput);
       audioRecorder.record();
       clearRecordingTimeout();
       recordingTimeoutRef.current = setTimeout(() => {
@@ -231,12 +347,22 @@ export default function AssistantScreen() {
   }, [audioRecorder, clearRecordingTimeout, stopRecordingAndTranscribe]);
 
   const toggleRecording = useCallback(() => {
+    if (showCoachmark) {
+      dismissCoachmark();
+    }
+
     if (isRecording) {
       stopRecordingAndTranscribe();
     } else {
       startRecording();
     }
-  }, [isRecording, startRecording, stopRecordingAndTranscribe]);
+  }, [
+    dismissCoachmark,
+    isRecording,
+    showCoachmark,
+    startRecording,
+    stopRecordingAndTranscribe,
+  ]);
 
   useEffect(
     () => () => {
@@ -272,6 +398,22 @@ export default function AssistantScreen() {
     loop.start();
     return () => loop.stop();
   }, [isRecording, recordingPulseAnim]);
+
+  useEffect(() => {
+    if (!isRecording) return;
+    console.log("[STT] Recorder state:", {
+      canRecord: recorderState.canRecord,
+      durationMillis: recorderState.durationMillis,
+      metering: recorderState.metering,
+      mediaServicesDidReset: recorderState.mediaServicesDidReset,
+    });
+  }, [
+    isRecording,
+    recorderState.canRecord,
+    recorderState.durationMillis,
+    recorderState.metering,
+    recorderState.mediaServicesDidReset,
+  ]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -875,6 +1017,24 @@ export default function AssistantScreen() {
         className="border-t border-border-200 px-4 pt-3 bg-background-0"
         style={{ paddingBottom: Math.max(insets.bottom, 12) }}
       >
+        {showCoachmark && (
+          <View className="mb-3 rounded-2xl border border-primary-200 bg-primary-50 px-4 py-3">
+            <View className="flex-row items-start justify-between">
+              <View className="flex-1 mr-3">
+                <Text className="text-primary-800 text-sm font-semibold">Quick start</Text>
+                <Text className="text-primary-700 text-sm mt-1">
+                  Try: "I had a call with Alex today" and tap the mic.
+                </Text>
+              </View>
+              <Pressable
+                onPress={dismissCoachmark}
+                className="px-2 py-1 rounded-lg bg-primary-100 active:bg-primary-200"
+              >
+                <Text className="text-primary-700 text-xs font-medium">Got it</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
         <View className="flex-row items-end rounded-3xl border border-border-200 bg-background-50 px-3 py-3">
           <View className="flex-1 mr-2">
             <TextInput

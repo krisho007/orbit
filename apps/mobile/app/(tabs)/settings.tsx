@@ -15,13 +15,16 @@ import {
   ChevronRight,
 } from "lucide-react-native";
 import { getThemeColor, useThemeColors, useThemeMode } from "../../lib/theme";
+import { useGluestackUI } from "../../components/ui/gluestack-ui-provider";
+import { resetOnboardingForTesting } from "../../lib/onboarding";
 
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
   const colors = useThemeColors();
-  const { mode, setMode } = useThemeMode();
-  const isDarkMode = mode === "dark";
+  const { setMode } = useThemeMode();
+  const { resolvedColorMode } = useGluestackUI();
+  const isDarkMode = resolvedColorMode === "dark";
 
   const handleSignOut = async () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -38,6 +41,34 @@ export default function SettingsScreen() {
         },
       },
     ]);
+  };
+
+  const handleResetOnboarding = () => {
+    if (!user?.id) {
+      Alert.alert("Unavailable", "You need to be signed in to reset onboarding state.");
+      return;
+    }
+
+    Alert.alert(
+      "Reset Onboarding",
+      "This will clear onboarding completion and assistant quick-start tip state for this account on this device.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await resetOnboardingForTesting(user.id);
+              router.replace("/welcome" as any);
+            } catch (error) {
+              console.error("Failed to reset onboarding state:", error);
+              Alert.alert("Error", "Failed to reset onboarding state.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   const SettingRow = ({
@@ -97,12 +128,12 @@ export default function SettingsScreen() {
               Dark Mode
             </Text>
             <Text className="text-typography-500 text-sm">
-              Follow system when off
+              Default is system on first launch
             </Text>
           </View>
           <Switch
             value={isDarkMode}
-            onValueChange={(value) => setMode(value ? "dark" : "system")}
+            onValueChange={(value) => setMode(value ? "dark" : "light")}
             trackColor={{
               false: getThemeColor(colors, "border-300"),
               true: getThemeColor(colors, "primary-500"),
@@ -177,6 +208,14 @@ export default function SettingsScreen() {
           subtitle="Theme and display settings"
           onPress={() => {}}
         />
+        {__DEV__ && (
+          <SettingRow
+            icon={Bell}
+            title="Reset Onboarding (Dev)"
+            subtitle="Clear onboarding state and reopen the onboarding flow"
+            onPress={handleResetOnboarding}
+          />
+        )}
       </View>
 
       <View className="mt-6">

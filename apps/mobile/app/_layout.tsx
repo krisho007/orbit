@@ -11,7 +11,7 @@ import {
   useGluestackUI,
 } from "../components/ui/gluestack-ui-provider";
 import { getThemeColor, ThemeModeProvider, useThemeColors, useThemeMode } from "../lib/theme";
-import { isGoogleImportOnboardingComplete } from "../lib/onboarding";
+import { isAppOnboardingComplete, onboardingVersion } from "../lib/onboarding";
 
 function RootLayoutNav() {
   const { user, isLoading } = useAuth();
@@ -32,7 +32,7 @@ function RootLayoutNav() {
       }
 
       if (!cancelled) setOnboardingState("checking");
-      const isComplete = await isGoogleImportOnboardingComplete(user.id);
+      const isComplete = await isAppOnboardingComplete(user.id, onboardingVersion);
       if (!cancelled) {
         setOnboardingState(isComplete ? "complete" : "required");
       }
@@ -71,11 +71,12 @@ function RootLayoutNav() {
     const firstSegment = String(segments[0] || "");
     const inAuthGroup = firstSegment === "(auth)";
     const inAuthCallback = firstSegment === "auth"; // orbit://auth/callback deep link route
+    const inOnboardingGroup = firstSegment === "(onboarding)";
     const inOnboardingWelcome = firstSegment === "welcome";
     const inGoogleImportScreen = firstSegment === "google-import";
     const inIncomingCallScreen = firstSegment === "incoming-call";
-    const inTabsGroup = firstSegment === "(tabs)";
-    const inOnboardingFlow = inOnboardingWelcome || inGoogleImportScreen;
+    const inOnboardingFlow =
+      inOnboardingGroup || inOnboardingWelcome || inGoogleImportScreen;
 
     if (!user?.id && !inAuthGroup && !inAuthCallback) {
       // Redirect to sign-in if not authenticated
@@ -85,11 +86,14 @@ function RootLayoutNav() {
       user?.id &&
       onboardingState === "required" &&
       !inOnboardingFlow &&
-      !inIncomingCallScreen &&
-      !inTabsGroup
+      !inIncomingCallScreen
     ) {
       router.replace("/welcome" as any);
-    } else if (user?.id && onboardingState === "complete" && (inAuthGroup || inAuthCallback || inOnboardingWelcome)) {
+    } else if (
+      user?.id &&
+      onboardingState === "complete" &&
+      (inAuthGroup || inAuthCallback || inOnboardingGroup || inOnboardingWelcome)
+    ) {
       // Redirect to assistant if authenticated
       router.replace("/(tabs)/assistant");
     }

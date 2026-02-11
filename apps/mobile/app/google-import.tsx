@@ -12,7 +12,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { CircleCheck, Download, RefreshCw, TriangleAlert, Users } from "lucide-react-native";
 import { contactsApi, GoogleImportContact } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { markGoogleImportOnboardingComplete } from "../lib/onboarding";
+import { markAppOnboardingComplete, onboardingVersion } from "../lib/onboarding";
 import { getThemeColor, useThemeColors } from "../lib/theme";
 
 type ImportResult = {
@@ -123,7 +123,7 @@ export default function GoogleImportScreen() {
     setIsCompletingOnboarding(true);
     setError(null);
     try {
-      await markGoogleImportOnboardingComplete(user.id);
+      await markAppOnboardingComplete(user.id, onboardingVersion);
       router.replace("/(tabs)/assistant");
     } catch (err) {
       console.error("Failed to complete onboarding:", err);
@@ -141,6 +141,18 @@ export default function GoogleImportScreen() {
     await handleFinish();
   };
 
+  const handleBackToOnboarding = () => {
+    if (!isOnboardingEntry) {
+      router.back();
+      return;
+    }
+
+    router.replace({
+      pathname: "/welcome" as any,
+      params: { step: "0" },
+    });
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-background-50">
       <ScrollView className="flex-1" contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
@@ -150,7 +162,7 @@ export default function GoogleImportScreen() {
           </Text>
           <Text className="text-typography-600 text-base">
             {isOnboardingEntry
-              ? "Step 2: import now or skip and do it later from Settings."
+              ? "Import now, or return to onboarding and continue the tour."
               : "Bring your Google contacts into Orbit anytime."}
           </Text>
         </View>
@@ -306,16 +318,35 @@ export default function GoogleImportScreen() {
             )}
           </Pressable>
 
-          <Pressable
-            onPress={handleSkip}
-            disabled={isCompletingOnboarding || isImporting || isFetching}
-            className="py-4 rounded-2xl items-center"
-            style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1 }]}
-          >
-            <Text className="text-typography-500 font-medium">
-              {isOnboardingEntry ? "Skip for now" : "Cancel"}
-            </Text>
-          </Pressable>
+          {isOnboardingEntry ? (
+            <>
+              <Pressable
+                onPress={handleBackToOnboarding}
+                disabled={isCompletingOnboarding || isImporting || isFetching}
+                className="py-4 rounded-2xl border border-border-200 bg-background-0 items-center mb-3"
+                style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1 }]}
+              >
+                <Text className="text-typography-700 font-medium">Back to onboarding</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleSkip}
+                disabled={isCompletingOnboarding || isImporting || isFetching}
+                className="py-4 rounded-2xl items-center"
+                style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1 }]}
+              >
+                <Text className="text-typography-500 font-medium">Skip onboarding</Text>
+              </Pressable>
+            </>
+          ) : (
+            <Pressable
+              onPress={handleSkip}
+              disabled={isCompletingOnboarding || isImporting || isFetching}
+              className="py-4 rounded-2xl items-center"
+              style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1 }]}
+            >
+              <Text className="text-typography-500 font-medium">Cancel</Text>
+            </Pressable>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

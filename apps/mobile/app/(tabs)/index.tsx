@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef, type ReactNode } from "react";
 import {
   View,
   Text,
@@ -10,8 +10,10 @@ import {
   Image,
   Linking,
   Alert,
+  AppState,
+  StyleSheet,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import {
   Search,
   X,
@@ -20,7 +22,18 @@ import {
   Download,
   Phone,
 } from "lucide-react-native";
+import Swipeable, {
+  type SwipeableMethods,
+} from "react-native-gesture-handler/ReanimatedSwipeable";
 import Svg, { Path } from "react-native-svg";
+import Animated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useSharedValue,
+  type SharedValue,
+} from "react-native-reanimated";
 import { contactsApi, Contact } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { getThemeColor, useThemeColors, type ThemeColors } from "../../lib/theme";
@@ -75,6 +88,210 @@ function ContactsListHeader({
   );
 }
 
+function SwipeAction({
+  progress,
+  trackedProgress,
+  label,
+  align,
+  icon,
+  backgroundColor,
+  textColor,
+}: {
+  progress: SharedValue<number>;
+  trackedProgress: SharedValue<number>;
+  label: string;
+  align: "left" | "right";
+  icon: ReactNode;
+  backgroundColor: string;
+  textColor: string;
+}) {
+  useAnimatedReaction(
+    () => progress.value,
+    (value) => {
+      trackedProgress.value = value;
+    }
+  );
+
+  const slideFrom = align === "left" ? -20 : 20;
+  const actionStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 1], [0.2, 1], Extrapolation.CLAMP),
+    transform: [
+      {
+        translateX: interpolate(progress.value, [0, 1], [slideFrom, 0], Extrapolation.CLAMP),
+      },
+      { scale: interpolate(progress.value, [0, 1], [0.92, 1], Extrapolation.CLAMP) },
+    ],
+  }));
+
+  return (
+    <Animated.View
+      style={[actionStyle, { backgroundColor }]}
+      className={`mx-4 mb-3 rounded-2xl flex-1 px-6 justify-center ${align === "left" ? "items-start" : "items-end"}`}
+    >
+      {icon}
+      <Text className="text-xs font-semibold mt-1" style={{ color: textColor }}>
+        {label}
+      </Text>
+    </Animated.View>
+  );
+}
+
+function ContactRow({
+  item,
+  colors,
+  swipeableRef,
+  onOpenContact,
+  onOpenCall,
+  onOpenWhatsApp,
+  onWillOpenRow,
+}: {
+  item: Contact;
+  colors: ThemeColors;
+  swipeableRef: { current: SwipeableMethods | null };
+  onOpenContact: (id: string) => void;
+  onOpenCall: (phone: string) => void;
+  onOpenWhatsApp: (phone: string) => void;
+  onWillOpenRow: (id: string) => void;
+}) {
+  const leftSwipeProgress = useSharedValue(0);
+  const rightSwipeProgress = useSharedValue(0);
+
+  const cardStyle = useAnimatedStyle(() => {
+    const swipeAmount = Math.max(leftSwipeProgress.value, rightSwipeProgress.value);
+    return {
+      opacity: interpolate(swipeAmount, [0, 1], [1, 0.7], Extrapolation.CLAMP),
+      transform: [
+        {
+          scale: interpolate(swipeAmount, [0, 1], [1, 0.985], Extrapolation.CLAMP),
+        },
+      ],
+    };
+  });
+
+  const blurOverlayStyle = useAnimatedStyle(() => {
+    const swipeAmount = Math.max(leftSwipeProgress.value, rightSwipeProgress.value);
+    return {
+      opacity: interpolate(swipeAmount, [0, 1], [0, 0.24], Extrapolation.CLAMP),
+    };
+  });
+
+  return (
+    <Swipeable
+      ref={swipeableRef}
+      enabled={Boolean(item.primaryPhone)}
+      friction={1}
+      overshootLeft={false}
+      overshootRight={false}
+      renderLeftActions={(progress) => (
+        <SwipeAction
+          progress={progress}
+          trackedProgress={leftSwipeProgress}
+          label="Call"
+          align="left"
+          icon={<Phone size={20} color={getThemeColor(colors, "primary-700")} />}
+          backgroundColor={getThemeColor(colors, "primary-100")}
+          textColor={getThemeColor(colors, "primary-700")}
+        />
+      )}
+      renderRightActions={(progress) => (
+        <SwipeAction
+          progress={progress}
+          trackedProgress={rightSwipeProgress}
+          label="WhatsApp"
+          align="right"
+          icon={<WhatsAppIcon size={20} color="#25D366" />}
+          backgroundColor={getThemeColor(colors, "background-100")}
+          textColor={getThemeColor(colors, "typography-700")}
+        />
+      )}
+      onSwipeableWillOpen={() => {
+        onWillOpenRow(item.id);
+      }}
+      onSwipeableOpen={(direction) => {
+        if (!item.primaryPhone) return;
+        if (direction === "right") {
+          onOpenCall(item.primaryPhone);
+          return;
+        }
+        if (direction === "left") {
+          onOpenWhatsApp(item.primaryPhone);
+        }
+      }}
+    >
+      <Animated.View style={cardStyle}>
+        <Pressable
+          onPress={() => onOpenContact(item.id)}
+          className="relative overflow-hidden flex-row items-center px-4 py-4 bg-background-0 border border-border-100 rounded-2xl mx-4 mb-3 active:bg-background-50"
+        >
+          {item.images?.[0]?.imageUrl ? (
+            <Image
+              source={{ uri: item.images[0].imageUrl }}
+              className="w-12 h-12 rounded-2xl mr-4"
+            />
+          ) : (
+            <View className="w-12 h-12 rounded-2xl bg-primary-100 items-center justify-center mr-4">
+              <Text className="text-primary-700 text-lg font-semibold">
+                {item.displayName.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+
+          <View className="flex-1">
+            <Text className="text-typography-900 font-semibold text-base">
+              {item.displayName}
+            </Text>
+            {(item.company || item.jobTitle) && (
+              <Text className="text-typography-600 text-sm mt-0.5">
+                {[item.jobTitle, item.company].filter(Boolean).join(" at ")}
+              </Text>
+            )}
+            {item.primaryPhone && (
+              <Text className="text-typography-500 text-sm">{item.primaryPhone}</Text>
+            )}
+          </View>
+
+          {item.primaryPhone && (
+            <View className="flex-row items-center gap-5 ml-3">
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onOpenWhatsApp(item.primaryPhone!);
+                }}
+                hitSlop={8}
+                className="active:opacity-50"
+              >
+                <WhatsAppIcon size={22} color="#25D366" />
+              </Pressable>
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onOpenCall(item.primaryPhone!);
+                }}
+                hitSlop={8}
+                className="active:opacity-50"
+              >
+                <Phone size={22} color={getThemeColor(colors, "primary-600")} />
+              </Pressable>
+            </View>
+          )}
+
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFillObject,
+              blurOverlayStyle,
+              {
+                backgroundColor: getThemeColor(colors, "background-50"),
+                borderRadius: 16,
+              },
+            ]}
+          />
+        </Pressable>
+      </Animated.View>
+    </Swipeable>
+  );
+}
+
 export default function ContactsScreen() {
   const router = useRouter();
   const { session } = useAuth();
@@ -86,6 +303,7 @@ export default function ContactsScreen() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const swipeableRefs = useRef<Record<string, { current: SwipeableMethods | null }>>({});
 
   const loadContacts = useCallback(
     async (refresh = false) => {
@@ -143,6 +361,41 @@ export default function ContactsScreen() {
     }
   };
 
+  const getSwipeableRef = useCallback((id: string) => {
+    if (!swipeableRefs.current[id]) {
+      swipeableRefs.current[id] = { current: null };
+    }
+    return swipeableRefs.current[id];
+  }, []);
+
+  const closeAllSwipeables = useCallback(() => {
+    Object.values(swipeableRefs.current).forEach((ref) => ref.current?.close());
+  }, []);
+
+  const closeOtherSwipeables = useCallback((openId: string) => {
+    Object.entries(swipeableRefs.current).forEach(([id, ref]) => {
+      if (id !== openId) {
+        ref.current?.close();
+      }
+    });
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      closeAllSwipeables();
+    }, [closeAllSwipeables])
+  );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (status) => {
+      if (status === "active") {
+        closeAllSwipeables();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [closeAllSwipeables]);
+
   const handleCall = (phone: string) => {
     Linking.openURL(`tel:${phone}`);
   };
@@ -155,67 +408,20 @@ export default function ContactsScreen() {
   };
 
   const renderContact = ({ item }: { item: Contact }) => (
-    <Pressable
-      onPress={() =>
+    <ContactRow
+      item={item}
+      colors={colors}
+      swipeableRef={getSwipeableRef(item.id)}
+      onOpenContact={(id) =>
         router.push({
           pathname: "/contact/[id]",
-          params: { id: item.id, from: "/(tabs)/index" },
+          params: { id, from: "/(tabs)/index" },
         })
       }
-      className="flex-row items-center px-4 py-4 bg-background-0 border border-border-100 rounded-2xl mx-4 mb-3 active:bg-background-50"
-    >
-      {item.images?.[0]?.imageUrl ? (
-        <Image
-          source={{ uri: item.images[0].imageUrl }}
-          className="w-12 h-12 rounded-2xl mr-4"
-        />
-      ) : (
-        <View className="w-12 h-12 rounded-2xl bg-primary-100 items-center justify-center mr-4">
-          <Text className="text-primary-700 text-lg font-semibold">
-            {item.displayName.charAt(0).toUpperCase()}
-          </Text>
-        </View>
-      )}
-
-      <View className="flex-1">
-        <Text className="text-typography-900 font-semibold text-base">
-          {item.displayName}
-        </Text>
-        {(item.company || item.jobTitle) && (
-          <Text className="text-typography-600 text-sm mt-0.5">
-            {[item.jobTitle, item.company].filter(Boolean).join(" at ")}
-          </Text>
-        )}
-        {item.primaryPhone && (
-          <Text className="text-typography-500 text-sm">{item.primaryPhone}</Text>
-        )}
-      </View>
-
-      {item.primaryPhone && (
-        <View className="flex-row items-center gap-5 ml-3">
-          <Pressable
-            onPress={(e) => {
-              e.stopPropagation();
-              handleWhatsApp(item.primaryPhone!);
-            }}
-            hitSlop={8}
-            className="active:opacity-50"
-          >
-            <WhatsAppIcon size={22} color="#25D366" />
-          </Pressable>
-          <Pressable
-            onPress={(e) => {
-              e.stopPropagation();
-              handleCall(item.primaryPhone!);
-            }}
-            hitSlop={8}
-            className="active:opacity-50"
-          >
-            <Phone size={22} color={getThemeColor(colors, "primary-600")} />
-          </Pressable>
-        </View>
-      )}
-    </Pressable>
+      onOpenCall={handleCall}
+      onOpenWhatsApp={handleWhatsApp}
+      onWillOpenRow={closeOtherSwipeables}
+    />
   );
 
   const ListEmpty = () => (

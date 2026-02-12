@@ -45,7 +45,14 @@ export function useThemeModeStorage() {
         if (!isMounted) return;
         if (value === "light" || value === "dark" || value === "system") {
           setModeState(value);
+          return;
         }
+
+        // Persist the default mode explicitly for first-run installs.
+        setModeState("system");
+        AsyncStorage.setItem(THEME_MODE_KEY, "system").catch(() => {
+          // Ignore storage errors.
+        });
       })
       .catch(() => {
         // Ignore storage errors and fall back to system.

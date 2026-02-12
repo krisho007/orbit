@@ -7,13 +7,16 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error(
-    "Missing Supabase environment variables! " +
-    "Ensure EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY are set. " +
-    "For EAS builds, set them as EAS secrets or commit the .env file."
-  );
+  const message =
+    "Missing Supabase environment variables. " +
+    "Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY for this build profile.";
+  console.error(message);
   console.error("EXPO_PUBLIC_SUPABASE_URL:", supabaseUrl ?? "(not set)");
-  console.error("EXPO_PUBLIC_SUPABASE_ANON_KEY:", supabaseAnonKey ? "(set)" : "(not set)");
+  console.error(
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY:",
+    supabaseAnonKey ? "(set)" : "(not set)"
+  );
+  throw new Error(message);
 }
 
 const webStorage = {
@@ -41,8 +44,8 @@ const storage = Platform.OS === "web" ? webStorage : AsyncStorage;
 // Use implicit flow for native (returns tokens directly in URL hash, no PKCE verifier needed)
 // Use PKCE for web (more secure in browser environment)
 export const supabase = createClient(
-  supabaseUrl || "https://placeholder.supabase.co",
-  supabaseAnonKey || "placeholder-key",
+  supabaseUrl,
+  supabaseAnonKey,
   {
     auth: {
       storage,

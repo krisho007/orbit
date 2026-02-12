@@ -11,7 +11,9 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://orbit-app.fly.dev"
+        "EXPO_PUBLIC_API_URL": "https://orbit-app.fly.dev",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ghjqmkvsnwvppbpfnoii.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_wyT6ebepitJ3_4k1YvC8MQ_1Va3fmJb"
       },
       "android": {
         "buildType": "apk"
@@ -19,7 +21,9 @@
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://orbit-app.fly.dev"
+        "EXPO_PUBLIC_API_URL": "https://orbit-app.fly.dev",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ghjqmkvsnwvppbpfnoii.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_wyT6ebepitJ3_4k1YvC8MQ_1Va3fmJb"
       },
       "android": {
         "buildType": "app-bundle"

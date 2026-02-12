@@ -287,9 +287,12 @@ Use preview builds to test the app as a **standalone APK** without needing a dev
 # 1. Deploy any pending backend changes (from repo root)
 fly deploy
 
-# 2. Build preview APK (from apps/mobile)
+# 2. Build preview APK on EAS cloud (from apps/mobile)
 cd apps/mobile
 eas build --profile preview --platform android
+
+# Or build preview APK locally on your MacBook
+eas build --platform android --profile preview --local
 ```
 
 Scan the QR code to download and install. The app will work immediately.
@@ -378,6 +381,9 @@ eas build --profile development --platform android
 
 # Mobile - Preview build (from apps/mobile)
 eas build --profile preview --platform android
+
+# Mobile - Preview build locally on your MacBook (from apps/mobile)
+eas build --platform android --profile preview --local
 
 # Mobile - Production build (from apps/mobile)
 eas build --profile production --platform android

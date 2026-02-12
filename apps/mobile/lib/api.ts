@@ -349,6 +349,18 @@ export const speechApi = {
     console.log("[speechApi] auth session exists:", !!session?.access_token);
 
     const formData = new FormData();
+    const normalizedUri = uri.split("?")[0];
+    const extensionMatch = normalizedUri.match(/\.([a-zA-Z0-9]+)$/);
+    const extension = (extensionMatch?.[1] || "aac").toLowerCase();
+    const fileName = `recording.${extension}`;
+    const mimeType =
+      extension === "webm"
+        ? "audio/webm"
+        : extension === "m4a" || extension === "mp4"
+          ? "audio/mp4"
+          : extension === "aac"
+            ? "audio/aac"
+            : "application/octet-stream";
 
     if (Platform.OS === "web") {
       // On web, expo-av returns a blob: URL -- fetch it and append as a File
@@ -356,17 +368,34 @@ export const speechApi = {
       const blobResponse = await fetch(uri);
       const blob = await blobResponse.blob();
       console.log("[speechApi] Blob size:", blob.size, "type:", blob.type);
-      const file = new File([blob], "recording.webm", {
-        type: blob.type || "audio/webm",
+      const file = new File([blob], fileName, {
+        type: blob.type || mimeType,
       });
       formData.append("audio", file);
     } else {
+      console.log("[speechApi] Native upload metadata:", {
+        name: fileName,
+        type: mimeType,
+      });
+      try {
+        const localProbe = await fetch(uri);
+        const localBlob = await localProbe.blob();
+        console.log("[speechApi] Native local blob probe:", {
+          size: localBlob.size,
+          type: localBlob.type,
+        });
+      } catch (probeError) {
+        console.warn("[speechApi] Native local blob probe failed:", probeError);
+      }
       // React Native FormData accepts { uri, name, type } objects for file uploads
-      formData.append("audio", {
-        uri,
-        name: "recording.m4a",
-        type: "audio/m4a",
-      } as any);
+      formData.append(
+        "audio",
+        {
+          uri,
+          name: fileName,
+          type: mimeType,
+        } as any
+      );
     }
 
     const baseUrl = API_URL || "";

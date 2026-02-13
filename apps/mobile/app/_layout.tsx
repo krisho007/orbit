@@ -1,5 +1,5 @@
 import "../global.css";
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -12,6 +12,20 @@ import {
 } from "../components/ui/gluestack-ui-provider";
 import { getThemeColor, ThemeModeProvider, useThemeColors, useThemeMode } from "../lib/theme";
 import { isAppOnboardingComplete, onboardingVersion } from "../lib/onboarding";
+
+type OnboardingContextValue = {
+  requireOnboarding: () => void;
+  markOnboardingComplete: () => void;
+};
+
+const OnboardingContext = createContext<OnboardingContextValue>({
+  requireOnboarding: () => {},
+  markOnboardingComplete: () => {},
+});
+
+export function useOnboarding() {
+  return useContext(OnboardingContext);
+}
 
 function RootLayoutNav() {
   const { user, isLoading } = useAuth();
@@ -124,7 +138,14 @@ function RootLayoutNav() {
     );
   }
 
-  return <Stack screenOptions={{ headerShown: false, animation: "none" }} />;
+  return (
+    <OnboardingContext.Provider value={{
+      requireOnboarding: () => setOnboardingState("required"),
+      markOnboardingComplete: () => setOnboardingState("complete"),
+    }}>
+      <Stack screenOptions={{ headerShown: false, animation: "none" }} />
+    </OnboardingContext.Provider>
+  );
 }
 
 function ThemedStatusBar() {

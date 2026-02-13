@@ -14,6 +14,7 @@ import { contactsApi, GoogleImportContact } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { markAppOnboardingComplete, onboardingVersion } from "../lib/onboarding";
 import { getThemeColor, useThemeColors } from "../lib/theme";
+import { useOnboarding } from "./_layout";
 
 type ImportResult = {
   imported: number;
@@ -29,6 +30,7 @@ export default function GoogleImportScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const { user, session } = useAuth();
+  const { markOnboardingComplete } = useOnboarding();
 
   const accessToken = useMemo(
     () => ((session as unknown as { provider_token?: string } | null)?.provider_token ?? null),
@@ -124,6 +126,7 @@ export default function GoogleImportScreen() {
     setError(null);
     try {
       await markAppOnboardingComplete(user.id, onboardingVersion);
+      markOnboardingComplete();
       router.replace("/(tabs)/assistant");
     } catch (err) {
       console.error("Failed to complete onboarding:", err);

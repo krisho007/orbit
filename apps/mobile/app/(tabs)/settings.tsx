@@ -18,10 +18,12 @@ import {
 import { getThemeColor, useThemeColors, useThemeMode } from "../../lib/theme";
 import { useGluestackUI } from "../../components/ui/gluestack-ui-provider";
 import { resetOnboardingForTesting } from "../../lib/onboarding";
+import { useOnboarding } from "../_layout";
 
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
+  const { requireOnboarding } = useOnboarding();
   const colors = useThemeColors();
   const { setMode } = useThemeMode();
   const { resolvedColorMode } = useGluestackUI();
@@ -61,6 +63,7 @@ export default function SettingsScreen() {
           onPress: async () => {
             try {
               await resetOnboardingForTesting(user.id);
+              requireOnboarding();
               router.replace("/welcome" as any);
             } catch (error) {
               console.error("Failed to reset onboarding state:", error);

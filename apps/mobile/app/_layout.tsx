@@ -1,6 +1,6 @@
 import "../global.css";
-import { useEffect, useState } from "react";
-import { Slot, useRouter, useSegments } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -18,6 +18,8 @@ function RootLayoutNav() {
   const segments = useSegments();
   const router = useRouter();
   const colors = useThemeColors();
+  const lastRedirectRef = useRef<string | null>(null);
+  const firstSegment = String(segments[0] || "");
   const [onboardingState, setOnboardingState] = useState<
     "checking" | "required" | "complete"
   >("checking");
@@ -46,7 +48,7 @@ function RootLayoutNav() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, segments[0]]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -68,7 +70,6 @@ function RootLayoutNav() {
   useEffect(() => {
     if (isLoading || onboardingState === "checking") return;
 
-    const firstSegment = String(segments[0] || "");
     const inAuthGroup = firstSegment === "(auth)";
     const inAuthCallback = firstSegment === "auth"; // orbit://auth/callback deep link route
     const inOnboardingGroup = firstSegment === "(onboarding)";
@@ -78,26 +79,42 @@ function RootLayoutNav() {
     const inOnboardingFlow =
       inOnboardingGroup || inOnboardingWelcome || inGoogleImportScreen;
 
+    let redirectTarget: "/(auth)/sign-in" | "/welcome" | "/(tabs)/assistant" | null =
+      null;
+
     if (!user?.id && !inAuthGroup && !inAuthCallback) {
       // Redirect to sign-in if not authenticated
       // (don't redirect away from auth/callback while OAuth code exchange is in progress)
-      router.replace("/(auth)/sign-in");
+      redirectTarget = "/(auth)/sign-in";
     } else if (
       user?.id &&
       onboardingState === "required" &&
       !inOnboardingFlow &&
       !inIncomingCallScreen
     ) {
-      router.replace("/welcome" as any);
+      redirectTarget = "/welcome";
     } else if (
       user?.id &&
       onboardingState === "complete" &&
       (inAuthGroup || inAuthCallback || inOnboardingGroup || inOnboardingWelcome)
     ) {
       // Redirect to assistant if authenticated
-      router.replace("/(tabs)/assistant");
+      redirectTarget = "/(tabs)/assistant";
     }
-  }, [user?.id, segments, isLoading, onboardingState, router]);
+
+    if (!redirectTarget) {
+      lastRedirectRef.current = null;
+      return;
+    }
+
+    // Prevent repeated replace calls while React Navigation is settling route changes.
+    if (lastRedirectRef.current === redirectTarget) {
+      return;
+    }
+    lastRedirectRef.current = redirectTarget;
+    router.replace(redirectTarget as any);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, firstSegment, isLoading, onboardingState]);
 
   if (isLoading) {
     return (
@@ -107,7 +124,7 @@ function RootLayoutNav() {
     );
   }
 
-  return <Slot />;
+  return <Stack screenOptions={{ headerShown: false, animation: "none" }} />;
 }
 
 function ThemedStatusBar() {

@@ -84,11 +84,11 @@ export default function ContactDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
 
   const handleBack = useCallback(() => {
-    if (backHref) {
-      router.replace(backHref as any);
+    if (router.canGoBack()) {
+      router.back();
       return;
     }
-    router.back();
+    router.replace((backHref || "/(tabs)/index") as any);
   }, [backHref, router]);
 
   useEffect(() => {

@@ -70,11 +70,11 @@ export default function ReminderDetailScreen() {
   const [isSaving, setIsSaving] = useState(false);
 
   const handleBack = useCallback(() => {
-    if (backHref) {
-      router.replace(backHref as any);
+    if (router.canGoBack()) {
+      router.back();
       return;
     }
-    router.back();
+    router.replace((backHref || "/(tabs)/index") as any);
   }, [backHref, router]);
 
   useEffect(() => {

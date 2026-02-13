@@ -161,6 +161,7 @@ export default function AssistantScreen() {
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isStoppingRecordingRef = useRef(false);
   const recordingPulseAnim = useRef(new Animated.Value(0)).current;
+  const recordingBarAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     (async () => {
@@ -377,8 +378,16 @@ export default function AssistantScreen() {
     if (!isRecording) {
       recordingPulseAnim.stopAnimation();
       recordingPulseAnim.setValue(0);
+      recordingBarAnim.setValue(0);
       return;
     }
+
+    Animated.timing(recordingBarAnim, {
+      toValue: 1,
+      duration: 700,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
 
     const loop = Animated.loop(
       Animated.sequence([
@@ -399,7 +408,7 @@ export default function AssistantScreen() {
 
     loop.start();
     return () => loop.stop();
-  }, [isRecording, recordingPulseAnim]);
+  }, [isRecording, recordingPulseAnim, recordingBarAnim]);
 
   useEffect(() => {
     if (!isRecording) return;
@@ -1143,121 +1152,99 @@ export default function AssistantScreen() {
             </View>
           </View>
         )}
-        <View className="flex-row items-end rounded-3xl border border-border-200 bg-background-50 px-3 py-3">
-          <View className="flex-1 mr-2">
-            <TextInput
-              className="text-base text-typography-900 min-h-[52px] max-h-[160px] py-2 px-1"
-              placeholder="Ask me anything..."
-              placeholderTextColor={getThemeColor(colors, "typography-500")}
-              value={input}
-              onChangeText={setInput}
-              multiline
-              maxLength={500}
-              editable={!isLoading}
-              textAlignVertical="top"
-              onSubmitEditing={() => sendMessage(input)}
-              submitBehavior="submit"
-              blurOnSubmit={false}
-              returnKeyType="send"
-            />
-          </View>
-          <Pressable
-            onPress={toggleRecording}
-            disabled={isLoading || isTranscribing}
-            className={`w-11 h-11 rounded-2xl items-center justify-center mr-1 ${
-              isRecording
-                ? "bg-red-500 active:bg-red-600"
-                : "bg-border-200 active:bg-border-300"
-            }`}
-          >
-            {isTranscribing ? (
-              <ActivityIndicator size="small" color={getThemeColor(colors, "typography-500")} />
-            ) : (
-              <Mic
-                size={18}
-                color={
-                  isRecording
-                    ? getThemeColor(colors, "typography-0")
-                    : getThemeColor(colors, "typography-500")
-                }
-              />
-            )}
-          </Pressable>
-          <Pressable
-            onPress={() => sendMessage(input)}
-            disabled={!input.trim() || isLoading}
-            className={`w-11 h-11 rounded-2xl items-center justify-center ${
-              input.trim() && !isLoading
-                ? "bg-primary-600 active:bg-primary-700"
-                : "bg-border-200"
-            }`}
-          >
-            {isLoading ? (
-              <ActivityIndicator size="small" color={getThemeColor(colors, "typography-0")} />
-            ) : (
-              <SendHorizonal
-                size={18}
-                color={
-                  input.trim()
-                    ? getThemeColor(colors, "typography-0")
-                    : getThemeColor(colors, "typography-400")
-                }
-              />
-            )}
-          </Pressable>
-        </View>
-      </View>
-      {isRecording && (
-        <Pressable
-          onPress={toggleRecording}
-          className="absolute inset-0 items-center justify-center px-8"
-          style={{ backgroundColor: "rgba(0, 0, 0, 0.45)" }}
-        >
-          <View className="items-center justify-center">
+        <View className="rounded-3xl border border-border-200 bg-background-50 px-3 py-3" style={{ overflow: "hidden" }}>
+          {isRecording ? (
             <Animated.View
-              className="absolute w-36 h-36 rounded-full bg-red-400"
+              className="flex-row items-center min-h-[52px] px-1"
               style={{
-                opacity: recordingPulseAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.35, 0],
-                }),
-                transform: [
-                  {
+                opacity: recordingBarAnim,
+                transform: [{
+                  translateX: recordingBarAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [60, 0],
+                  }),
+                }],
+              }}
+            >
+              <Animated.View
+                className="w-3.5 h-3.5 rounded-full bg-red-500 mr-3"
+                style={{
+                  opacity: recordingPulseAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 0.3],
+                  }),
+                  transform: [{
                     scale: recordingPulseAnim.interpolate({
                       inputRange: [0, 1],
-                      outputRange: [1, 1.4],
+                      outputRange: [1, 1.3],
                     }),
-                  },
-                ],
-              }}
-            />
-            <Animated.View
-              className="absolute w-32 h-32 rounded-full bg-red-400"
-              style={{
-                opacity: recordingPulseAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.22, 0.38],
-                }),
-              }}
-            />
-            <View className="w-28 h-28 rounded-full bg-red-500 items-center justify-center">
-              <Mic size={44} color={getThemeColor(colors, "typography-0")} />
+                  }],
+                }}
+              />
+              <Text className="text-typography-700 text-base font-medium flex-1">Listening...</Text>
+              <Pressable
+                onPress={stopRecordingAndTranscribe}
+                className="bg-primary-600 rounded-2xl px-5 py-2.5 active:bg-primary-700"
+              >
+                <Text className="text-typography-0 text-sm font-semibold">OK</Text>
+              </Pressable>
+            </Animated.View>
+          ) : (
+            <View className="flex-row items-end">
+              <View className="flex-1 mr-2">
+                <TextInput
+                  className="text-base text-typography-900 min-h-[52px] max-h-[160px] py-2 px-1"
+                  placeholder="Ask me anything..."
+                  placeholderTextColor={getThemeColor(colors, "typography-500")}
+                  value={input}
+                  onChangeText={setInput}
+                  multiline
+                  maxLength={500}
+                  editable={!isLoading}
+                  textAlignVertical="top"
+                  onSubmitEditing={() => sendMessage(input)}
+                  submitBehavior="submit"
+                  blurOnSubmit={false}
+                  returnKeyType="send"
+                />
+              </View>
+              <Pressable
+                onPress={toggleRecording}
+                disabled={isLoading || isTranscribing}
+                className="w-11 h-11 rounded-2xl items-center justify-center mr-1 bg-border-200 active:bg-border-300"
+              >
+                {isTranscribing ? (
+                  <ActivityIndicator size="small" color={getThemeColor(colors, "typography-500")} />
+                ) : (
+                  <Mic size={18} color={getThemeColor(colors, "typography-500")} />
+                )}
+              </Pressable>
+              <Pressable
+                onPress={() => sendMessage(input)}
+                disabled={!input.trim() || isLoading}
+                className={`w-11 h-11 rounded-2xl items-center justify-center ${
+                  input.trim() && !isLoading
+                    ? "bg-primary-600 active:bg-primary-700"
+                    : "bg-border-200"
+                }`}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color={getThemeColor(colors, "typography-0")} />
+                ) : (
+                  <SendHorizonal
+                    size={18}
+                    color={
+                      input.trim()
+                        ? getThemeColor(colors, "typography-0")
+                        : getThemeColor(colors, "typography-400")
+                    }
+                  />
+                )}
+              </Pressable>
             </View>
-          </View>
-          <Text
-            className="mt-6 text-center text-base font-semibold"
-            style={{ color: getThemeColor(colors, "typography-0") }}
-          >
-            Listening...
-          </Text>
-          <Text
-            className="mt-2 text-center text-sm"
-            style={{ color: "rgba(255, 255, 255, 0.9)" }}
-          >
-            Tap to stop
-          </Text>
-        </Pressable>
-      )}
+          )}
+        </View>
+      </View>
     </KeyboardAvoidingView>
     </AnimatedTabScreen>
   );

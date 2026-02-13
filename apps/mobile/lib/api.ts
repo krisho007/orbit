@@ -317,13 +317,22 @@ export type AssistantCreatedCard =
   | { kind: "event"; event: AssistantEventCard }
   | { kind: "reminder"; reminder: AssistantReminderCard };
 
+export type AssistantSelectionOption = {
+  id: string;
+  entityKind: "contact" | "conversation" | "event" | "reminder" | "relationship_type";
+  title: string;
+  subtitle?: string | null;
+  selectMessage: string;
+};
+
 export type AssistantUi =
   | { kind: "contact"; contact: AssistantContactCard }
   | { kind: "contacts"; count: number; contacts: AssistantContactCard[] }
   | { kind: "conversations"; count: number; conversations: AssistantConversationCard[] }
   | { kind: "events"; count: number; events: AssistantEventCard[] }
   | { kind: "reminders"; count: number; reminders: AssistantReminderCard[] }
-  | { kind: "created"; cards: AssistantCreatedCard[] };
+  | { kind: "created"; cards: AssistantCreatedCard[] }
+  | { kind: "selection"; prompt: string; options: AssistantSelectionOption[] };
 
 export type ChatMessage = {
   role: "user" | "assistant";

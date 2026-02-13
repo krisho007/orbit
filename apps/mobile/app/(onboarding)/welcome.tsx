@@ -5,9 +5,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   Bell,
+  CalendarDays,
   Download,
   MessageCircle,
   Mic,
+  Phone,
   Sparkles,
   Users,
 } from "lucide-react-native";
@@ -35,7 +37,7 @@ const STEPS: OnboardingStep[] = [
     icon: Download,
   },
   {
-    title: "Record conversations fast",
+    title: "Easily log your conversations",
     description:
       "Tap the mic in Orbit Assistant and log conversations in seconds.",
     visualTitle: "Voice capture",
@@ -119,6 +121,12 @@ export default function WelcomeScreen() {
     setError(null);
   };
 
+  const handleBack = () => {
+    if (isFirstStep) return;
+    setStep((prev) => Math.max(prev - 1, 0));
+    setError(null);
+  };
+
   const handleImport = () => {
     router.push({
       pathname: "/google-import" as any,
@@ -127,6 +135,9 @@ export default function WelcomeScreen() {
   };
 
   const VisualIcon = currentStep.icon;
+  const isConversationPreview = step === 1;
+  const isReminderPreview = step === 2;
+  const isContactDetailPreview = step === 3;
 
   return (
     <SafeAreaView className="flex-1 bg-background-50">
@@ -164,26 +175,111 @@ export default function WelcomeScreen() {
               </View>
             </View>
 
-            <View className="flex-row flex-wrap">
-              {currentStep.chips.map((chip) => (
-                <View
-                  key={chip}
-                  className="rounded-full border border-border-200 bg-background-50 px-3 py-1.5 mr-2 mb-2"
-                >
-                  <Text className="text-typography-700 text-xs font-medium">{chip}</Text>
+            {isConversationPreview ? (
+              <View className="rounded-2xl border border-border-200 bg-background-50 p-3">
+                <View className="flex-row items-center justify-between mb-2">
+                  <View className="w-7 h-7 rounded-xl bg-primary-100 items-center justify-center mr-2">
+                    <Sparkles size={13} color={getThemeColor(colors, "primary-600")} />
+                  </View>
+                  <Text className="text-typography-800 text-xs font-semibold flex-1">Orbit Assistant</Text>
+                  <Text className="text-typography-400 text-[10px]">Today</Text>
                 </View>
-              ))}
-            </View>
-
-            {step === 1 && (
-              <View className="mt-3 rounded-2xl border border-border-200 bg-background-50 p-3">
-                <View className="flex-row items-center">
-                  <Mic size={14} color={getThemeColor(colors, "primary-600")} />
-                  <MessageCircle size={14} color={getThemeColor(colors, "primary-600")} />
-                  <Text className="text-typography-700 text-sm ml-2">
-                    Example: "I had a call with Alex today"
+                <View className="rounded-xl bg-primary-50 border border-primary-200 p-3 mb-2">
+                  <Text className="text-primary-800 text-sm leading-5">
+                    Talked with Parinder, neighbour. He has a boy (3rd standard) and girl (8th),
+                    studying at Vidyaniketan School
                   </Text>
                 </View>
+                <View className="rounded-xl border border-border-200 bg-background-0 p-3">
+                  <View className="flex-row items-center mb-1">
+                    <View className="w-6 h-6 rounded-lg bg-primary-100 items-center justify-center mr-2">
+                      <Phone size={12} color={getThemeColor(colors, "primary-600")} />
+                    </View>
+                    <Text className="text-typography-900 text-xs font-semibold">Parinder</Text>
+                  </View>
+                  <Text className="text-typography-500 text-[11px]">Phone Call · Feb 12</Text>
+                </View>
+              </View>
+            ) : isReminderPreview ? (
+              <View className="rounded-2xl border border-border-200 bg-background-50 p-3">
+                <View className="flex-row items-center justify-between mb-2">
+                  <Text className="text-typography-900 text-xs font-semibold">Reminders</Text>
+                  <CalendarDays size={13} color={getThemeColor(colors, "typography-500")} />
+                </View>
+                <View className="rounded-xl border border-border-200 bg-background-0 p-3 mb-2">
+                  <View className="flex-row items-start">
+                    <View className="w-7 h-7 rounded-xl bg-primary-100 items-center justify-center mr-2">
+                      <Bell size={12} color={getThemeColor(colors, "primary-600")} />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-typography-900 text-xs font-semibold mb-1">
+                        Call Parinder
+                      </Text>
+                      <Text className="text-typography-500 text-[11px] mb-2">Due Feb 12 · Open</Text>
+                      <Text className="text-typography-700 text-xs leading-5">
+                        Remind me to call Parinder on 12th Feb to followup on getting a reference
+                        at Google.
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+                <View className="rounded-xl bg-primary-50 border border-primary-200 p-3">
+                  <Text className="text-primary-800 text-sm leading-5">
+                    Remind me to call Parinder on 12th Feb to followup on getting a reference at
+                    Google.
+                  </Text>
+                </View>
+              </View>
+            ) : isContactDetailPreview ? (
+              <View className="rounded-2xl border border-border-200 bg-background-50 p-3">
+                <Text className="text-typography-900 text-sm font-semibold mb-2">Parinder</Text>
+
+                <View className="mb-2">
+                  <Text className="text-typography-500 text-[11px] font-semibold mb-1">
+                    Conversations
+                  </Text>
+                  <View className="rounded-xl border border-border-200 bg-background-0 p-3">
+                    <View className="flex-row items-center mb-1">
+                      <MessageCircle size={12} color={getThemeColor(colors, "primary-600")} />
+                      <Text className="text-typography-900 text-xs font-semibold ml-2">
+                        Phone Call · Feb 12
+                      </Text>
+                    </View>
+                    <Text className="text-typography-700 text-xs leading-5">
+                      Talked with Parinder, neighbour. He has a boy (3rd standard) and girl (8th),
+                      studying at Vidyaniketan School
+                    </Text>
+                  </View>
+                </View>
+
+                <View>
+                  <Text className="text-typography-500 text-[11px] font-semibold mb-1">
+                    Reminders
+                  </Text>
+                  <View className="rounded-xl border border-border-200 bg-background-0 p-3">
+                    <View className="flex-row items-center mb-1">
+                      <Bell size={12} color={getThemeColor(colors, "primary-600")} />
+                      <Text className="text-typography-900 text-xs font-semibold ml-2">
+                        Call Parinder · Feb 12
+                      </Text>
+                    </View>
+                    <Text className="text-typography-700 text-xs leading-5">
+                      Remind me to call Parinder on 12th Feb to followup on getting a reference
+                      at Google.
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <View className="flex-row flex-wrap">
+                {currentStep.chips.map((chip) => (
+                  <View
+                    key={chip}
+                    className="rounded-full border border-border-200 bg-background-50 px-3 py-1.5 mr-2 mb-2"
+                  >
+                    <Text className="text-typography-700 text-xs font-medium">{chip}</Text>
+                  </View>
+                ))}
               </View>
             )}
           </View>
@@ -221,27 +317,49 @@ export default function WelcomeScreen() {
             </Pressable>
           )}
 
-          <Pressable
-            onPress={handlePrimary}
-            disabled={isFinishing}
-            className="w-full py-4 rounded-2xl bg-background-0 border border-border-200 items-center mb-3"
-            style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
-          >
-            {isFinishing ? (
-              <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
-            ) : (
-              <Text className="text-typography-700 text-base font-semibold">{primaryLabel}</Text>
-            )}
-          </Pressable>
+          <View className="flex-row items-center mb-3">
+            <Pressable
+              onPress={handleBack}
+              disabled={isFirstStep || isFinishing}
+              className={`flex-1 py-4 rounded-2xl border items-center mr-2 ${
+                isFirstStep
+                  ? "border-border-100 bg-background-50"
+                  : "border-border-200 bg-background-0"
+              }`}
+              style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+            >
+              <Text
+                className={`text-base font-semibold ${
+                  isFirstStep ? "text-typography-400" : "text-typography-700"
+                }`}
+              >
+                Back
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handlePrimary}
+              disabled={isFinishing}
+              className="flex-1 py-4 rounded-2xl bg-primary-600 items-center ml-2 active:bg-primary-700"
+              style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+            >
+              {isFinishing ? (
+                <ActivityIndicator size="small" color={getThemeColor(colors, "typography-0")} />
+              ) : (
+                <Text className="text-typography-0 text-base font-semibold">{primaryLabel}</Text>
+              )}
+            </Pressable>
+          </View>
 
-          <Pressable
-            onPress={completeOnboarding}
-            disabled={isFinishing}
-            className="w-full py-3 rounded-2xl items-center"
-            style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1 }]}
-          >
-            <Text className="text-typography-500 text-base font-medium">Skip for now</Text>
-          </Pressable>
+          {!isLastStep && (
+            <Pressable
+              onPress={completeOnboarding}
+              disabled={isFinishing}
+              className="w-full py-3 rounded-2xl items-center"
+              style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1 }]}
+            >
+              <Text className="text-typography-500 text-base font-medium">Skip for now</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     </SafeAreaView>

@@ -44,11 +44,6 @@ class PhoneStateReceiver : BroadcastReceiver() {
       TelephonyManager.EXTRA_STATE_IDLE -> {
         cancelIncomingNotification(context)
         val number = incomingNumber ?: getLastNumber(context)
-        if (number.isNullOrBlank()) {
-          clearLastNumber(context)
-          return
-        }
-
         showCallEndedNotification(context, number)
         clearLastNumber(context)
       }
@@ -80,11 +75,11 @@ class PhoneStateReceiver : BroadcastReceiver() {
     manager.notify(NOTIFICATION_ID_INCOMING, notification)
   }
 
-  private fun showCallEndedNotification(context: Context, phoneNumber: String) {
+  private fun showCallEndedNotification(context: Context, phoneNumber: String?) {
     val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     ensureNotificationChannels(manager)
 
-    val openIntent = createDeepLinkIntent(context, phoneNumber, "ended")
+    val openIntent = createAssistantDeepLinkIntent(context, phoneNumber)
     val pendingIntent = PendingIntent.getActivity(
       context,
       REQUEST_CODE_ENDED,
@@ -95,7 +90,7 @@ class PhoneStateReceiver : BroadcastReceiver() {
     val notification = NotificationCompat.Builder(context, CHANNEL_ENDED)
       .setSmallIcon(android.R.drawable.sym_call_missed)
       .setContentTitle("Call ended")
-      .setContentText("Tap to add notes in Orbit")
+      .setContentText("Capture call notes with Orbit Assistant")
       .setPriority(NotificationCompat.PRIORITY_DEFAULT)
       .setAutoCancel(true)
       .setContentIntent(pendingIntent)
@@ -107,6 +102,24 @@ class PhoneStateReceiver : BroadcastReceiver() {
   private fun launchDeepLink(context: Context, phoneNumber: String, phase: String) {
     val intent = createDeepLinkIntent(context, phoneNumber, phase)
     context.startActivity(intent)
+  }
+
+  private fun createAssistantDeepLinkIntent(context: Context, phoneNumber: String?): Intent {
+    val builder = Uri.Builder()
+      .scheme("orbit")
+      .authority("assistant")
+      .appendQueryParameter("source", "call-ended")
+    if (!phoneNumber.isNullOrBlank()) {
+      builder.appendQueryParameter("phone", phoneNumber)
+    }
+    val deepLink = builder.build()
+
+    return Intent(Intent.ACTION_VIEW, deepLink, context, MainActivity::class.java)
+      .addFlags(
+        Intent.FLAG_ACTIVITY_NEW_TASK or
+          Intent.FLAG_ACTIVITY_SINGLE_TOP or
+          Intent.FLAG_ACTIVITY_CLEAR_TOP
+      )
   }
 
   private fun createDeepLinkIntent(context: Context, phoneNumber: String?, phase: String): Intent {

@@ -1087,5 +1087,450 @@ describe("processMessageLLM", () => {
       expect(response.text).toBe("I can help you with that.");
       expect(response.ui).toBeNull();
     });
+
+    it("does not claim contact creation when create_contact was called without success", async () => {
+      const fakeGenerate = (async () => ({
+        text: "The contact was created successfully.",
+        toolResults: [],
+        steps: [
+          {
+            toolCalls: [
+              {
+                toolName: "create_contact",
+                toolCallId: "tc-1",
+                input: {},
+                invalid: true,
+                error: new Error("displayName is required"),
+              },
+            ],
+            toolResults: [],
+          },
+        ],
+      })) as unknown as typeof generateText;
+
+      const response = await processMessageLLM(
+        "user-1",
+        [{ role: "user", content: "Create contact with number 9999999999" }],
+        fakeGenerate
+      );
+
+      expect(response.text).toContain("contact name");
+      expect(response.ui).toBeNull();
+    });
+
+    it("returns explicit failure when create_contact produced an error result", async () => {
+      const fakeGenerate = (async () => ({
+        text: "The contact has been created.",
+        toolResults: [
+          {
+            output: {
+              type: "error",
+              message: "Failed to create contact",
+            },
+          },
+        ],
+        steps: [
+          {
+            toolCalls: [
+              {
+                toolName: "create_contact",
+                toolCallId: "tc-2",
+                input: { displayName: "Usha Medicals" },
+                invalid: false,
+              },
+            ],
+            toolResults: [
+              {
+                output: {
+                  type: "error",
+                  message: "Failed to create contact",
+                },
+              },
+            ],
+          },
+        ],
+      })) as unknown as typeof generateText;
+
+      const response = await processMessageLLM(
+        "user-1",
+        [{ role: "user", content: "Add contact Usha Medicals" }],
+        fakeGenerate
+      );
+
+      expect(response.text).toContain("couldn't create");
+      expect(response.text).toContain("Failed to create contact");
+      expect(response.ui).toBeNull();
+    });
+
+    it("returns selection UI for ambiguous contact context", async () => {
+      const fakeGenerate = (async () => ({
+        text: "Please choose the correct contact.",
+        toolResults: [
+          {
+            output: {
+              type: "contact_ambiguous",
+              message: "Multiple contacts match Sam. Please pick one.",
+              candidates: [
+                { id: "contact-1", displayName: "Sam Lee" },
+                { id: "contact-2", displayName: "Sam Levin" },
+              ],
+            },
+          },
+        ],
+      })) as unknown as typeof generateText;
+
+      const response = await processMessageLLM(
+        "user-1",
+        [{ role: "user", content: "Create reminder for Sam" }],
+        fakeGenerate
+      );
+
+      expect(response.ui?.kind).toBe("selection");
+      if (!response.ui || response.ui.kind !== "selection") {
+        throw new Error("Expected selection UI payload");
+      }
+
+      expect(response.ui.options).toHaveLength(2);
+      expect(response.ui.options[0].entityKind).toBe("contact");
+      expect(response.ui.options[0].selectMessage).toContain("contact ID");
+    });
+
+    it("returns selection UI for ambiguous relationship type context", async () => {
+      const fakeGenerate = (async () => ({
+        text: "Please choose the relationship type.",
+        toolResults: [
+          {
+            output: {
+              type: "relationship_type_ambiguous",
+              message: "Multiple relationship types match sibling. Please pick one.",
+              candidates: [
+                { id: "rt-1", name: "Sibling" },
+                { id: "rt-2", name: "Step Sibling" },
+              ],
+            },
+          },
+        ],
+      })) as unknown as typeof generateText;
+
+      const response = await processMessageLLM(
+        "user-1",
+        [{ role: "user", content: "Rahul is my sibling" }],
+        fakeGenerate
+      );
+
+      expect(response.ui?.kind).toBe("selection");
+      if (!response.ui || response.ui.kind !== "selection") {
+        throw new Error("Expected selection UI payload");
+      }
+
+      expect(response.ui.options).toHaveLength(2);
+      expect(response.ui.options[0].entityKind).toBe("relationship_type");
+      expect(response.ui.options[0].selectMessage).toContain("relationship type ID");
+    });
+  });
+
+  // ============================================
+  // 8. GUARDRAIL UNIT TESTS
+  // ============================================
+
+  describe("isExplicitUserConfirmation", () => {
+    let isExplicitUserConfirmation: typeof import("./assistant").isExplicitUserConfirmation;
+
+    beforeEach(async () => {
+      ({ isExplicitUserConfirmation } = await import("./assistant"));
+    });
+
+    it("accepts exact confirmation tokens", () => {
+      const positiveTokens = [
+        "yes", "y", "yes please", "go ahead", "please go ahead",
+        "proceed", "do it", "confirm", "confirmed", "looks good",
+        "sounds good", "sure", "ok", "okay", "yep", "yup",
+        "absolutely", "definitely",
+      ];
+      for (const token of positiveTokens) {
+        expect(isExplicitUserConfirmation(token)).toBe(true);
+      }
+    });
+
+    it("is case-insensitive", () => {
+      expect(isExplicitUserConfirmation("Yes")).toBe(true);
+      expect(isExplicitUserConfirmation("YES")).toBe(true);
+      expect(isExplicitUserConfirmation("Go Ahead")).toBe(true);
+      expect(isExplicitUserConfirmation("CONFIRM")).toBe(true);
+    });
+
+    it("trims whitespace", () => {
+      expect(isExplicitUserConfirmation("  yes  ")).toBe(true);
+      expect(isExplicitUserConfirmation("\tyes\n")).toBe(true);
+    });
+
+    it("rejects empty or whitespace-only input", () => {
+      expect(isExplicitUserConfirmation("")).toBe(false);
+      expect(isExplicitUserConfirmation("   ")).toBe(false);
+    });
+
+    it("does NOT match 'yesterday' (substring false positive)", () => {
+      expect(isExplicitUserConfirmation("yesterday")).toBe(false);
+    });
+
+    it("does NOT match sentences containing confirmation words", () => {
+      expect(isExplicitUserConfirmation("yes but change the date")).toBe(false);
+      expect(isExplicitUserConfirmation("that sounds good to me but let me check")).toBe(false);
+      expect(isExplicitUserConfirmation("go ahead and also add Bob")).toBe(false);
+      expect(isExplicitUserConfirmation("sure thing")).toBe(false);
+    });
+
+    it("rejects arbitrary text", () => {
+      expect(isExplicitUserConfirmation("create a contact")).toBe(false);
+      expect(isExplicitUserConfirmation("no")).toBe(false);
+      expect(isExplicitUserConfirmation("maybe")).toBe(false);
+      expect(isExplicitUserConfirmation("cancel")).toBe(false);
+    });
+  });
+
+  // ============================================
+  // 9. INTENT PARSING UNIT TESTS
+  // ============================================
+
+  describe("parseIntentFromText", () => {
+    let parseIntentFromText: typeof import("./assistant").parseIntentFromText;
+
+    beforeEach(async () => {
+      ({ parseIntentFromText } = await import("./assistant"));
+    });
+
+    it("parses JSON object with intent field", () => {
+      expect(parseIntentFromText('{"intent": "create_contact"}')).toBe("create_contact");
+      expect(parseIntentFromText('{"intent": "search_conversation"}')).toBe("search_conversation");
+      expect(parseIntentFromText('{"intent": "delete_entity"}')).toBe("delete_entity");
+    });
+
+    it("parses JSON wrapped in code fences", () => {
+      expect(parseIntentFromText('```json\n{"intent": "create_event"}\n```')).toBe("create_event");
+      expect(parseIntentFromText('```\n{"intent": "edit_contact"}\n```')).toBe("edit_contact");
+    });
+
+    it("parses bare intent string", () => {
+      expect(parseIntentFromText("create_contact")).toBe("create_contact");
+      expect(parseIntentFromText("search_reminder")).toBe("search_reminder");
+    });
+
+    it("strips quotes from bare intent string", () => {
+      expect(parseIntentFromText('"create_contact"')).toBe("create_contact");
+      expect(parseIntentFromText("'edit_event'")).toBe("edit_event");
+      expect(parseIntentFromText("`search_contact`")).toBe("search_contact");
+    });
+
+    it("returns 'unknown' for empty input", () => {
+      expect(parseIntentFromText("")).toBe("unknown");
+      expect(parseIntentFromText("   ")).toBe("unknown");
+    });
+
+    it("returns 'unknown' for invalid intent values", () => {
+      expect(parseIntentFromText('{"intent": "not_a_real_intent"}')).toBe("unknown");
+      expect(parseIntentFromText("gibberish")).toBe("unknown");
+      expect(parseIntentFromText("hello world")).toBe("unknown");
+    });
+
+    it("returns 'unknown' for malformed JSON", () => {
+      expect(parseIntentFromText("{malformed")).toBe("unknown");
+      expect(parseIntentFromText('{"intent": 42}')).toBe("unknown");
+    });
+  });
+
+  // ============================================
+  // 10. ENUM ASSERTION UNIT TESTS
+  // ============================================
+
+  describe("Enum Assertions", () => {
+    let assertValidMedium: typeof import("./assistant").assertValidMedium;
+    let assertValidEventType: typeof import("./assistant").assertValidEventType;
+    let assertValidReminderStatus: typeof import("./assistant").assertValidReminderStatus;
+    let assertValidGender: typeof import("./assistant").assertValidGender;
+
+    beforeEach(async () => {
+      ({ assertValidMedium, assertValidEventType, assertValidReminderStatus, assertValidGender } =
+        await import("./assistant"));
+    });
+
+    it("assertValidMedium accepts valid values", () => {
+      expect(assertValidMedium("PHONE_CALL")).toBe("PHONE_CALL");
+      expect(assertValidMedium("WHATSAPP")).toBe("WHATSAPP");
+      expect(assertValidMedium("EMAIL")).toBe("EMAIL");
+      expect(assertValidMedium("CHANCE_ENCOUNTER")).toBe("CHANCE_ENCOUNTER");
+      expect(assertValidMedium("IN_PERSON_MEETING")).toBe("IN_PERSON_MEETING");
+      expect(assertValidMedium("ONLINE_MEETING")).toBe("ONLINE_MEETING");
+      expect(assertValidMedium("OTHER")).toBe("OTHER");
+    });
+
+    it("assertValidMedium rejects invalid values", () => {
+      expect(() => assertValidMedium("INVALID")).toThrow("Invalid conversation medium");
+      expect(() => assertValidMedium("phone_call")).toThrow("Invalid conversation medium");
+      expect(() => assertValidMedium("")).toThrow("Invalid conversation medium");
+    });
+
+    it("assertValidEventType accepts valid values", () => {
+      expect(assertValidEventType("MEETING")).toBe("MEETING");
+      expect(assertValidEventType("CALL")).toBe("CALL");
+      expect(assertValidEventType("BIRTHDAY")).toBe("BIRTHDAY");
+      expect(assertValidEventType("ANNIVERSARY")).toBe("ANNIVERSARY");
+    });
+
+    it("assertValidEventType rejects invalid values", () => {
+      expect(() => assertValidEventType("INVALID")).toThrow("Invalid event type");
+      expect(() => assertValidEventType("meeting")).toThrow("Invalid event type");
+    });
+
+    it("assertValidReminderStatus accepts valid values", () => {
+      expect(assertValidReminderStatus("OPEN")).toBe("OPEN");
+      expect(assertValidReminderStatus("DONE")).toBe("DONE");
+      expect(assertValidReminderStatus("CANCELED")).toBe("CANCELED");
+    });
+
+    it("assertValidReminderStatus rejects invalid values", () => {
+      expect(() => assertValidReminderStatus("INVALID")).toThrow("Invalid reminder status");
+      expect(() => assertValidReminderStatus("open")).toThrow("Invalid reminder status");
+    });
+
+    it("assertValidGender accepts valid values", () => {
+      expect(assertValidGender("MALE")).toBe("MALE");
+      expect(assertValidGender("FEMALE")).toBe("FEMALE");
+    });
+
+    it("assertValidGender rejects invalid values", () => {
+      expect(() => assertValidGender("INVALID")).toThrow("Invalid gender");
+      expect(() => assertValidGender("male")).toThrow("Invalid gender");
+    });
+  });
+
+  // ============================================
+  // 11. DELETE TOOL PROTECTION
+  // ============================================
+
+  describe("Delete Tool Protection", () => {
+    let DELETE_TOOL_NAMES: typeof import("./assistant").DELETE_TOOL_NAMES;
+    let MUTATING_TOOL_NAMES: typeof import("./assistant").MUTATING_TOOL_NAMES;
+
+    beforeEach(async () => {
+      ({ DELETE_TOOL_NAMES, MUTATING_TOOL_NAMES } = await import("./assistant"));
+    });
+
+    it("DELETE_TOOL_NAMES contains all delete tools", () => {
+      const expected = [
+        "delete_contact", "delete_contact_image", "delete_conversation",
+        "delete_event", "delete_reminder", "delete_tag",
+        "delete_relationship", "delete_relationship_type",
+      ];
+      for (const name of expected) {
+        expect(DELETE_TOOL_NAMES.has(name)).toBe(true);
+      }
+      expect(DELETE_TOOL_NAMES.size).toBe(expected.length);
+    });
+
+    it("MUTATING_TOOL_NAMES does not include delete tools", () => {
+      for (const deleteTool of DELETE_TOOL_NAMES) {
+        expect(MUTATING_TOOL_NAMES.has(deleteTool)).toBe(false);
+      }
+    });
+  });
+
+  // ============================================
+  // 12. INTENT TOOL SCOPING
+  // ============================================
+
+  describe("Intent Tool Scoping", () => {
+    let INTENT_TOOL_SETS: typeof import("./assistant").INTENT_TOOL_SETS;
+    let DELETE_TOOL_NAMES: typeof import("./assistant").DELETE_TOOL_NAMES;
+
+    beforeEach(async () => {
+      ({ INTENT_TOOL_SETS, DELETE_TOOL_NAMES } = await import("./assistant"));
+    });
+
+    it("every intent has a tool set", () => {
+      const intents = [
+        "create_contact", "search_contact", "edit_contact",
+        "create_conversation", "create_conversation_with_contact",
+        "search_conversation", "edit_conversation",
+        "create_event", "create_event_with_conversation",
+        "search_event", "edit_event",
+        "create_reminder", "create_reminder_with_context",
+        "search_reminder", "edit_reminder",
+        "delete_entity", "unknown",
+      ];
+      for (const intent of intents) {
+        expect(INTENT_TOOL_SETS[intent as keyof typeof INTENT_TOOL_SETS]).toBeDefined();
+        expect(INTENT_TOOL_SETS[intent as keyof typeof INTENT_TOOL_SETS].length).toBeGreaterThan(0);
+      }
+    });
+
+    it("no intent tool set includes delete tools", () => {
+      for (const [intent, tools] of Object.entries(INTENT_TOOL_SETS)) {
+        for (const tool of tools) {
+          expect(DELETE_TOOL_NAMES.has(tool)).toBe(false);
+        }
+      }
+    });
+
+    it("mutating intents include request_confirmation", () => {
+      const mutatingIntents = [
+        "create_contact", "create_conversation", "create_conversation_with_contact",
+        "create_event", "create_event_with_conversation",
+        "create_reminder", "create_reminder_with_context",
+        "edit_contact", "edit_conversation", "edit_event", "edit_reminder",
+      ];
+      for (const intent of mutatingIntents) {
+        expect(INTENT_TOOL_SETS[intent as keyof typeof INTENT_TOOL_SETS]).toContain("request_confirmation");
+      }
+    });
+
+    it("search intents do NOT include request_confirmation", () => {
+      const searchIntents = [
+        "search_contact", "search_conversation", "search_event", "search_reminder",
+      ];
+      for (const intent of searchIntents) {
+        expect(INTENT_TOOL_SETS[intent as keyof typeof INTENT_TOOL_SETS]).not.toContain("request_confirmation");
+      }
+    });
+
+    it("scoped tool sets are smaller than 20 tools each", () => {
+      for (const [intent, tools] of Object.entries(INTENT_TOOL_SETS)) {
+        expect(tools.length).toBeLessThan(20);
+      }
+    });
+  });
+
+  // ============================================
+  // 13. CONFIRMATION UI CARD
+  // ============================================
+
+  describe("Confirmation UI", () => {
+    it("returns confirmation UI when request_confirmation tool is called", async () => {
+      const fakeGenerate = (async () => ({
+        text: "I'd like to create a contact for Alice. Shall I proceed?",
+        toolResults: [
+          {
+            output: {
+              type: "confirmation_requested",
+              action: "Create contact Alice with phone +1 555 000 1111",
+              details: { displayName: "Alice", primaryPhone: "+1 555 000 1111" },
+            },
+          },
+        ],
+      })) as unknown as typeof generateText;
+
+      const response = await processMessageLLM(
+        "user-1",
+        [{ role: "user", content: "Add a contact for Alice" }],
+        fakeGenerate
+      );
+
+      expect(response.ui?.kind).toBe("confirmation");
+      if (!response.ui || response.ui.kind !== "confirmation") {
+        throw new Error("Expected confirmation UI payload");
+      }
+
+      expect(response.ui.action).toBe("Create contact Alice with phone +1 555 000 1111");
+      expect(response.ui.details).toEqual({ displayName: "Alice", primaryPhone: "+1 555 000 1111" });
+    });
   });
 });

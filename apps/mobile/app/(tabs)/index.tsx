@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef, type ReactNode } from "react";
+import { AnimatedTabScreen } from "../../components/animated-tab-screen";
 import {
   View,
   Text,
@@ -454,6 +455,7 @@ export default function ContactsScreen() {
     ) : null;
 
   return (
+    <AnimatedTabScreen tabName="index">
     <View className="flex-1 bg-background-50">
       <FlatList
         data={contacts}
@@ -503,5 +505,6 @@ export default function ContactsScreen() {
         </Pressable>
       </View>
     </View>
+    </AnimatedTabScreen>
   );
 }

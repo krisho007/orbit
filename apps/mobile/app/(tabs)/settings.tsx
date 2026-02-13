@@ -1,4 +1,5 @@
 import { View, Text, Pressable, Alert, ScrollView, Switch } from "react-native";
+import { AnimatedTabScreen } from "../../components/animated-tab-screen";
 import type { ComponentType } from "react";
 import { useAuth } from "../../lib/auth";
 import { useRouter } from "expo-router";
@@ -120,6 +121,7 @@ export default function SettingsScreen() {
   );
 
   return (
+    <AnimatedTabScreen tabName="settings">
     <ScrollView className="flex-1 bg-background-50">
       <View className="bg-background-0 p-4 border-b border-border-100">
         <View className="flex-row items-center justify-between">
@@ -235,5 +237,6 @@ export default function SettingsScreen() {
         <Text className="text-typography-400 text-sm">Orbit v1.0.0</Text>
       </View>
     </ScrollView>
+    </AnimatedTabScreen>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import type { ComponentType } from "react";
+import { AnimatedTabScreen } from "../../components/animated-tab-screen";
 import {
   View,
   Text,
@@ -203,6 +204,7 @@ export default function EventsScreen() {
     ) : null;
 
   return (
+    <AnimatedTabScreen tabName="events">
     <View className="flex-1 bg-background-50">
       <FlatList
         data={events}
@@ -230,6 +232,7 @@ export default function EventsScreen() {
         <Plus size={22} color={getThemeColor(colors, "typography-0")} />
       </Pressable>
     </View>
+    </AnimatedTabScreen>
   );
 }
 

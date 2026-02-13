@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { AnimatedTabScreen } from "../../components/animated-tab-screen";
 import {
   View,
   Text,
@@ -208,6 +209,7 @@ export default function RemindersScreen() {
     ) : null;
 
   return (
+    <AnimatedTabScreen tabName="reminders">
     <View className="flex-1 bg-background-50">
       <FlatList
         data={reminders}
@@ -237,5 +239,6 @@ export default function RemindersScreen() {
         </Pressable>
       </View>
     </View>
+    </AnimatedTabScreen>
   );
 }

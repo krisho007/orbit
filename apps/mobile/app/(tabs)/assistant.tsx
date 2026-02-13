@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
+import { AnimatedTabScreen } from "../../components/animated-tab-screen";
 import type { ComponentType } from "react";
 import {
   View,
@@ -1098,6 +1099,7 @@ export default function AssistantScreen() {
   );
 
   return (
+    <AnimatedTabScreen tabName="assistant">
     <KeyboardAvoidingView
       behavior="padding"
       className="flex-1 bg-background-50"
@@ -1257,5 +1259,6 @@ export default function AssistantScreen() {
         </Pressable>
       )}
     </KeyboardAvoidingView>
+    </AnimatedTabScreen>
   );
 }

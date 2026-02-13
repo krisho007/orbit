@@ -54,6 +54,7 @@ import {
   AssistantConversationCard,
   AssistantEventCard,
   AssistantReminderCard,
+  AssistantSelectionOption,
 } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { isAssistantCoachmarkSeen, markAssistantCoachmarkSeen } from "../../lib/onboarding";
@@ -159,6 +160,21 @@ export default function AssistantScreen() {
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isStoppingRecordingRef = useRef(false);
   const recordingPulseAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    (async () => {
+      try {
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
+          interruptionMode: "doNotMix",
+          shouldRouteThroughEarpiece: false,
+        });
+      } catch (err) {
+        console.warn("[STT] Failed to initialize audio mode:", err);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     // Keep only stable messages in cache so returning from detail pages restores results.
@@ -319,21 +335,6 @@ export default function AssistantScreen() {
         shouldRouteThroughEarpiece: false,
       });
       await audioRecorder.prepareToRecordAsync();
-      const availableInputs = audioRecorder.getAvailableInputs();
-      console.log("[STT] Available recording inputs:", availableInputs);
-      const preferredInput =
-        availableInputs.find((input) =>
-          /built|microphone|mic/i.test(`${input.name} ${input.type}`)
-        ) || availableInputs[0];
-      if (preferredInput?.uid) {
-        audioRecorder.setInput(preferredInput.uid);
-        console.log("[STT] Selected recording input:", preferredInput);
-      }
-      const currentInput = await audioRecorder.getCurrentInput().catch((err) => {
-        console.warn("[STT] Could not read current input:", err);
-        return null;
-      });
-      console.log("[STT] Current recording input:", currentInput);
       audioRecorder.record();
       clearRecordingTimeout();
       recordingTimeoutRef.current = setTimeout(() => {
@@ -701,7 +702,112 @@ export default function AssistantScreen() {
     );
   };
 
+  const openSelectionOption = (option: AssistantSelectionOption) => {
+    if (option.entityKind === "contact") {
+      router.push({
+        pathname: "/contact/[id]",
+        params: { id: option.id, from: "/(tabs)/assistant" },
+      });
+      return;
+    }
+
+    if (option.entityKind === "conversation") {
+      router.push({
+        pathname: "/conversation/[id]",
+        params: { id: option.id, from: "/(tabs)/assistant" },
+      });
+      return;
+    }
+
+    if (option.entityKind === "event") {
+      router.push({
+        pathname: "/event/[id]",
+        params: { id: option.id, from: "/(tabs)/assistant" },
+      });
+      return;
+    }
+
+    if (option.entityKind === "reminder") {
+      router.push({
+        pathname: "/reminder/[id]",
+        params: { id: option.id, from: "/(tabs)/assistant" },
+      });
+      return;
+    }
+  };
+
+  const renderSelectionOptionCard = (option: AssistantSelectionOption) => {
+    const canOpen =
+      option.entityKind === "contact" ||
+      option.entityKind === "conversation" ||
+      option.entityKind === "event" ||
+      option.entityKind === "reminder";
+
+    return (
+      <View
+        key={`${option.entityKind}:${option.id}`}
+        className="bg-background-0 border border-border-100 rounded-2xl p-4 mb-3"
+      >
+        <Text className="text-typography-900 font-semibold text-base" numberOfLines={1}>
+          {option.title}
+        </Text>
+        {option.subtitle ? (
+          <Text className="text-typography-600 text-sm mt-1" numberOfLines={1}>
+            {option.subtitle}
+          </Text>
+        ) : null}
+        <View className="flex-row mt-3">
+          {canOpen ? (
+            <Pressable
+              onPress={() => openSelectionOption(option)}
+              className="rounded-xl border border-border-200 bg-background-50 px-3 py-2 mr-2 active:bg-background-100"
+            >
+              <Text className="text-typography-700 text-sm font-medium">Open</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={() => sendMessage(option.selectMessage)}
+            disabled={isLoading}
+            className={`rounded-xl px-3 py-2 ${isLoading ? "bg-primary-200" : "bg-primary-600 active:bg-primary-700"}`}
+          >
+            <Text className="text-typography-0 text-sm font-medium">Select</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  };
+
   const renderAssistantUi = (ui: AssistantUi) => {
+    if (ui.kind === "selection") {
+      const options = ui.options.slice(0, RESULT_CARD_LIMIT);
+      const showCountLabel = ui.options.length > options.length;
+      const showScrollableResults = options.length > 2;
+      return (
+        <View>
+          <Text className="text-typography-700 text-sm mb-2">{ui.prompt}</Text>
+          {showCountLabel ? (
+            <Text className="text-typography-500 text-xs mb-2">
+              Showing {options.length} of {ui.options.length} options
+            </Text>
+          ) : null}
+          {showScrollableResults ? (
+            <ScrollView
+              className="max-h-[340px]"
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+              indicatorStyle={scrollIndicatorStyle}
+              persistentScrollbar
+              contentContainerStyle={resultScrollContentStyle}
+            >
+              {options.map(renderSelectionOptionCard)}
+            </ScrollView>
+          ) : (
+            options.map(renderSelectionOptionCard)
+          )}
+        </View>
+      );
+    }
+
     if (ui.kind === "created") {
       const cards = ui.cards.slice(0, RESULT_CARD_LIMIT);
       const showCountLabel = ui.cards.length > cards.length;

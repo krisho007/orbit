@@ -1,0 +1,41 @@
+# fly.toml - Orbit API + Web UI
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+
+app = "orbit-app"
+primary_region = "sjc"
+
+[build]
+  # Build from repo root to access both apps/api and apps/mobile
+  dockerfile = "apps/api/Dockerfile"
+
+[env]
+  PORT = "3000"
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 25
+    soft_limit = 20
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[checks]
+  [checks.health]
+    port = 3000
+    type = "http"
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "5s"
+    method = "GET"
+    path = "/health"

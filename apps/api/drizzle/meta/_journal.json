@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1770620244883,
+      "tag": "0000_spooky_blade",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1770629311243,
+      "tag": "0001_add_primary_contact_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771051979148,
+      "tag": "0002_little_squadron_supreme",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1771120800000,
+      "tag": "0003_merge_consent_columns",
+      "breakpoints": true
+    }
+  ]
+}

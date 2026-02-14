@@ -1,18 +1,15 @@
 # dependencies
 node_modules/
-/.pnp
+.pnp
 .pnp.js
 .yarn/install-state.gz
 
 # testing
-/coverage
-
-# next.js
-/.next/
-/out/
+coverage/
 
 # production
-/build
+build/
+dist/
 
 # misc
 .DS_Store
@@ -27,14 +24,33 @@ yarn-error.log*
 .env*.local
 .env
 
-# vercel
-.vercel
-
 # typescript
 *.tsbuildinfo
-next-env.d.ts
 
-# capacitor
-capacitor/android/
-capacitor/ios/
-capacitor/.gradle/
+# Expo
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+*.apk
+
+# iOS/Android (Expo managed)
+ios/
+android/
+
+# Keep selected Android native sources in apps/mobile under version control
+!apps/mobile/android/
+!apps/mobile/android/app/
+!apps/mobile/android/app/src/
+!apps/mobile/android/app/src/main/
+!apps/mobile/android/app/src/main/AndroidManifest.xml
+!apps/mobile/android/app/src/main/java/
+!apps/mobile/android/app/src/main/java/com/
+!apps/mobile/android/app/src/main/java/com/orbit/
+!apps/mobile/android/app/src/main/java/com/orbit/app/
+!apps/mobile/android/app/src/main/java/com/orbit/app/MainActivity.kt
+!apps/mobile/android/app/src/main/java/com/orbit/app/PhoneStateReceiver.kt

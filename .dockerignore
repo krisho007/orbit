@@ -1,0 +1,38 @@
+# Root level dockerignore
+.git
+*.log
+.DS_Store
+
+# Ignore old Next.js app during Docker build
+app/
+components/
+lib/
+prisma/
+public/
+auth.ts
+middleware.ts
+next.config.ts
+next-env.d.ts
+postcss.config.mjs
+tsconfig.json
+capacitor/
+
+# Ignore node_modules everywhere (including inside apps/)
+**/node_modules
+
+# Ignore env files
+**/.env
+**/.env.*
+
+# Ignore markdown files (except we might need some)
+*.md
+**/*.md
+
+# Ignore mobile-specific build artifacts
+apps/mobile/.expo
+apps/mobile/android
+apps/mobile/ios
+apps/mobile/dist
+
+# Ignore API build artifacts
+apps/api/drizzle

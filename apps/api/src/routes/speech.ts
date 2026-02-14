@@ -2,7 +2,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Hono } from "hono";
+import { eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
+import { db, users } from "../db";
 
 const app = new Hono();
 
@@ -62,6 +64,17 @@ async function maybeDumpUploadedAudio(
 app.post("/transcribe", async (c) => {
   console.log("[Speech] POST /transcribe - request received");
   const userId = c.get("userId");
+
+  // Check third-party consent before processing
+  const [user] = await db
+    .select({ thirdPartyConsentGranted: users.thirdPartyConsentGranted })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!user?.thirdPartyConsentGranted) {
+    return c.json({ error: "Speech consent required", code: "CONSENT_REQUIRED" }, 403);
+  }
 
   if (!SARVAM_API_KEY) {
     console.error("[Speech] SARVAM_API_KEY not configured");

@@ -70,6 +70,7 @@ export const users = pgTable("users", {
   // Links the user to their own contact record in the CRM.
   // When set, the assistant knows who "I" / "me" / "my" refers to.
   primaryContactId: text("primaryContactId"),
+  thirdPartyConsentGranted: boolean("thirdPartyConsentGranted").default(false).notNull(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
 });

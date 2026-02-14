@@ -49,6 +49,7 @@ import {
 import {
   assistantApi,
   speechApi,
+  userApi,
   ChatMessage,
   AssistantUi,
   AssistantContactCard,
@@ -61,6 +62,7 @@ import { useAuth } from "../../lib/auth";
 import { isAssistantCoachmarkSeen, markAssistantCoachmarkSeen } from "../../lib/onboarding";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
 import { useGluestackUI } from "../../components/ui/gluestack-ui-provider";
+import { AiConsentDialog } from "../../components/ai-consent-dialog";
 
 type Message = ChatMessage & {
   id: string;
@@ -152,6 +154,8 @@ export default function AssistantScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [showCoachmark, setShowCoachmark] = useState(false);
+  const [consent, setConsent] = useState<boolean | null>(null);
+  const [showConsentDialog, setShowConsentDialog] = useState(false);
   const audioRecorder = useAudioRecorder(STT_RECORDING_OPTIONS);
   const recorderState = useAudioRecorderState(audioRecorder);
   const isRecording = recorderState.isRecording;
@@ -176,6 +180,33 @@ export default function AssistantScreen() {
         console.warn("[STT] Failed to initialize audio mode:", err);
       }
     })();
+  }, []);
+
+  // Load consent state on mount
+  useEffect(() => {
+    let cancelled = false;
+    const loadConsent = async () => {
+      try {
+        const consentData = await userApi.getConsent();
+        if (!cancelled) {
+          setConsent(consentData.aiConsent && consentData.sttConsent);
+        }
+      } catch (error) {
+        console.error("Failed to load consent:", error);
+      }
+    };
+    loadConsent();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleConsentAgree = useCallback(async () => {
+    setShowConsentDialog(false);
+    try {
+      await userApi.updateConsent({ aiConsent: true, sttConsent: true });
+      setConsent(true);
+    } catch (error) {
+      Alert.alert("Error", "Failed to save consent. Please try again.");
+    }
   }, []);
 
   useEffect(() => {
@@ -297,6 +328,12 @@ export default function AssistantScreen() {
   }, [audioRecorder, clearRecordingTimeout]);
 
   const startRecording = useCallback(async () => {
+    // Check STT consent before recording
+    if (!consent) {
+      setShowConsentDialog(true);
+      return;
+    }
+
     try {
       console.log("[STT] Requesting microphone permission...");
       const currentPermission = await AudioModule.getRecordingPermissionsAsync();
@@ -347,7 +384,7 @@ export default function AssistantScreen() {
       console.error("[STT] Failed to start recording:", err);
       Alert.alert("Error", "Could not start recording.");
     }
-  }, [audioRecorder, clearRecordingTimeout, stopRecordingAndTranscribe]);
+  }, [audioRecorder, clearRecordingTimeout, stopRecordingAndTranscribe, consent]);
 
   const toggleRecording = useCallback(() => {
     if (showCoachmark) {
@@ -384,7 +421,7 @@ export default function AssistantScreen() {
 
     Animated.timing(recordingBarAnim, {
       toValue: 1,
-      duration: 700,
+      duration: 1200,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
@@ -460,6 +497,13 @@ export default function AssistantScreen() {
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || isSendingRef.current) return;
+
+      // Check AI consent before sending
+      if (!consent) {
+        setShowConsentDialog(true);
+        return;
+      }
+
       isSendingRef.current = true;
 
       const userMessage: Message = {
@@ -526,7 +570,7 @@ export default function AssistantScreen() {
         }, 100);
       }
     },
-    [messages, nextMessageId]
+    [messages, nextMessageId, consent]
   );
 
   const handleSuggestion = (suggestion: string) => {
@@ -1246,6 +1290,15 @@ export default function AssistantScreen() {
         </View>
       </View>
     </KeyboardAvoidingView>
+    <AiConsentDialog
+      visible={showConsentDialog}
+      onAgree={handleConsentAgree}
+      onDismiss={() => setShowConsentDialog(false)}
+      onViewDetails={() => {
+        setShowConsentDialog(false);
+        router.push("/data-privacy" as any);
+      }}
+    />
     </AnimatedTabScreen>
   );
 }

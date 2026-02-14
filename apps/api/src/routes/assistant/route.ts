@@ -1,8 +1,10 @@
 import { Hono } from "hono";
+import { eq } from "drizzle-orm";
 import { authMiddleware } from "../../middleware/auth";
 import type { ChatMessage } from "./types";
 import { chatSchema } from "./types";
 import { processMessageLLM } from "./process-message";
+import { db, users } from "../../db";
 
 const app = new Hono();
 
@@ -11,6 +13,18 @@ app.use("/*", authMiddleware);
 // POST /api/assistant - Process chat message
 app.post("/", async (c) => {
   const userId = c.get("userId");
+
+  // Check third-party consent before processing
+  const [user] = await db
+    .select({ thirdPartyConsentGranted: users.thirdPartyConsentGranted })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!user?.thirdPartyConsentGranted) {
+    return c.json({ error: "AI consent required", code: "CONSENT_REQUIRED" }, 403);
+  }
+
   const body = await c.req.json();
 
   const validation = chatSchema.safeParse(body);

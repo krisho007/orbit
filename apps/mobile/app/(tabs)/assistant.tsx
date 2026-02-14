@@ -45,6 +45,8 @@ import {
   MapPin,
   Bell,
   SquarePen,
+  LogOut,
+  Settings as SettingsIcon,
 } from "lucide-react-native";
 import {
   assistantApi,
@@ -142,7 +144,7 @@ const REMINDER_STATUS_META: Record<string, string> = {
 export default function AssistantScreen() {
   const router = useRouter();
   const navigation = useNavigation();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
@@ -466,15 +468,37 @@ export default function AssistantScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <Pressable
-          onPress={resetChat}
-          className="mr-4 w-9 h-9 rounded-xl items-center justify-center active:bg-background-100"
-        >
-          <SquarePen size={20} color={getThemeColor(colors, "typography-700")} />
-        </Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Pressable
+            onPress={resetChat}
+            className="mr-2 w-9 h-9 rounded-xl items-center justify-center active:bg-background-100"
+          >
+            <SquarePen size={20} color={getThemeColor(colors, "typography-700")} />
+          </Pressable>
+          {Platform.OS === "web" && (
+            <>
+              <Pressable
+                onPress={() => router.push("/(tabs)/settings")}
+                style={{ padding: 6, borderRadius: 8, marginRight: 4 }}
+              >
+                <SettingsIcon size={20} color={getThemeColor(colors, "typography-600")} />
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  if (window.confirm("Are you sure you want to sign out?")) {
+                    signOut();
+                  }
+                }}
+                style={{ padding: 6, borderRadius: 8, marginRight: 16 }}
+              >
+                <LogOut size={20} color={getThemeColor(colors, "typography-600")} />
+              </Pressable>
+            </>
+          )}
+        </View>
       ),
     });
-  }, [navigation, resetChat, colors]);
+  }, [navigation, resetChat, colors, router, signOut]);
 
   useFocusEffect(
     useCallback(() => {

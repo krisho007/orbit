@@ -69,6 +69,12 @@ app.onError((err, c) => {
   return c.json({ error: "Internal server error" }, 500);
 });
 
+// Landing page
+const landingHtml = await Bun.file(import.meta.dir + "/landing.html").text();
+app.get("/", (c) => {
+  return c.html(landingHtml);
+});
+
 // Serve Expo Web static files (after API routes)
 // This serves the web UI for all non-API routes
 app.use("*", serveStatic({ root: "./public" }));

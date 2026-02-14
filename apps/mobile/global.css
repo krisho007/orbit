@@ -1,3 +1,23 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Letterbox: constrain web to landscape-tablet width */
+@media (min-width: 1081px) {
+  html {
+    background-color: #f0eeeb;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    html {
+      background-color: #1c1917;
+    }
+  }
+
+  #root {
+    max-width: 1080px;
+    margin: 0 auto;
+    min-height: 100vh;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.08);
+  }
+}

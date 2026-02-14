@@ -2,11 +2,14 @@
 # Build from repo root: docker build -f apps/api/Dockerfile .
 
 # ==================================
-# Stage 1: Build Expo Web (using Node for Metro compatibility)
+# Stage 1: Build Expo Web (Node for Metro, Bun for dependency resolution)
 # ==================================
 FROM node:20-slim AS web-builder
 
 WORKDIR /build
+
+# Install Bun for dependency resolution (handles peer deps correctly)
+RUN npm install -g bun
 
 # Build arguments for Expo (needed at build time for static rendering)
 ARG EXPO_PUBLIC_SUPABASE_URL
@@ -19,15 +22,15 @@ ENV EXPO_PUBLIC_SUPABASE_ANON_KEY=$EXPO_PUBLIC_SUPABASE_ANON_KEY
 ENV EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL
 
 # Copy mobile app package files
-COPY apps/mobile/package.json apps/mobile/package-lock.json* apps/mobile/bun.lock* ./
+COPY apps/mobile/package.json apps/mobile/bun.lock* ./
 
-# Install dependencies with npm (more reliable for Expo/Metro)
-RUN npm install
+# Install dependencies with Bun (resolves peer deps properly)
+RUN bun install --frozen-lockfile
 
 # Copy mobile app source
 COPY apps/mobile/ ./
 
-# Build Expo Web (static export)
+# Build Expo Web (static export using Node/Metro)
 ENV NODE_ENV=production
 RUN npx expo export --platform web
 

@@ -14,10 +14,10 @@ Hono serves the API at `/api/*` and the Expo Web static files at `/*` with SPA f
 
 ```bash
 # From repo root
-./scripts/deploy-fly.sh
+fly deploy
 ```
 
-This runs `fly deploy` using `apps/api/Dockerfile` and the `fly.toml` config at the repo root.
+Uses `apps/api/Dockerfile` and the `fly.toml` config at the repo root.
 
 ### Database Migrations
 
@@ -33,7 +33,7 @@ bun run db:generate
 bun run db:migrate
 # 5. Deploy API (if code changes too)
 cd ../..
-./scripts/deploy-fly.sh
+fly deploy
 ```
 
 **Always run migrations BEFORE deploying** new API code that depends on schema changes.
@@ -53,8 +53,8 @@ All profiles connect to the same backend. The difference is build type only.
 
 | Changed... | Action |
 |---|---|
-| Mobile UI only | `./scripts/deploy-fly.sh` (rebuilds web + API image) |
-| API code only | `./scripts/deploy-fly.sh` |
+| Mobile UI only | `fly deploy` (rebuilds web + API image) |
+| API code only | `fly deploy` |
 | DB schema only | `cd apps/api && bun run db:generate && bun run db:migrate` |
 | Schema + API | Migrate first, then deploy |
 | Mobile native deps | `eas build --profile development --platform android` |

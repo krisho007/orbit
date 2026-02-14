@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orbit — Your Personal CRM for Real Relationships</title>
+  <meta name="description" content="Orbit is a privacy-first personal CRM that helps you nurture real relationships. AI-powered, GDPR-compliant, open-source. Free during beta.">
+  <meta property="og:title" content="Orbit — Your Personal CRM for Real Relationships">
+  <meta property="og:description" content="Stay connected with the people who matter. AI-powered contact management, conversation logging, smart reminders, and voice notes.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://www.myorbit360.com">
+  <link rel="canonical" href="https://www.myorbit360.com">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            teal: {
+              50: '#F0FDFA', 100: '#CCFBF1', 200: '#99F6E4', 300: '#5EEAD4',
+              400: '#2DD4BF', 500: '#14B8A6', 600: '#0D9488', 700: '#0F766E',
+              800: '#115E59', 900: '#134E4A', 950: '#042F2E',
+            },
+            tangerine: {
+              50: '#FFF7ED', 100: '#FFEDD5', 200: '#FED7AA', 300: '#FDBA74',
+              400: '#FB923C', 500: '#F97316', 600: '#EA580C', 700: '#C2410C',
+            },
+            stone: {
+              50: '#FAFAF9', 100: '#F5F5F4', 200: '#E7E5E4', 300: '#D6D3D1',
+              400: '#A8A29E', 500: '#78716C', 600: '#57534E', 700: '#44403C',
+              800: '#292524', 900: '#1C1917', 950: '#0C0A09',
+            },
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    .hero-gradient {
+      background: linear-gradient(135deg, #F0FDFA 0%, #CCFBF1 30%, #FFF7ED 70%, #FAFAF9 100%);
+    }
+    .hero-mesh {
+      background-image:
+        radial-gradient(at 20% 30%, rgba(20,184,166,0.15) 0%, transparent 50%),
+        radial-gradient(at 80% 20%, rgba(249,115,22,0.1) 0%, transparent 50%),
+        radial-gradient(at 50% 80%, rgba(20,184,166,0.08) 0%, transparent 50%);
+    }
+  </style>
+</head>
+<body class="bg-stone-50 font-sans text-stone-900 antialiased">
+
+  <!-- Navbar -->
+  <header class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-stone-200">
+    <nav class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2">
+        <svg class="w-8 h-8 text-teal-600" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2.5"/>
+          <circle cx="16" cy="16" r="6" fill="currentColor" opacity="0.2"/>
+          <circle cx="16" cy="16" r="3" fill="currentColor"/>
+          <circle cx="16" cy="5" r="2" fill="currentColor"/>
+          <circle cx="25.5" cy="11" r="2" fill="currentColor"/>
+          <circle cx="25.5" cy="21" r="2" fill="currentColor"/>
+          <circle cx="16" cy="27" r="2" fill="currentColor"/>
+          <circle cx="6.5" cy="21" r="2" fill="currentColor"/>
+          <circle cx="6.5" cy="11" r="2" fill="currentColor"/>
+        </svg>
+        <span class="text-xl font-bold text-stone-900">Orbit</span>
+      </a>
+      <div class="hidden md:flex items-center gap-8">
+        <a href="#features" class="text-sm font-medium text-stone-600 hover:text-teal-600 transition-colors">Features</a>
+        <a href="#privacy" class="text-sm font-medium text-stone-600 hover:text-teal-600 transition-colors">Privacy</a>
+        <a href="#open-source" class="text-sm font-medium text-stone-600 hover:text-teal-600 transition-colors">Open Source</a>
+        <a href="#pricing" class="text-sm font-medium text-stone-600 hover:text-teal-600 transition-colors">Pricing</a>
+      </div>
+      <a href="/(auth)/sign-in" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 rounded-lg transition-colors">
+        Sign In
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+      </a>
+    </nav>
+  </header>
+
+  <main>
+
+    <!-- Hero -->
+    <section class="hero-gradient hero-mesh relative overflow-hidden">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-24 sm:pt-28 sm:pb-32">
+        <div class="max-w-3xl mx-auto text-center">
+          <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-stone-900 leading-tight">
+            Your Personal CRM for <span class="text-teal-600">Real Relationships</span>
+          </h1>
+          <p class="mt-4 text-xl sm:text-2xl font-semibold text-tangerine-500">
+            Network is Networth!
+          </p>
+          <p class="mt-4 text-lg text-stone-600 max-w-2xl mx-auto leading-relaxed">
+            Stay connected with the people who matter. Log conversations, set smart reminders, track events, and let AI help you nurture your most important relationships.
+          </p>
+          <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <a href="/(auth)/sign-in" class="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-xl shadow-lg shadow-teal-600/25 transition-all hover:shadow-xl hover:shadow-teal-600/30">
+              Get Started Free
+              <svg class="ml-2 w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+            </a>
+            <a href="https://github.com/krisho007/orbit" target="_blank" rel="noopener noreferrer" class="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold text-stone-700 bg-white border border-stone-300 hover:border-stone-400 rounded-xl transition-all hover:shadow-md">
+              <svg class="mr-2 w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+              View on GitHub
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="py-20 sm:py-28 bg-white">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center max-w-2xl mx-auto">
+          <h2 class="text-3xl sm:text-4xl font-bold text-stone-900">Everything you need to stay connected</h2>
+          <p class="mt-4 text-lg text-stone-500">Powerful tools to manage your personal and professional relationships, all in one place.</p>
+        </div>
+        <div class="mt-16 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+
+          <!-- Contact Management -->
+          <div class="group p-6 rounded-2xl border border-stone-200 hover:border-teal-200 bg-white hover:shadow-lg hover:shadow-teal-600/5 transition-all">
+            <div class="w-12 h-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center mb-4">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>
+            </div>
+            <h3 class="text-lg font-semibold text-stone-900">Contact Management</h3>
+            <p class="mt-2 text-stone-500 leading-relaxed">Organize your contacts with tags, relationship types, and custom notes. Find anyone instantly.</p>
+          </div>
+
+          <!-- Conversation Logging -->
+          <div class="group p-6 rounded-2xl border border-stone-200 hover:border-teal-200 bg-white hover:shadow-lg hover:shadow-teal-600/5 transition-all">
+            <div class="w-12 h-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center mb-4">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155"/></svg>
+            </div>
+            <h3 class="text-lg font-semibold text-stone-900">Conversation Logging</h3>
+            <p class="mt-2 text-stone-500 leading-relaxed">Record what you talked about, when, and any follow-ups. Never forget an important conversation again.</p>
+          </div>
+
+          <!-- AI Assistant -->
+          <div class="group p-6 rounded-2xl border border-stone-200 hover:border-tangerine-200 bg-white hover:shadow-lg hover:shadow-tangerine-500/5 transition-all">
+            <div class="w-12 h-12 rounded-xl bg-tangerine-50 text-tangerine-500 flex items-center justify-center mb-4">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"/></svg>
+            </div>
+            <h3 class="text-lg font-semibold text-stone-900">AI Assistant</h3>
+            <p class="mt-2 text-stone-500 leading-relaxed">Gemini-powered assistant that helps you draft messages, summarize interactions, and surface relationship insights.</p>
+          </div>
+
+          <!-- Smart Reminders -->
+          <div class="group p-6 rounded-2xl border border-stone-200 hover:border-teal-200 bg-white hover:shadow-lg hover:shadow-teal-600/5 transition-all">
+            <div class="w-12 h-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center mb-4">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>
+            </div>
+            <h3 class="text-lg font-semibold text-stone-900">Smart Reminders</h3>
+            <p class="mt-2 text-stone-500 leading-relaxed">Set follow-up reminders so you never lose touch. Get nudges to reconnect at just the right time.</p>
+          </div>
+
+          <!-- Event Tracking -->
+          <div class="group p-6 rounded-2xl border border-stone-200 hover:border-teal-200 bg-white hover:shadow-lg hover:shadow-teal-600/5 transition-all">
+            <div class="w-12 h-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center mb-4">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6h.008v.008H12v-.008zM12 15h.008v.008H12V15zm0 2.25h.008v.008H12v-.008zM9.75 15h.008v.008H9.75V15zm0 2.25h.008v.008H9.75v-.008zM7.5 15h.008v.008H7.5V15zm0 2.25h.008v.008H7.5v-.008zm6.75-4.5h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V15zm0 2.25h.008v.008h-.008v-.008zm2.25-4.5h.008v.008H16.5v-.008zm0 2.25h.008v.008H16.5V15z"/></svg>
+            </div>
+            <h3 class="text-lg font-semibold text-stone-900">Event Tracking</h3>
+            <p class="mt-2 text-stone-500 leading-relaxed">Remember birthdays, anniversaries, and milestones. Keep a timeline of meaningful moments with each contact.</p>
+          </div>
+
+          <!-- Voice Notes -->
+          <div class="group p-6 rounded-2xl border border-stone-200 hover:border-tangerine-200 bg-white hover:shadow-lg hover:shadow-tangerine-500/5 transition-all">
+            <div class="w-12 h-12 rounded-xl bg-tangerine-50 text-tangerine-500 flex items-center justify-center mb-4">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"/></svg>
+            </div>
+            <h3 class="text-lg font-semibold text-stone-900">Voice Notes</h3>
+            <p class="mt-2 text-stone-500 leading-relaxed">Record voice memos after meetings and calls. Automatic transcription turns spoken words into searchable text.</p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Privacy / GDPR -->
+    <section id="privacy" class="py-20 sm:py-28 bg-stone-50">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center max-w-2xl mx-auto">
+          <h2 class="text-3xl sm:text-4xl font-bold text-stone-900">Privacy-First by Design</h2>
+          <p class="mt-4 text-lg text-stone-500">Your data belongs to you. We built Orbit from the ground up with privacy and GDPR compliance at its core.</p>
+        </div>
+        <div class="mt-16 grid grid-cols-1 sm:grid-cols-2 gap-8 max-w-4xl mx-auto">
+
+          <div class="flex gap-4 p-6 rounded-2xl bg-white border border-stone-200">
+            <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+            </div>
+            <div>
+              <h3 class="font-semibold text-stone-900">Data Isolation</h3>
+              <p class="mt-1 text-sm text-stone-500">Multi-tenant architecture ensures your data is completely separated from other users. Every query is scoped to your account.</p>
+            </div>
+          </div>
+
+          <div class="flex gap-4 p-6 rounded-2xl bg-white border border-stone-200">
+            <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+            </div>
+            <div>
+              <h3 class="font-semibold text-stone-900">GDPR Compliant</h3>
+              <p class="mt-1 text-sm text-stone-500">Full data export and account deletion at any time. You have complete control over your personal data.</p>
+            </div>
+          </div>
+
+          <div class="flex gap-4 p-6 rounded-2xl bg-white border border-stone-200">
+            <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88"/></svg>
+            </div>
+            <div>
+              <h3 class="font-semibold text-stone-900">Minimal Data Collection</h3>
+              <p class="mt-1 text-sm text-stone-500">We only collect what's needed to make the app work. No tracking, no ads, no selling your data.</p>
+            </div>
+          </div>
+
+          <div class="flex gap-4 p-6 rounded-2xl bg-white border border-stone-200">
+            <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
+            </div>
+            <div>
+              <h3 class="font-semibold text-stone-900">Third-Party Transparency</h3>
+              <p class="mt-1 text-sm text-stone-500">We're upfront about every service we use: Supabase (auth & database), Google Gemini (AI), and Sarvam AI (voice). That's it.</p>
+            </div>
+          </div>
+
+        </div>
+        <div class="mt-8 text-center">
+          <a href="/privacy" class="text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors">
+            Read our full Privacy Policy &rarr;
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Open Source -->
+    <section id="open-source" class="py-20 sm:py-28 bg-white">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="max-w-3xl mx-auto text-center">
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-stone-900 text-white mb-6">
+            <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          </div>
+          <h2 class="text-3xl sm:text-4xl font-bold text-stone-900">Open Source & Self-Hostable</h2>
+          <p class="mt-4 text-lg text-stone-500 max-w-2xl mx-auto leading-relaxed">
+            Orbit is fully open source. Inspect the code, contribute improvements, or self-host your own instance for complete data sovereignty. No vendor lock-in, ever.
+          </p>
+          <div class="mt-8">
+            <a href="https://github.com/krisho007/orbit" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-6 py-3 text-base font-semibold text-white bg-stone-900 hover:bg-stone-800 rounded-xl transition-colors">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+              Star on GitHub
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pricing -->
+    <section id="pricing" class="py-20 sm:py-28 bg-stone-50">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center max-w-2xl mx-auto">
+          <h2 class="text-3xl sm:text-4xl font-bold text-stone-900">Simple, Transparent Pricing</h2>
+          <p class="mt-4 text-lg text-stone-500">Free during beta with all features. Lock in discounted pricing now &mdash; before beta ends.</p>
+        </div>
+        <div class="mt-12 grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+
+          <!-- Free Tier -->
+          <div class="rounded-2xl border border-stone-200 bg-white p-8">
+            <h3 class="text-lg font-semibold text-stone-900">Free</h3>
+            <div class="mt-4 flex items-baseline gap-2">
+              <span class="text-5xl font-extrabold text-stone-900">$0</span>
+              <span class="text-lg text-stone-500">/month</span>
+            </div>
+            <p class="mt-1 text-sm text-teal-600 font-medium">All features included during beta</p>
+            <ul class="mt-6 space-y-3">
+              <li class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-teal-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                <span class="text-stone-700">Unlimited contacts</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-teal-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                <span class="text-stone-700">AI assistant</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-teal-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                <span class="text-stone-700">Voice transcription</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-teal-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                <span class="text-stone-700">Web + mobile apps</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-teal-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                <span class="text-stone-700">Reminders & event tracking</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-teal-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                <span class="text-stone-700">GDPR data export & deletion</span>
+              </li>
+            </ul>
+            <a href="/(auth)/sign-in" class="mt-8 w-full inline-flex items-center justify-center px-6 py-3.5 text-base font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 rounded-xl transition-colors">
+              Get Started Free
+            </a>
+          </div>
+
+          <!-- Pro Tier -->
+          <div class="rounded-2xl border-2 border-teal-500 bg-white p-8 shadow-lg shadow-teal-600/10 relative">
+            <div class="absolute -top-3.5 left-6 px-3 py-1 bg-tangerine-500 text-white text-xs font-bold rounded-full uppercase tracking-wide">Beta Pricing</div>
+            <h3 class="text-lg font-semibold text-stone-900">Pro</h3>
+            <div class="mt-4">
+              <!-- Monthly -->
+              <div class="flex items-baseline gap-2">
+                <span class="text-lg text-stone-400 line-through">$6</span>
+                <span class="text-5xl font-extrabold text-stone-900">$4</span>
+                <span class="text-lg text-stone-500">/month</span>
+              </div>
+              <!-- Yearly -->
+              <div class="mt-2 flex items-baseline gap-2">
+                <span class="text-sm text-stone-400 line-through">$49/year</span>
+                <span class="text-sm font-semibold text-teal-600">$29/year</span>
+                <span class="text-xs text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full font-medium">Save 40%</span>
+              </div>
+            </div>
+            <p class="mt-2 text-sm text-tangerine-600 font-medium">Lock in this price &mdash; subscribe during beta</p>
+            <ul class="mt-6 space-y-3">
+              <li class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-teal-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                <span class="text-stone-700">Everything in Free</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-teal-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                <span class="text-stone-700">Priority support</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-teal-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                <span class="text-stone-700">Early access to new features</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-teal-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                <span class="text-stone-700">Locked-in beta pricing forever</span>
+              </li>
+            </ul>
+            <a href="/(auth)/sign-in" class="mt-8 w-full inline-flex items-center justify-center px-6 py-3.5 text-base font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-xl shadow-lg shadow-teal-600/25 transition-all hover:shadow-xl">
+              Lock In Beta Price
+            </a>
+            <p class="mt-4 text-xs text-center text-stone-400">Price increases to $6/mo &middot; $49/yr after beta</p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-stone-900 text-stone-400">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="flex items-center gap-2">
+          <svg class="w-7 h-7 text-teal-400" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2.5"/>
+            <circle cx="16" cy="16" r="6" fill="currentColor" opacity="0.2"/>
+            <circle cx="16" cy="16" r="3" fill="currentColor"/>
+            <circle cx="16" cy="5" r="2" fill="currentColor"/>
+            <circle cx="25.5" cy="11" r="2" fill="currentColor"/>
+            <circle cx="25.5" cy="21" r="2" fill="currentColor"/>
+            <circle cx="16" cy="27" r="2" fill="currentColor"/>
+            <circle cx="6.5" cy="21" r="2" fill="currentColor"/>
+            <circle cx="6.5" cy="11" r="2" fill="currentColor"/>
+          </svg>
+          <span class="text-lg font-bold text-white">Orbit</span>
+        </div>
+        <div class="flex flex-wrap items-center justify-center gap-6 text-sm">
+          <a href="/privacy" class="hover:text-white transition-colors">Privacy Policy</a>
+          <a href="/terms" class="hover:text-white transition-colors">Terms</a>
+          <a href="https://github.com/krisho007/orbit" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">GitHub</a>
+          <a href="/(auth)/sign-in" class="hover:text-white transition-colors">Sign In</a>
+        </div>
+      </div>
+      <div class="mt-8 pt-8 border-t border-stone-800 text-center text-sm text-stone-500">
+        &copy; 2025 Orbit. All rights reserved.
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

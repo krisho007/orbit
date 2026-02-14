@@ -276,6 +276,19 @@ export const tagsApi = {
   delete: (id: string) => api.delete(`/api/tags/${id}`),
 };
 
+// User / GDPR
+export const userApi = {
+  getConsent: () =>
+    api.get<{ aiConsent: boolean; sttConsent: boolean }>("/api/users/me/consent"),
+
+  updateConsent: (data: { aiConsent?: boolean; sttConsent?: boolean }) =>
+    api.put<{ success: true }>("/api/users/me/consent", data),
+
+  exportData: () => api.get<Record<string, unknown>>("/api/users/me/export"),
+
+  deleteAccount: () => api.delete<{ success: true }>("/api/users/me"),
+};
+
 // Assistant
 export type AssistantContactCard = {
   id: string;

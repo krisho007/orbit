@@ -1,9 +1,12 @@
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../lib/auth";
 import { useState } from "react";
 import { Users, MessageCircle, CalendarDays, Sparkles } from "lucide-react-native";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
+
+const PRIVACY_POLICY_URL = "https://www.myorbit360.com/privacy";
+const TERMS_URL = "https://www.myorbit360.com/terms";
 
 export default function SignIn() {
   const { signInWithGoogle } = useAuth();
@@ -96,7 +99,20 @@ export default function SignIn() {
         </Pressable>
 
         <Text className="text-typography-400 text-sm text-center mt-8 px-4">
-          By continuing, you agree to our Terms of Service and Privacy Policy
+          By continuing, you agree to our{" "}
+          <Text
+            className="text-primary-600 underline"
+            onPress={() => Linking.openURL(TERMS_URL)}
+          >
+            Terms of Service
+          </Text>
+          {" "}and{" "}
+          <Text
+            className="text-primary-600 underline"
+            onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
+          >
+            Privacy Policy
+          </Text>
         </Text>
       </View>
     </SafeAreaView>

@@ -75,6 +75,7 @@ export async function createConversation(
       followUpAt: followUpAt ? new Date(followUpAt) : null,
       eventId: eventId || null,
       userId,
+      updatedAt: new Date(),
     })
     .returning();
 
@@ -310,6 +311,7 @@ export async function createConversationByIds(
       happenedAt: new Date(payload.happenedAt),
       followUpAt: payload.followUpAt ? new Date(payload.followUpAt) : null,
       eventId: payload.eventId || null,
+      updatedAt: new Date(),
     })
     .returning();
 

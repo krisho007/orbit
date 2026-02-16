@@ -10,7 +10,7 @@ import {
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { format } from "date-fns";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import {
@@ -33,6 +33,7 @@ const RECURRENCE_OPTIONS: Array<{ value: ReminderRecurrence; label: string }> = 
 
 export default function NewReminderScreen() {
   const router = useRouter();
+  const { contactId } = useLocalSearchParams<{ contactId?: string }>();
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -55,6 +56,15 @@ export default function NewReminderScreen() {
     recurrence: "NONE" as ReminderRecurrence,
     recurrenceInterval: "1",
   });
+
+  useEffect(() => {
+    if (!contactId) return;
+    contactsApi.get(contactId).then((contact) => {
+      setSelectedParticipants((prev) =>
+        prev.some((p) => p.id === contact.id) ? prev : [...prev, contact]
+      );
+    }).catch((err) => console.error("Failed to load contact for pre-selection:", err));
+  }, [contactId]);
 
   useEffect(() => {
     if (contactSearch.trim().length < 2) {

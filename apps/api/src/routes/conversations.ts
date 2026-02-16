@@ -463,6 +463,7 @@ app.post("/", async (c) => {
         happenedAt: new Date(data.happenedAt),
         followUpAt: data.followUpAt ? new Date(data.followUpAt) : null,
         eventId: data.eventId || null,
+        updatedAt: new Date(),
       })
       .returning();
 

@@ -27,6 +27,7 @@ import {
   Bell,
   CheckCircle2,
   XCircle,
+  Plus,
 } from "lucide-react-native";
 import Svg, { Path } from "react-native-svg";
 import { contactsApi, conversationsApi, remindersApi, Contact, Conversation, Reminder, ReminderStatus } from "../../lib/api";
@@ -408,8 +409,14 @@ export default function ContactDetailScreen() {
 
         {/* Conversations */}
         <View className="px-4 py-4 border-t border-border-200">
-          <View className="mb-3">
+          <View className="mb-3 flex-row items-center justify-between">
             <Text className="text-typography-900 text-base font-semibold">Conversations</Text>
+            <Pressable
+              onPress={() => router.push(`/conversation/new?contactId=${id}`)}
+              className="p-1 active:opacity-50"
+            >
+              <Plus size={20} color={getThemeColor(colors, "primary-600")} />
+            </Pressable>
           </View>
 
           {isLoadingConversations ? (
@@ -491,8 +498,14 @@ export default function ContactDetailScreen() {
 
         {/* Reminders */}
         <View className="px-4 py-4 border-t border-border-200">
-          <View className="mb-3">
+          <View className="mb-3 flex-row items-center justify-between">
             <Text className="text-typography-900 text-base font-semibold">Reminders</Text>
+            <Pressable
+              onPress={() => router.push(`/reminder/new?contactId=${id}`)}
+              className="p-1 active:opacity-50"
+            >
+              <Plus size={20} color={getThemeColor(colors, "primary-600")} />
+            </Pressable>
           </View>
 
           {isLoadingReminders ? (

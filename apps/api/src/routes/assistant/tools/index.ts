@@ -39,7 +39,7 @@ export function buildToolSet(userId: string, schemas: AllSchemas) {
       description: "Propose a create/update action and ask the user to confirm before executing. Use this to present a clear summary of what you plan to do.",
       inputSchema: z.object({
         action: z.string().describe("What you intend to do, e.g. 'Create a phone call conversation with Alice about project timeline'"),
-        details: z.record(z.unknown()).optional().describe("Key details of the proposed action"),
+        details: z.record(z.string(), z.unknown()).optional().describe("Key details of the proposed action"),
       }),
       execute: async ({ action, details }) => ({
         type: "confirmation_requested",

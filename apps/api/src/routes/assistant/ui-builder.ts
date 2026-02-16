@@ -286,7 +286,50 @@ export function buildUiFromToolResults(
 export function summarizeUiText(ui: AssistantUi | null, fallback: string): string {
   if (!ui) return fallback;
 
-  // If the LLM provided meaningful text, prefer it over generic summaries.
+  // ── List-type UIs: cards handle display, so use concise generated text ──
+  // For non-zero counts we always override the LLM text (which tends to
+  // contain redundant numbered lists).  For zero counts we prefer the LLM
+  // text because it may contain a helpful follow-up like "No contacts found
+  // matching 'Xyzzy'. Want to create one?"
+
+  if (ui.kind === "contacts") {
+    if (ui.count === 0) return fallback || "No contacts found.";
+    if (ui.contacts.length < ui.count) {
+      return `Showing ${ui.contacts.length} of ${ui.count} contacts.`;
+    }
+    return `Showing ${ui.count} contact${ui.count === 1 ? "" : "s"}.`;
+  }
+
+  if (ui.kind === "conversations") {
+    if (ui.count === 0) return fallback || "No conversations found.";
+    if (ui.conversations.length < ui.count) {
+      return `Showing ${ui.conversations.length} of ${ui.count} conversations.`;
+    }
+    return `Showing ${ui.count} conversation${ui.count === 1 ? "" : "s"}.`;
+  }
+
+  if (ui.kind === "events") {
+    if (ui.count === 0) return fallback || "No events found.";
+    if (ui.events.length < ui.count) {
+      return `Showing ${ui.events.length} of ${ui.count} events.`;
+    }
+    return `Showing ${ui.count} event${ui.count === 1 ? "" : "s"}.`;
+  }
+
+  if (ui.kind === "reminders") {
+    if (ui.count === 0) return fallback || "No reminders found.";
+    if (ui.reminders.length < ui.count) {
+      return `Showing ${ui.reminders.length} of ${ui.count} reminders.`;
+    }
+    return `Showing ${ui.count} reminder${ui.count === 1 ? "" : "s"}.`;
+  }
+
+  if (ui.kind === "selection") {
+    return `Please pick one of the ${ui.options.length} options below.`;
+  }
+
+  // ── Non-list UIs: prefer LLM text when available ──
+
   if (fallback && fallback.trim().length > 0) return fallback;
 
   if (ui.kind === "created") {
@@ -306,38 +349,6 @@ export function summarizeUiText(ui: AssistantUi | null, fallback: string): strin
     ].filter(Boolean);
 
     return chunks.length > 0 ? `Logged ${chunks.join(", ")}.` : "Done.";
-  }
-
-  if (ui.kind === "contacts") {
-    if (ui.count === 0) return "No contacts found.";
-    if (ui.contacts.length < ui.count) {
-      return `Showing ${ui.contacts.length} of ${ui.count} contacts.`;
-    }
-    return `Showing ${ui.count} contact${ui.count === 1 ? "" : "s"}.`;
-  }
-
-  if (ui.kind === "conversations") {
-    if (ui.count === 0) return "No conversations found.";
-    if (ui.conversations.length < ui.count) {
-      return `Showing ${ui.conversations.length} of ${ui.count} conversations.`;
-    }
-    return `Showing ${ui.count} conversation${ui.count === 1 ? "" : "s"}.`;
-  }
-
-  if (ui.kind === "events") {
-    if (ui.count === 0) return "No events found.";
-    if (ui.events.length < ui.count) {
-      return `Showing ${ui.events.length} of ${ui.count} events.`;
-    }
-    return `Showing ${ui.count} event${ui.count === 1 ? "" : "s"}.`;
-  }
-
-  if (ui.kind === "reminders") {
-    if (ui.count === 0) return "No reminders found.";
-    if (ui.reminders.length < ui.count) {
-      return `Showing ${ui.reminders.length} of ${ui.count} reminders.`;
-    }
-    return `Showing ${ui.count} reminder${ui.count === 1 ? "" : "s"}.`;
   }
 
   if (ui.kind === "contact") {

@@ -55,6 +55,8 @@ export const reminderRecurrenceEnum = pgEnum("ReminderRecurrence", [
   "YEARLY",
 ]);
 
+export const assistantMessageRoleEnum = pgEnum("AssistantMessageRole", ["user", "assistant"]);
+
 // ============================================
 // Users (Supabase Auth - reference only)
 // ============================================
@@ -96,6 +98,7 @@ export const contacts = pgTable(
     jobTitle: text("jobTitle"),
     location: text("location"),
     notes: text("notes"),
+    assistantConversationId: text("assistantConversationId"),
     createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
   },
@@ -157,6 +160,7 @@ export const conversations = pgTable(
     happenedAt: timestamp("happenedAt", { mode: "date" }).notNull(),
     followUpAt: timestamp("followUpAt", { mode: "date" }),
     eventId: text("eventId"),
+    assistantConversationId: text("assistantConversationId"),
     createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
   },
@@ -200,6 +204,7 @@ export const reminders = pgTable(
     recurrenceEndsAt: timestamp("recurrenceEndsAt", { mode: "date" }),
     conversationId: text("conversationId"),
     isAutoFromConversation: boolean("isAutoFromConversation").default(false).notNull(),
+    assistantConversationId: text("assistantConversationId"),
     createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
   },
@@ -245,6 +250,7 @@ export const events = pgTable(
     startAt: timestamp("startAt", { mode: "date" }).notNull(),
     endAt: timestamp("endAt", { mode: "date" }),
     location: text("location"),
+    assistantConversationId: text("assistantConversationId"),
     createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
   },
@@ -355,10 +361,60 @@ export const contactImages = pgTable(
 );
 
 // ============================================
+// Assistant Conversation Models
+// ============================================
+
+export const assistantConversations = pgTable(
+  "assistant_conversations",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("userId").notNull(),
+    title: text("title"),
+    createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("assistant_conversations_userId_idx").on(table.userId),
+    index("assistant_conversations_userId_updatedAt_idx").on(table.userId, table.updatedAt),
+  ]
+);
+
+export const assistantMessages = pgTable(
+  "assistant_messages",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    assistantConversationId: text("assistantConversationId").notNull(),
+    role: assistantMessageRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    ui: text("ui"),
+    createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("assistant_messages_conversationId_idx").on(table.assistantConversationId),
+    index("assistant_messages_convId_createdAt_idx").on(table.assistantConversationId, table.createdAt),
+  ]
+);
+
+// ============================================
 // Relations
 // ============================================
 
-export const contactsRelations = relations(contacts, ({ many }) => ({
+export const assistantConversationsRelations = relations(assistantConversations, ({ many }) => ({
+  messages: many(assistantMessages),
+}));
+
+export const assistantMessagesRelations = relations(assistantMessages, ({ one }) => ({
+  conversation: one(assistantConversations, {
+    fields: [assistantMessages.assistantConversationId],
+    references: [assistantConversations.id],
+  }),
+}));
+
+export const contactsRelations = relations(contacts, ({ one, many }) => ({
   tags: many(contactTags),
   conversationParticipants: many(conversationParticipants),
   reminderParticipants: many(reminderParticipants),
@@ -367,6 +423,10 @@ export const contactsRelations = relations(contacts, ({ many }) => ({
   relationshipsTo: many(relationships, { relationName: "toContact" }),
   socialLinks: many(socialLinks),
   images: many(contactImages),
+  assistantConversation: one(assistantConversations, {
+    fields: [contacts.assistantConversationId],
+    references: [assistantConversations.id],
+  }),
 }));
 
 export const tagsRelations = relations(tags, ({ many }) => ({
@@ -391,6 +451,10 @@ export const conversationsRelations = relations(conversations, ({ one, many }) =
   }),
   participants: many(conversationParticipants),
   reminders: many(reminders),
+  assistantConversation: one(assistantConversations, {
+    fields: [conversations.assistantConversationId],
+    references: [assistantConversations.id],
+  }),
 }));
 
 export const conversationParticipantsRelations = relations(conversationParticipants, ({ one }) => ({
@@ -410,6 +474,10 @@ export const remindersRelations = relations(reminders, ({ one, many }) => ({
     references: [conversations.id],
   }),
   participants: many(reminderParticipants),
+  assistantConversation: one(assistantConversations, {
+    fields: [reminders.assistantConversationId],
+    references: [assistantConversations.id],
+  }),
 }));
 
 export const reminderParticipantsRelations = relations(reminderParticipants, ({ one }) => ({
@@ -423,9 +491,13 @@ export const reminderParticipantsRelations = relations(reminderParticipants, ({ 
   }),
 }));
 
-export const eventsRelations = relations(events, ({ many }) => ({
+export const eventsRelations = relations(events, ({ one, many }) => ({
   participants: many(eventParticipants),
   conversations: many(conversations),
+  assistantConversation: one(assistantConversations, {
+    fields: [events.assistantConversationId],
+    references: [assistantConversations.id],
+  }),
 }));
 
 export const eventParticipantsRelations = relations(eventParticipants, ({ one }) => ({
@@ -489,3 +561,7 @@ export type Relationship = typeof relationships.$inferSelect;
 export type RelationshipType = typeof relationshipTypes.$inferSelect;
 export type SocialLink = typeof socialLinks.$inferSelect;
 export type ContactImage = typeof contactImages.$inferSelect;
+export type AssistantConversation = typeof assistantConversations.$inferSelect;
+export type NewAssistantConversation = typeof assistantConversations.$inferInsert;
+export type AssistantMessage = typeof assistantMessages.$inferSelect;
+export type NewAssistantMessage = typeof assistantMessages.$inferInsert;

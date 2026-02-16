@@ -8,6 +8,7 @@ export const messageSchema = z.object({
 
 export const chatSchema = z.object({
   messages: z.array(messageSchema),
+  conversationId: z.string().optional(),
 });
 
 export const PAGE_SIZE = 20;

@@ -88,6 +88,10 @@ class ApiClient {
     return this.request<T>(path, { method: "PUT", body });
   }
 
+  patch<T>(path: string, body?: unknown) {
+    return this.request<T>(path, { method: "PATCH", body });
+  }
+
   delete<T>(path: string) {
     return this.request<T>(path, { method: "DELETE" });
   }
@@ -353,9 +357,52 @@ export type ChatMessage = {
   ui?: AssistantUi | null;
 };
 
+export type ChatResponse = ChatMessage & {
+  conversationId: string;
+};
+
+export type AssistantConversationSummary = {
+  id: string;
+  title: string | null;
+  updatedAt: string;
+  lastMessage: { content: string; role: "user" | "assistant" } | null;
+};
+
+export type AssistantConversationDetail = {
+  id: string;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messages: Array<{
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+    ui: AssistantUi | null;
+    createdAt: string;
+  }>;
+};
+
 export const assistantApi = {
-  chat: (messages: ChatMessage[]) =>
-    api.post<ChatMessage>("/api/assistant", { messages }),
+  chat: (messages: ChatMessage[], conversationId?: string) =>
+    api.post<ChatResponse>("/api/assistant", { messages, conversationId }),
+
+  listConversations: (cursor?: string) =>
+    api.get<{
+      conversations: AssistantConversationSummary[];
+      nextCursor: string | null;
+    }>("/api/assistant/conversations", cursor ? { cursor } : undefined),
+
+  getConversation: (id: string) =>
+    api.get<AssistantConversationDetail>(`/api/assistant/conversations/${id}`),
+
+  deleteConversation: (id: string) =>
+    api.delete<{ success: boolean }>(`/api/assistant/conversations/${id}`),
+
+  updateConversationTitle: (id: string, title: string) =>
+    api.patch<{ id: string; title: string; updatedAt: string }>(
+      `/api/assistant/conversations/${id}`,
+      { title }
+    ),
 };
 
 export const speechApi = {

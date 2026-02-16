@@ -26,7 +26,8 @@ export async function createConversation(
   content?: string,
   happenedAt?: string,
   followUpAt?: string,
-  eventId?: string
+  eventId?: string,
+  assistantConversationId?: string
 ): Promise<ToolResult> {
   let resolvedParticipantIds: string[] = [];
 
@@ -76,6 +77,7 @@ export async function createConversation(
       eventId: eventId || null,
       userId,
       updatedAt: new Date(),
+      assistantConversationId: assistantConversationId || null,
     })
     .returning();
 
@@ -298,7 +300,8 @@ export async function createConversationByIds(
     followUpAt?: string;
     eventId?: string;
     participantIds: string[];
-  }
+  },
+  assistantConversationId?: string
 ): Promise<ToolResult> {
   const participantIds = [...new Set(payload.participantIds)];
 
@@ -312,6 +315,7 @@ export async function createConversationByIds(
       followUpAt: payload.followUpAt ? new Date(payload.followUpAt) : null,
       eventId: payload.eventId || null,
       updatedAt: new Date(),
+      assistantConversationId: assistantConversationId || null,
     })
     .returning();
 
@@ -543,7 +547,7 @@ export async function listConversationsByContacts(
 
 // ── Tool definitions ─────────────────────────────────────────────────
 
-export function createConversationTools(userId: string, schemas: EnumSchemas) {
+export function createConversationTools(userId: string, schemas: EnumSchemas, assistantConversationId?: string) {
   return {
     create_conversation: tool({
       description: "Create a new conversation record with participant contact IDs",
@@ -556,7 +560,7 @@ export function createConversationTools(userId: string, schemas: EnumSchemas) {
         eventId: z.string().optional().describe("Linked event ID, if any"),
       }),
       execute: async ({ participantIds, medium, content, happenedAt, followUpAt, eventId }) =>
-        createConversation(userId, participantIds, medium as string, content, happenedAt, followUpAt, eventId),
+        createConversation(userId, participantIds, medium as string, content, happenedAt, followUpAt, eventId, assistantConversationId),
     }),
 
     query_conversations: tool({
@@ -630,7 +634,7 @@ export function createConversationTools(userId: string, schemas: EnumSchemas) {
         participantIds: z.array(z.string()).describe("Participant contact ids"),
       }),
       execute: async ({ content, medium, happenedAt, followUpAt, eventId, participantIds }) =>
-        createConversationByIds(userId, { content, medium, happenedAt, followUpAt, eventId, participantIds }),
+        createConversationByIds(userId, { content, medium, happenedAt, followUpAt, eventId, participantIds }, assistantConversationId),
     }),
 
     update_conversation_by_id: tool({

@@ -22,7 +22,8 @@ import { buildToolSet } from "./tools";
 export async function processMessageLLM(
   userId: string,
   messages: ChatMessage[],
-  generate: typeof generateText = generateText
+  generate: typeof generateText = generateText,
+  assistantConversationId?: string
 ): Promise<{ text: string; ui: AssistantUi | null }> {
   if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     return {
@@ -76,7 +77,7 @@ export async function processMessageLLM(
     optionalEventTypeSchema,
     optionalReminderStatusSchema,
     completionStatusSchema,
-  });
+  }, assistantConversationId);
 
   // Fetch user context for personalized system prompt
   const userContext = usingMockGenerate

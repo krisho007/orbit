@@ -27,7 +27,8 @@ export async function createEvent(
   endAt?: string,
   location?: string,
   description?: string,
-  eventType?: string
+  eventType?: string,
+  assistantConversationId?: string
 ): Promise<ToolResult> {
   let resolvedParticipantIds: string[] = [];
 
@@ -64,6 +65,7 @@ export async function createEvent(
       endAt: endAt ? new Date(endAt) : null,
       location: location || null,
       userId,
+      assistantConversationId: assistantConversationId || null,
     })
     .returning();
 
@@ -277,7 +279,8 @@ export async function createEventByIds(
     endAt?: string;
     location?: string;
     participantIds?: string[];
-  }
+  },
+  assistantConversationId?: string
 ): Promise<ToolResult> {
   const [newEvent] = await db
     .insert(events)
@@ -289,6 +292,7 @@ export async function createEventByIds(
       startAt: new Date(payload.startAt),
       endAt: payload.endAt ? new Date(payload.endAt) : null,
       location: payload.location || null,
+      assistantConversationId: assistantConversationId || null,
     })
     .returning();
 
@@ -486,7 +490,7 @@ export async function listEventContacts(
 
 // ── Tool definitions ─────────────────────────────────────────────────
 
-export function createEventTools(userId: string, schemas: EnumSchemas) {
+export function createEventTools(userId: string, schemas: EnumSchemas, assistantConversationId?: string) {
   return {
     create_event: tool({
       description: "Create a new event. Use participant contact IDs when linking contacts.",
@@ -500,7 +504,7 @@ export function createEventTools(userId: string, schemas: EnumSchemas) {
         eventType: schemas.eventTypeSchema.describe("Event type value"),
       }),
       execute: async ({ title, participantIds, startAt, endAt, location, description, eventType }) =>
-        createEvent(userId, title, startAt, participantIds, endAt, location, description, eventType),
+        createEvent(userId, title, startAt, participantIds, endAt, location, description, eventType, assistantConversationId),
     }),
 
     query_events: tool({
@@ -560,7 +564,7 @@ export function createEventTools(userId: string, schemas: EnumSchemas) {
         participantIds: z.array(z.string()).optional().describe("Participant contact ids"),
       }),
       execute: async ({ title, description, eventType, startAt, endAt, location, participantIds }) =>
-        createEventByIds(userId, { title, description, eventType, startAt, endAt, location, participantIds }),
+        createEventByIds(userId, { title, description, eventType, startAt, endAt, location, participantIds }, assistantConversationId),
     }),
 
     update_event_by_id: tool({

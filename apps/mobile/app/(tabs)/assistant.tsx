@@ -16,6 +16,7 @@ import {
   Linking,
   Animated,
   Easing,
+  Modal,
 } from "react-native";
 import { useRouter, useNavigation, useFocusEffect } from "expo-router";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -47,6 +48,9 @@ import {
   SquarePen,
   LogOut,
   Settings as SettingsIcon,
+  History,
+  X,
+  Trash2,
 } from "lucide-react-native";
 import {
   assistantApi,
@@ -59,6 +63,7 @@ import {
   AssistantEventCard,
   AssistantReminderCard,
   AssistantSelectionOption,
+  AssistantConversationSummary,
 } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { isAssistantCoachmarkSeen, markAssistantCoachmarkSeen } from "../../lib/onboarding";
@@ -75,12 +80,14 @@ type AssistantDraftState = {
   messages: Message[];
   input: string;
   messageSequence: number;
+  conversationId: string | null;
 };
 
 const assistantDraftState: AssistantDraftState = {
   messages: [],
   input: "",
   messageSequence: 0,
+  conversationId: null,
 };
 
 const SUGGESTIONS = [
@@ -153,11 +160,15 @@ export default function AssistantScreen() {
   const resultScrollContentStyle = Platform.OS === "android" ? { paddingRight: 6 } : undefined;
   const [messages, setMessages] = useState<Message[]>(assistantDraftState.messages);
   const [input, setInput] = useState(assistantDraftState.input);
+  const [conversationId, setConversationId] = useState<string | null>(assistantDraftState.conversationId);
   const [isLoading, setIsLoading] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [showCoachmark, setShowCoachmark] = useState(false);
   const [consent, setConsent] = useState<boolean | null>(null);
   const [showConsentDialog, setShowConsentDialog] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyItems, setHistoryItems] = useState<AssistantConversationSummary[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const audioRecorder = useAudioRecorder(STT_RECORDING_OPTIONS);
   const recorderState = useAudioRecorderState(audioRecorder);
   const isRecording = recorderState.isRecording;
@@ -220,6 +231,10 @@ export default function AssistantScreen() {
     assistantDraftState.input = input;
   }, [input]);
 
+  useEffect(() => {
+    assistantDraftState.conversationId = conversationId;
+  }, [conversationId]);
+
   useEffect(
     () => () => {
       assistantDraftState.messages = assistantDraftState.messages.filter(
@@ -278,12 +293,14 @@ export default function AssistantScreen() {
   const resetChat = useCallback(() => {
     setMessages([]);
     setInput("");
+    setConversationId(null);
     setIsLoading(false);
     isSendingRef.current = false;
     messageSequenceRef.current = 0;
     assistantDraftState.messages = [];
     assistantDraftState.input = "";
     assistantDraftState.messageSequence = 0;
+    assistantDraftState.conversationId = null;
   }, []);
 
   const clearRecordingTimeout = useCallback(() => {
@@ -465,10 +482,71 @@ export default function AssistantScreen() {
     recorderState.mediaServicesDidReset,
   ]);
 
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const data = await assistantApi.listConversations();
+      setHistoryItems(data.conversations);
+    } catch (error) {
+      console.error("Failed to load history:", error);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  const openHistory = useCallback(() => {
+    setShowHistory(true);
+    loadHistory();
+  }, [loadHistory]);
+
+  const loadConversation = useCallback(async (id: string) => {
+    setShowHistory(false);
+    setIsLoading(true);
+    try {
+      const data = await assistantApi.getConversation(id);
+      setConversationId(data.id);
+      messageSequenceRef.current = 0;
+      const loadedMessages: Message[] = data.messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        ui: m.ui ?? undefined,
+      }));
+      setMessages(loadedMessages);
+      setInput("");
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 100);
+    } catch (error) {
+      console.error("Failed to load conversation:", error);
+      Alert.alert("Error", "Failed to load conversation.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const deleteHistoryItem = useCallback(async (id: string) => {
+    try {
+      await assistantApi.deleteConversation(id);
+      setHistoryItems((prev) => prev.filter((item) => item.id !== id));
+      if (conversationId === id) {
+        resetChat();
+      }
+    } catch (error) {
+      console.error("Failed to delete conversation:", error);
+    }
+  }, [conversationId, resetChat]);
+
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
         <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Pressable
+            onPress={openHistory}
+            className="mr-1 w-9 h-9 rounded-xl items-center justify-center active:bg-background-100"
+          >
+            <History size={20} color={getThemeColor(colors, "typography-700")} />
+          </Pressable>
           <Pressable
             onPress={resetChat}
             className="mr-2 w-9 h-9 rounded-xl items-center justify-center active:bg-background-100"
@@ -498,7 +576,7 @@ export default function AssistantScreen() {
         </View>
       ),
     });
-  }, [navigation, resetChat, colors, router, signOut]);
+  }, [navigation, resetChat, openHistory, colors, router, signOut]);
 
   useFocusEffect(
     useCallback(() => {
@@ -559,7 +637,11 @@ export default function AssistantScreen() {
           { role: "user" as const, content: trimmed },
         ];
 
-        const response = await assistantApi.chat(chatHistory);
+        const response = await assistantApi.chat(chatHistory, conversationId ?? undefined);
+
+        if (response.conversationId) {
+          setConversationId(response.conversationId);
+        }
 
         setMessages((prev) => {
           const filtered = prev.filter((m) => !m.isLoading);
@@ -594,7 +676,7 @@ export default function AssistantScreen() {
         }, 100);
       }
     },
-    [messages, nextMessageId, consent]
+    [messages, nextMessageId, consent, conversationId]
   );
 
   const handleSuggestion = (suggestion: string) => {
@@ -1314,6 +1396,71 @@ export default function AssistantScreen() {
         </View>
       </View>
     </KeyboardAvoidingView>
+    <Modal
+      visible={showHistory}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowHistory(false)}
+    >
+      <View className="flex-1 bg-background-50">
+        <View className="flex-row items-center justify-between px-4 pt-4 pb-3 border-b border-border-200 bg-background-0">
+          <Text className="text-typography-900 text-lg font-semibold">Chat History</Text>
+          <Pressable
+            onPress={() => setShowHistory(false)}
+            className="w-9 h-9 rounded-xl items-center justify-center active:bg-background-100"
+          >
+            <X size={20} color={getThemeColor(colors, "typography-700")} />
+          </Pressable>
+        </View>
+        {historyLoading ? (
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator size="large" color={getThemeColor(colors, "primary-600")} />
+          </View>
+        ) : historyItems.length === 0 ? (
+          <View className="flex-1 items-center justify-center px-8">
+            <History size={40} color={getThemeColor(colors, "typography-300")} />
+            <Text className="text-typography-500 text-base mt-4 text-center">
+              No conversations yet. Start chatting to see your history here.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={historyItems}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ padding: 16 }}
+            renderItem={({ item }) => (
+              <Pressable
+                onPress={() => loadConversation(item.id)}
+                className="bg-background-0 border border-border-100 rounded-2xl p-4 mb-3 active:bg-background-50"
+              >
+                <View className="flex-row items-start justify-between">
+                  <View className="flex-1 mr-3">
+                    <Text className="text-typography-900 font-semibold text-base" numberOfLines={1}>
+                      {item.title || "Untitled"}
+                    </Text>
+                    {item.lastMessage && (
+                      <Text className="text-typography-500 text-sm mt-1" numberOfLines={2}>
+                        {item.lastMessage.content}
+                      </Text>
+                    )}
+                    <Text className="text-typography-400 text-xs mt-1.5">
+                      {format(new Date(item.updatedAt), "MMM d, yyyy 'at' h:mm a")}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => deleteHistoryItem(item.id)}
+                    className="w-9 h-9 rounded-xl items-center justify-center active:bg-background-100"
+                    hitSlop={8}
+                  >
+                    <Trash2 size={16} color={getThemeColor(colors, "typography-400")} />
+                  </Pressable>
+                </View>
+              </Pressable>
+            )}
+          />
+        )}
+      </View>
+    </Modal>
     <AiConsentDialog
       visible={showConsentDialog}
       onAgree={handleConsentAgree}

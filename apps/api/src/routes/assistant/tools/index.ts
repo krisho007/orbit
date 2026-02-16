@@ -16,14 +16,14 @@ export type AllSchemas = {
   completionStatusSchema: any;
 };
 
-export function buildToolSet(userId: string, schemas: AllSchemas) {
-  const contactTools = createContactTools(userId, schemas);
-  const conversationTools = createConversationTools(userId, schemas);
-  const eventTools = createEventTools(userId, schemas);
+export function buildToolSet(userId: string, schemas: AllSchemas, assistantConversationId?: string) {
+  const contactTools = createContactTools(userId, schemas, assistantConversationId);
+  const conversationTools = createConversationTools(userId, schemas, assistantConversationId);
+  const eventTools = createEventTools(userId, schemas, assistantConversationId);
   const reminderTools = createReminderTools(userId, {
     optionalReminderStatusSchema: schemas.optionalReminderStatusSchema,
     completionStatusSchema: schemas.completionStatusSchema,
-  });
+  }, assistantConversationId);
   const tagTools = createTagTools(userId);
   const relationshipTools = createRelationshipTools(userId);
 

@@ -37,7 +37,8 @@ export async function createContact(
   jobTitle?: string,
   location?: string,
   notes?: string,
-  tagIds?: string[]
+  tagIds?: string[],
+  assistantConversationId?: string
 ): Promise<ToolResult> {
   const [contact] = await db
     .insert(contacts)
@@ -52,6 +53,7 @@ export async function createContact(
       location: location || null,
       notes: notes || null,
       userId,
+      assistantConversationId: assistantConversationId || null,
     })
     .returning();
 
@@ -952,7 +954,7 @@ export type EnumSchemas = {
   optionalEventTypeSchema: any;
 };
 
-export function createContactTools(userId: string, schemas: EnumSchemas) {
+export function createContactTools(userId: string, schemas: EnumSchemas, assistantConversationId?: string) {
   return {
     create_contact: tool({
       description: "Create a new contact with their details",
@@ -991,7 +993,8 @@ export function createContactTools(userId: string, schemas: EnumSchemas) {
           jobTitle,
           location,
           notes,
-          tagIds
+          tagIds,
+          assistantConversationId
         ),
     }),
 

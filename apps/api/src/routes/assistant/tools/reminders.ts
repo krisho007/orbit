@@ -127,7 +127,8 @@ export async function createReminderByIds(
     status?: string;
     conversationId?: string;
     participantIds: string[];
-  }
+  },
+  assistantConversationId?: string
 ): Promise<ToolResult> {
   const uniqueParticipantIds = [...new Set(payload.participantIds)];
   if (uniqueParticipantIds.length === 0) {
@@ -159,6 +160,7 @@ export async function createReminderByIds(
       status: payload.status || "OPEN",
       conversationId: payload.conversationId || null,
       isAutoFromConversation: false,
+      assistantConversationId: assistantConversationId || null,
     })
     .returning();
 
@@ -275,7 +277,7 @@ export async function deleteReminderById(userId: string, reminderId: string): Pr
 
 // ── Tool definitions ─────────────────────────────────────────────────
 
-export function createReminderTools(userId: string, schemas: { optionalReminderStatusSchema: any; completionStatusSchema: any }) {
+export function createReminderTools(userId: string, schemas: { optionalReminderStatusSchema: any; completionStatusSchema: any }, assistantConversationId?: string) {
   return {
     list_reminders: tool({
       description: "List reminders with optional pagination and filters",
@@ -311,7 +313,7 @@ export function createReminderTools(userId: string, schemas: { optionalReminderS
         participantIds: z.array(z.string()).describe("Participant contact ids"),
       }),
       execute: async ({ title, notes, dueAt, status, conversationId, participantIds }) =>
-        createReminderByIds(userId, { title, notes, dueAt, status, conversationId, participantIds }),
+        createReminderByIds(userId, { title, notes, dueAt, status, conversationId, participantIds }, assistantConversationId),
     }),
 
     update_reminder_by_id: tool({

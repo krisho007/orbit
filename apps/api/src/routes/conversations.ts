@@ -1,7 +1,8 @@
 // Conversations API Routes
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, sql, ilike, or, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, ilike, or, inArray, isNotNull, asc } from "drizzle-orm";
+import { cosineDistance } from "drizzle-orm/sql/functions/vector";
 import {
   db,
   conversations,
@@ -12,12 +13,51 @@ import {
   events,
 } from "../db";
 import { authMiddleware } from "../middleware/auth";
+import {
+  generateEmbedding,
+  generateQueryEmbedding,
+  generateEmbeddings,
+  buildEmbeddingText,
+} from "../lib/embeddings";
 
 const app = new Hono();
 
 app.use("/*", authMiddleware);
 
 const PAGE_SIZE = 20;
+
+/** Fire-and-forget: generate embedding for a conversation and store it. */
+function generateAndStoreEmbedding(
+  conversationId: string,
+  content: string | null | undefined,
+  medium: string,
+  participantIds: string[]
+) {
+  (async () => {
+    try {
+      // Fetch participant names for enriched embedding text
+      let participantNames: string[] = [];
+      if (participantIds.length > 0) {
+        const rows = await db
+          .select({ displayName: contacts.displayName })
+          .from(contacts)
+          .where(inArray(contacts.id, participantIds));
+        participantNames = rows.map((r) => r.displayName);
+      }
+
+      const text = buildEmbeddingText({ content, medium, participantNames });
+      if (!text || text.length < 5) return;
+
+      const embedding = await generateEmbedding(text);
+      await db
+        .update(conversations)
+        .set({ embedding })
+        .where(eq(conversations.id, conversationId));
+    } catch (err) {
+      console.error(`[embeddings] Failed to generate embedding for conversation ${conversationId}:`, err);
+    }
+  })();
+}
 
 // Validation schemas
 const conversationMediums = [
@@ -288,10 +328,81 @@ app.get("/", async (c) => {
   const cursor = c.req.query("cursor");
   const search = c.req.query("search") || "";
   const medium = c.req.query("medium");
+  const semantic = c.req.query("semantic") === "true";
   const limit = parseInt(c.req.query("limit") || String(PAGE_SIZE));
 
   try {
-    // Build base query conditions
+    // Semantic search path
+    if (semantic && search) {
+      const queryEmbedding = await generateQueryEmbedding(search);
+      const distance = cosineDistance(conversations.embedding, queryEmbedding);
+
+      const conditions = [
+        eq(conversations.userId, userId),
+        isNotNull(conversations.embedding),
+        sql`${distance} < 0.5`,
+      ];
+
+      if (medium && conversationMediums.includes(medium as any)) {
+        conditions.push(eq(conversations.medium, medium as any));
+      }
+
+      const conversationsList = await db
+        .select({
+          id: conversations.id,
+          userId: conversations.userId,
+          content: conversations.content,
+          medium: conversations.medium,
+          happenedAt: conversations.happenedAt,
+          followUpAt: conversations.followUpAt,
+          eventId: conversations.eventId,
+          assistantConversationId: conversations.assistantConversationId,
+          createdAt: conversations.createdAt,
+          updatedAt: conversations.updatedAt,
+          similarity: sql<number>`1 - ${distance}`,
+        })
+        .from(conversations)
+        .where(and(...conditions))
+        .orderBy(asc(distance))
+        .limit(limit);
+
+      const conversationIds = conversationsList.map((conv) => conv.id);
+
+      const [participantsData, eventsData] = await Promise.all([
+        conversationIds.length > 0
+          ? db
+              .select()
+              .from(conversationParticipants)
+              .innerJoin(contacts, eq(conversationParticipants.contactId, contacts.id))
+              .where(inArray(conversationParticipants.conversationId, conversationIds))
+          : [],
+        conversationIds.length > 0
+          ? db
+              .select({ id: events.id, title: events.title, conversationEventId: conversations.id })
+              .from(events)
+              .innerJoin(conversations, eq(conversations.eventId, events.id))
+              .where(inArray(conversations.id, conversationIds))
+          : [],
+      ]);
+
+      const enrichedConversations = conversationsList.map((conv) => ({
+        ...conv,
+        participants: participantsData
+          .filter((p: any) => p.conversation_participants.conversationId === conv.id)
+          .map((p: any) => ({
+            ...p.conversation_participants,
+            contact: p.contacts,
+          })),
+        event: eventsData.find((e: any) => conv.eventId === e.id) || null,
+      }));
+
+      return c.json({
+        conversations: enrichedConversations,
+        nextCursor: null,
+      });
+    }
+
+    // Standard keyword search path
     const conditions = [eq(conversations.userId, userId)];
 
     if (medium && conversationMediums.includes(medium as any)) {
@@ -490,6 +601,14 @@ app.post("/", async (c) => {
       newConversation.content
     );
 
+    // Fire-and-forget embedding generation
+    generateAndStoreEmbedding(
+      newConversation.id,
+      newConversation.content,
+      newConversation.medium,
+      uniqueParticipantIds
+    );
+
     return c.json(newConversation, 201);
   } catch (error) {
     console.error("Error creating conversation:", error);
@@ -579,10 +698,115 @@ app.put("/:id", async (c) => {
       updatedConversation?.content || null
     );
 
+    // Regenerate embedding if content or medium changed
+    if (data.content !== undefined || data.medium !== undefined || data.participantIds !== undefined) {
+      generateAndStoreEmbedding(
+        conversationId,
+        updatedConversation?.content,
+        updatedConversation?.medium || "OTHER",
+        participantIdsForReminder
+      );
+    }
+
     return c.json(updatedConversation);
   } catch (error) {
     console.error("Error updating conversation:", error);
     return c.json({ error: "Failed to update conversation" }, 500);
+  }
+});
+
+// POST /api/conversations/embeddings/backfill - Generate embeddings for conversations that don't have one
+app.post("/embeddings/backfill", async (c) => {
+  const userId = c.get("userId");
+  const BATCH_SIZE = 100;
+
+  try {
+    // Find conversations with content but no embedding
+    const toEmbed = await db
+      .select({
+        id: conversations.id,
+        content: conversations.content,
+        medium: conversations.medium,
+      })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.userId, userId),
+          isNotNull(conversations.content),
+          sql`${conversations.embedding} IS NULL`
+        )
+      )
+      .orderBy(desc(conversations.happenedAt))
+      .limit(BATCH_SIZE);
+
+    if (toEmbed.length === 0) {
+      return c.json({ processed: 0, remaining: 0 });
+    }
+
+    // Get participant names for each conversation
+    const convIds = toEmbed.map((c) => c.id);
+    const participantsData = await db
+      .select({
+        conversationId: conversationParticipants.conversationId,
+        displayName: contacts.displayName,
+      })
+      .from(conversationParticipants)
+      .innerJoin(contacts, eq(conversationParticipants.contactId, contacts.id))
+      .where(inArray(conversationParticipants.conversationId, convIds));
+
+    // Group participant names by conversation
+    const participantsByConv = new Map<string, string[]>();
+    for (const row of participantsData) {
+      const names = participantsByConv.get(row.conversationId) || [];
+      names.push(row.displayName);
+      participantsByConv.set(row.conversationId, names);
+    }
+
+    // Build texts for embedding
+    const texts = toEmbed.map((conv) =>
+      buildEmbeddingText({
+        content: conv.content,
+        medium: conv.medium,
+        participantNames: participantsByConv.get(conv.id) || [],
+      })
+    );
+
+    // Generate embeddings in batch
+    const embeddings = await generateEmbeddings(texts);
+
+    // Update each conversation with its embedding
+    let processed = 0;
+    for (let i = 0; i < toEmbed.length; i++) {
+      const conv = toEmbed[i];
+      const emb = embeddings[i];
+      if (conv && emb) {
+        await db
+          .update(conversations)
+          .set({ embedding: emb })
+          .where(eq(conversations.id, conv.id));
+        processed++;
+      }
+    }
+
+    // Count remaining
+    const [remainingResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.userId, userId),
+          isNotNull(conversations.content),
+          sql`${conversations.embedding} IS NULL`
+        )
+      );
+
+    return c.json({
+      processed,
+      remaining: Number(remainingResult?.count || 0),
+    });
+  } catch (error) {
+    console.error("Error backfilling embeddings:", error);
+    return c.json({ error: "Failed to backfill embeddings" }, 500);
   }
 });
 

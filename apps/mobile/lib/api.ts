@@ -168,6 +168,7 @@ export const conversationsApi = {
     search?: string;
     medium?: string;
     limit?: number;
+    semantic?: boolean;
   }) =>
     api.get<{
       conversations: Conversation[];
@@ -349,16 +350,25 @@ export type AssistantUi =
   | { kind: "events"; count: number; events: AssistantEventCard[] }
   | { kind: "reminders"; count: number; reminders: AssistantReminderCard[] }
   | { kind: "created"; cards: AssistantCreatedCard[] }
-  | { kind: "selection"; prompt: string; options: AssistantSelectionOption[] };
+  | { kind: "selection"; prompt: string; options: AssistantSelectionOption[] }
+  | { kind: "confirmation"; action: string; details?: Record<string, unknown> };
+
+export type AssistantAction = {
+  label: string;
+  message: string;
+  style: "primary" | "secondary";
+};
 
 export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   ui?: AssistantUi | null;
+  actions?: AssistantAction[];
 };
 
 export type ChatResponse = ChatMessage & {
   conversationId: string;
+  actions?: AssistantAction[];
 };
 
 export type AssistantConversationSummary = {

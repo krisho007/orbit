@@ -11,6 +11,14 @@ export async function ensurePgTrgmExtension(): Promise<void> {
   pgTrgmReady = true;
 }
 
+let pgVectorReady = false;
+
+export async function ensurePgVectorExtension(): Promise<void> {
+  if (pgVectorReady) return;
+  await db.execute(sql`CREATE EXTENSION IF NOT EXISTS vector`);
+  pgVectorReady = true;
+}
+
 // Fuzzy search for contacts
 export async function findBestContactMatch(userId: string, name: string) {
   console.log(`[assistant:tool] findBestContactMatch — searching for "${name}"`);

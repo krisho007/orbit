@@ -11,6 +11,7 @@ import {
   primaryKey,
   unique,
   index,
+  vector,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -161,6 +162,7 @@ export const conversations = pgTable(
     followUpAt: timestamp("followUpAt", { mode: "date" }),
     eventId: text("eventId"),
     assistantConversationId: text("assistantConversationId"),
+    embedding: vector("embedding", { dimensions: 768 }),
     createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
   },
@@ -168,6 +170,8 @@ export const conversations = pgTable(
     index("conversations_userId_idx").on(table.userId),
     index("conversations_userId_happenedAt_idx").on(table.userId, table.happenedAt),
     index("conversations_eventId_idx").on(table.eventId),
+    index("conversations_embedding_idx")
+      .using("hnsw", table.embedding.op("vector_cosine_ops")),
   ]
 );
 

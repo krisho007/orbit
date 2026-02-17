@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { tool } from "ai";
-import { eq, and, desc, sql, ilike, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, ilike, inArray, isNotNull, asc } from "drizzle-orm";
+import { cosineDistance } from "drizzle-orm/sql/functions/vector";
 import {
   db,
   contacts,
@@ -15,7 +16,117 @@ import { assertValidMedium } from "../enums";
 import { getOwnedConversation, getOwnedEvent } from "../ownership";
 import { findBestContactMatch } from "../db-helpers";
 import { enrichConversations, syncConversationFollowUpReminder } from "../enrichment";
+import {
+  generateEmbedding,
+  generateQueryEmbedding,
+  buildEmbeddingText,
+} from "../../../lib/embeddings";
 import type { EnumSchemas } from "./contacts";
+
+// ── Helpers ──────────────────────────────────────────────────────────
+
+/** Fire-and-forget: generate embedding for a conversation and store it. */
+function generateAndStoreEmbedding(
+  conversationId: string,
+  content: string | null | undefined,
+  medium: string,
+  participantIds: string[]
+) {
+  (async () => {
+    try {
+      let participantNames: string[] = [];
+      if (participantIds.length > 0) {
+        const rows = await db
+          .select({ displayName: contacts.displayName })
+          .from(contacts)
+          .where(inArray(contacts.id, participantIds));
+        participantNames = rows.map((r) => r.displayName);
+      }
+
+      const text = buildEmbeddingText({ content, medium, participantNames });
+      if (!text || text.length < 5) return;
+
+      const embedding = await generateEmbedding(text);
+      await db
+        .update(conversations)
+        .set({ embedding })
+        .where(eq(conversations.id, conversationId));
+    } catch (err) {
+      console.error(`[embeddings] Failed to generate embedding for conversation ${conversationId}:`, err);
+    }
+  })();
+}
+
+/** Semantic vector search for conversations. */
+async function semanticSearchConversations(
+  userId: string,
+  query: string,
+  medium?: string,
+  limit?: number
+): Promise<ToolResult> {
+  const takeLimit = Math.min(limit || 10, 20);
+  console.log(`[assistant:tool] semanticSearchConversations — query="${query}", limit=${takeLimit}`);
+
+  try {
+    const queryEmbedding = await generateQueryEmbedding(query);
+    const distance = cosineDistance(conversations.embedding, queryEmbedding);
+
+    const conditions = [
+      eq(conversations.userId, userId),
+      isNotNull(conversations.embedding),
+      sql`${distance} < 0.6`,
+    ];
+
+    if (medium) {
+      conditions.push(eq(conversations.medium, assertValidMedium(medium)));
+    }
+
+    const conversationsList = await db
+      .select({
+        id: conversations.id,
+        medium: conversations.medium,
+        happenedAt: conversations.happenedAt,
+        content: conversations.content,
+        similarity: sql<number>`1 - ${distance}`,
+      })
+      .from(conversations)
+      .where(and(...conditions))
+      .orderBy(asc(distance))
+      .limit(takeLimit);
+
+    // Fetch participants for results
+    const convIds = conversationsList.map((c) => c.id);
+    let participants: any[] = [];
+    if (convIds.length > 0) {
+      participants = await db
+        .select()
+        .from(conversationParticipants)
+        .innerJoin(contacts, eq(conversationParticipants.contactId, contacts.id))
+        .where(inArray(conversationParticipants.conversationId, convIds));
+    }
+
+    console.log(`[assistant:tool] semanticSearchConversations — returning ${conversationsList.length} result(s)`);
+
+    return {
+      type: "conversations_found",
+      count: conversationsList.length,
+      conversations: conversationsList.map((c) => ({
+        id: c.id,
+        medium: c.medium,
+        happenedAt: c.happenedAt,
+        content: c.content,
+        similarity: c.similarity,
+        participants: participants
+          .filter((p: any) => p.conversation_participants.conversationId === c.id)
+          .map((p: any) => p.contacts.displayName),
+      })),
+    };
+  } catch (err) {
+    console.error(`[assistant:tool] semanticSearchConversations — error:`, err);
+    // Fallback to keyword search if vector search fails
+    return listConversations(userId, undefined, query, medium, limit);
+  }
+}
 
 // ── Implementation functions ─────────────────────────────────────────
 
@@ -100,6 +211,14 @@ export async function createConversation(
     conversation.followUpAt,
     resolvedParticipantIds,
     conversation.content
+  );
+
+  // Fire-and-forget embedding generation
+  generateAndStoreEmbedding(
+    conversation.id,
+    conversation.content,
+    conversation.medium,
+    resolvedParticipantIds
   );
 
   const participantContacts = await db
@@ -340,6 +459,14 @@ export async function createConversationByIds(
     newConversation.content
   );
 
+  // Fire-and-forget embedding generation
+  generateAndStoreEmbedding(
+    newConversation.id,
+    newConversation.content,
+    newConversation.medium,
+    participantIds
+  );
+
   const participantContacts =
     participantIds.length > 0
       ? await db
@@ -423,6 +550,16 @@ export async function updateConversationById(
     participantIdsForReminder,
     updatedConversation?.content || null
   );
+
+  // Regenerate embedding if content, medium, or participants changed
+  if (updates.content !== undefined || updates.medium !== undefined || updates.participantIds !== undefined) {
+    generateAndStoreEmbedding(
+      conversationId,
+      updatedConversation?.content,
+      updatedConversation?.medium || "OTHER",
+      participantIdsForReminder
+    );
+  }
 
   return { type: "conversation_updated", id: conversationId };
 }
@@ -575,9 +712,9 @@ export function createConversationTools(userId: string, schemas: EnumSchemas, as
     }),
 
     searchConversations: tool({
-      description: "Search conversations for context resolution",
+      description: "Search conversations by meaning (semantic search). Best for natural language queries like 'discussions about finances' or 'planning meetings'.",
       inputSchema: z.object({
-        searchTerm: z.string().optional().describe("Conversation text search"),
+        searchTerm: z.string().optional().describe("Natural language search query — finds conceptually related conversations"),
         participantName: z.string().optional().describe("Participant name"),
         medium: schemas.optionalMediumSchema.describe("Conversation medium filter"),
         limit: z.number().optional().describe("Maximum results"),
@@ -599,7 +736,11 @@ export function createConversationTools(userId: string, schemas: EnumSchemas, as
           }
           return result;
         }
-        return listConversations(userId, undefined, searchTerm, medium, limit);
+        // Use semantic search when no participant filter — finds conceptually related conversations
+        if (searchTerm) {
+          return semanticSearchConversations(userId, searchTerm, medium, limit);
+        }
+        return listConversations(userId, undefined, undefined, medium, limit);
       },
     }),
 

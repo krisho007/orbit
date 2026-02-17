@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { tool } from "ai";
-import { eq, and, desc, sql, ilike, inArray, isNotNull, asc } from "drizzle-orm";
-import { cosineDistance } from "drizzle-orm/sql/functions/vector";
+import { eq, and, desc, sql, ilike, inArray, isNotNull } from "drizzle-orm";
 import {
   db,
   contacts,
@@ -69,12 +68,12 @@ async function semanticSearchConversations(
 
   try {
     const queryEmbedding = await generateQueryEmbedding(query);
-    const distance = cosineDistance(conversations.embedding, queryEmbedding);
+    const embeddingStr = JSON.stringify(queryEmbedding);
 
     const conditions = [
       eq(conversations.userId, userId),
       isNotNull(conversations.embedding),
-      sql`${distance} < 0.6`,
+      sql`(${conversations.embedding} <=> ${embeddingStr}::vector) < 0.6`,
     ];
 
     if (medium) {
@@ -87,11 +86,11 @@ async function semanticSearchConversations(
         medium: conversations.medium,
         happenedAt: conversations.happenedAt,
         content: conversations.content,
-        similarity: sql<number>`1 - ${distance}`,
+        similarity: sql<number>`1 - (${conversations.embedding} <=> ${embeddingStr}::vector)`,
       })
       .from(conversations)
       .where(and(...conditions))
-      .orderBy(asc(distance))
+      .orderBy(sql`${conversations.embedding} <=> ${embeddingStr}::vector`)
       .limit(takeLimit);
 
     // Fetch participants for results

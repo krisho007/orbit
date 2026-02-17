@@ -1,7 +1,7 @@
 import { embed, embedMany } from "ai";
 import { google } from "@ai-sdk/google";
 
-const embeddingModel = google.embedding("text-embedding-004");
+const embeddingModel = google.embedding("gemini-embedding-001");
 
 /**
  * Build enriched text for embedding a conversation.
@@ -42,7 +42,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     model: embeddingModel,
     value: text,
     providerOptions: {
-      google: { taskType: "RETRIEVAL_DOCUMENT" },
+      google: { taskType: "RETRIEVAL_DOCUMENT", outputDimensionality: 768 },
     },
   });
   return embedding;
@@ -57,7 +57,7 @@ export async function generateQueryEmbedding(query: string): Promise<number[]> {
     model: embeddingModel,
     value: query,
     providerOptions: {
-      google: { taskType: "RETRIEVAL_QUERY" },
+      google: { taskType: "RETRIEVAL_QUERY", outputDimensionality: 768 },
     },
   });
   return embedding;
@@ -73,7 +73,7 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
     model: embeddingModel,
     values: texts,
     providerOptions: {
-      google: { taskType: "RETRIEVAL_DOCUMENT" },
+      google: { taskType: "RETRIEVAL_DOCUMENT", outputDimensionality: 768 },
     },
   });
   return embeddings;

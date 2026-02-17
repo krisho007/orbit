@@ -1,8 +1,7 @@
 // Conversations API Routes
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, sql, ilike, or, inArray, isNotNull, asc } from "drizzle-orm";
-import { cosineDistance } from "drizzle-orm/sql/functions/vector";
+import { eq, and, desc, sql, ilike, or, inArray, isNotNull } from "drizzle-orm";
 import {
   db,
   conversations,
@@ -335,12 +334,13 @@ app.get("/", async (c) => {
     // Semantic search path
     if (semantic && search) {
       const queryEmbedding = await generateQueryEmbedding(search);
-      const distance = cosineDistance(conversations.embedding, queryEmbedding);
+      const embeddingStr = JSON.stringify(queryEmbedding);
+      const distance = sql`${conversations.embedding} <=> ${embeddingStr}::vector`;
 
       const conditions = [
         eq(conversations.userId, userId),
         isNotNull(conversations.embedding),
-        sql`${distance} < 0.5`,
+        sql`(${conversations.embedding} <=> ${embeddingStr}::vector) < 0.5`,
       ];
 
       if (medium && conversationMediums.includes(medium as any)) {
@@ -359,11 +359,11 @@ app.get("/", async (c) => {
           assistantConversationId: conversations.assistantConversationId,
           createdAt: conversations.createdAt,
           updatedAt: conversations.updatedAt,
-          similarity: sql<number>`1 - ${distance}`,
+          similarity: sql<number>`1 - (${conversations.embedding} <=> ${embeddingStr}::vector)`,
         })
         .from(conversations)
         .where(and(...conditions))
-        .orderBy(asc(distance))
+        .orderBy(sql`${conversations.embedding} <=> ${embeddingStr}::vector`)
         .limit(limit);
 
       const conversationIds = conversationsList.map((conv) => conv.id);

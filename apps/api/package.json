@@ -9,6 +9,7 @@
     "start": "bun run src/index.ts",
     "test": "bun test",
     "test:assistant": "bun test src/routes/assistant.test.ts",
+    "test:assistant:e2e": "bun run scripts/test-assistant.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",

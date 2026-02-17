@@ -1,11 +1,11 @@
 import { generateText, InvalidToolInputError, NoSuchToolError } from "ai";
 import { google } from "@ai-sdk/google";
 import { stepCountIs } from "ai";
-import type { ChatMessage, ToolResult, ToolCallMeta, AssistantUi } from "./types";
+import type { ChatMessage, ToolResult, ToolCallMeta, AssistantUi, AssistantAction } from "./types";
 import { SCHEMA_ENUM_CONFIG, loadAssistantEnumConfig, enumValueSchema } from "./enums";
-import { identifyIntent } from "./guardrails";
-import { isIntentRequiringConfirmation, isExplicitUserConfirmation } from "./guardrails";
-import { MUTATING_TOOL_NAMES, DELETE_TOOL_NAMES, INTENT_TOOL_SETS } from "./constants";
+import { identifyIntents } from "./guardrails";
+import { anyIntentRequiresConfirmation, isExplicitUserConfirmation } from "./guardrails";
+import { MUTATING_TOOL_NAMES, DELETE_TOOL_NAMES, unionToolSets } from "./constants";
 import { getUserContext } from "./db-helpers";
 import { buildSystemPrompt } from "./system-prompt";
 import { buildUiFromToolResults, summarizeUiText } from "./ui-builder";
@@ -24,7 +24,7 @@ export async function processMessageLLM(
   messages: ChatMessage[],
   generate: typeof generateText = generateText,
   assistantConversationId?: string
-): Promise<{ text: string; ui: AssistantUi | null }> {
+): Promise<{ text: string; ui: AssistantUi | null; actions?: AssistantAction[] }> {
   if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     return {
       text:
@@ -65,10 +65,16 @@ export async function processMessageLLM(
     true
   );
 
-  const inferredIntent = await identifyIntent(messages, aiModel, generate);
   const lastUserText = extractLastUserText(messages as unknown[]);
+  const isConfirmation = isExplicitUserConfirmation(lastUserText);
+
+  // On confirmation turns, classify intents from earlier messages so the original
+  // intents (and their tool sets) are recovered instead of classifying "Sounds good." as unknown.
+  const messagesForClassification =
+    isConfirmation && messages.length >= 3 ? messages.slice(0, -2) : messages;
+  const inferredIntents = await identifyIntents(messagesForClassification, aiModel, generate);
   const confirmationRequired =
-    isIntentRequiringConfirmation(inferredIntent) && !isExplicitUserConfirmation(lastUserText);
+    anyIntentRequiresConfirmation(inferredIntents) && !isConfirmation;
 
   const toolsWithAliases = buildToolSet(userId, {
     mediumSchema,
@@ -83,8 +89,8 @@ export async function processMessageLLM(
   const userContext = usingMockGenerate
     ? { userName: null, userEmail: "", primaryContactId: null, primaryContactName: null }
     : await getUserContext(userId);
-  // Intent-based tool scoping: only expose tools relevant to the classified intent
-  const allowedToolNames = new Set(INTENT_TOOL_SETS[inferredIntent] ?? INTENT_TOOL_SETS.unknown);
+  // Intent-based tool scoping: union tool sets from all classified intents
+  const allowedToolNames = new Set(unionToolSets(inferredIntents));
 
   const toolsForRun = Object.fromEntries(
     Object.entries(toolsWithAliases).filter(([toolName]) => {
@@ -103,7 +109,7 @@ export async function processMessageLLM(
   console.log(`[assistant:llm] Starting LLM processing with ${modelMessages.length} message(s)`);
   console.log(`[assistant:llm] User context: ${userContext.userName || "(no name)"}, primaryContact: ${userContext.primaryContactId || "(not set)"}`);
   console.log(`[assistant:llm] Model: ${aiModel}`);
-  console.log(`[assistant:llm] Intent: ${inferredIntent}, confirmationRequired=${confirmationRequired}`);
+  console.log(`[assistant:llm] Intents: [${inferredIntents.join(", ")}], confirmationRequired=${confirmationRequired}`);
   const toolNames = Object.keys(toolsForRun);
   console.log(`[assistant:llm] Tools scoped: ${toolNames.length} tools — [${toolNames.join(", ")}]`);
   console.log(
@@ -116,7 +122,7 @@ export async function processMessageLLM(
 
   const result = await generate({
     model: google(aiModel),
-    system: buildSystemPrompt(userContext, enumConfig, inferredIntent, confirmationRequired),
+    system: buildSystemPrompt(userContext, enumConfig, inferredIntents, confirmationRequired),
     messages: modelMessages,
     tools: toolsForRun,
     experimental_repairToolCall: async ({ toolCall, error, messages }) => {
@@ -153,7 +159,7 @@ export async function processMessageLLM(
         input: JSON.stringify(sanitized),
       };
     },
-    stopWhen: stepCountIs(8),
+    stopWhen: stepCountIs(inferredIntents.length > 2 ? 10 : 8),
     onStepFinish: (event) => {
       stepIndex++;
       const toolCalls = event.toolCalls || [];
@@ -173,15 +179,20 @@ export async function processMessageLLM(
         console.log(
           `[assistant:llm] Step ${stepIndex} — ${toolCalls.length} tool call(s), ${toolResultsList.length} result(s), ${failedToolCalls} failed`
         );
-        for (const tc of toolCalls) {
+        for (let i = 0; i < toolCalls.length; i++) {
+          const tc = toolCalls[i];
           const inputPreview = (tc as any).input
             ? JSON.stringify((tc as any).input).substring(0, 300)
             : "(no input)";
           const toolCallId = typeof (tc as any).toolCallId === "string" ? (tc as any).toolCallId : "n/a";
           const invalid = Boolean((tc as any).invalid);
           const errorSummary = invalid ? summarizeToolCallError((tc as any).error) : "";
+          const matchedResult = toolResultsList[i] as { output?: ToolResult } | undefined;
+          const resultStatus = matchedResult?.output
+            ? `✓ ${matchedResult.output.type || "ok"}`
+            : "⏳ pending";
           console.log(
-            `  ↳ tool=${String((tc as any).toolName)} id=${toolCallId} invalid=${invalid} input=${inputPreview}`
+            `  ↳ tool=${String((tc as any).toolName)} id=${toolCallId} invalid=${invalid} → ${resultStatus} input=${inputPreview}`
           );
           if (invalid) {
             console.log(`    ↳ validation_error=${errorSummary}`);
@@ -193,12 +204,8 @@ export async function processMessageLLM(
             }
           }
         }
-        for (const tr of toolResultsList) {
-          const resultObj = tr as { output?: ToolResult };
-          if (resultObj.output) {
-            const typeInfo = resultObj.output.type || "unknown";
-            console.log(`  ← result type: ${typeInfo}`);
-          }
+        if (toolResultsList.length < toolCalls.length) {
+          console.log(`  ⚠ ${toolCalls.length - toolResultsList.length} tool result(s) pending (will appear in final summary)`);
         }
       } else if (event.text) {
         const preview = event.text.substring(0, 200);
@@ -236,7 +243,19 @@ export async function processMessageLLM(
   ) as ToolCallMeta[];
   const toolCalls = capturedToolCalls.length > 0 ? capturedToolCalls : stepToolCalls;
   const ui = buildUiFromToolResults(toolResults);
-  let text = summarizeUiText(ui, result.text);
+
+  // Suppress intermediate search UIs during confirmation turns.
+  // During create/edit flows, contact searches are context resolution,
+  // not the user's requested result.
+  const isIntermediateSearchUi =
+    confirmationRequired &&
+    ui !== null &&
+    ["contacts", "conversations", "events", "reminders"].includes(ui.kind) &&
+    !inferredIntents.some((i) => i.startsWith("search_"));
+
+  const effectiveUi = isIntermediateSearchUi ? null : ui;
+
+  let text = summarizeUiText(effectiveUi, result.text, confirmationRequired);
 
   const createContactCalls = toolCalls.filter((call) => call.toolName === "create_contact");
   const contactCreated = toolResults.some(
@@ -246,11 +265,40 @@ export async function processMessageLLM(
       toolResult.output.type === "contact_created"
   );
   if (createContactCalls.length > 0 && !contactCreated) {
-    const lastUserText = messages[messages.length - 1]?.content || "";
-    text = buildCreateContactFailureText(lastUserText, createContactCalls, toolResults);
+    // Only override text if no other mutations succeeded (e.g. event/conversation created).
+    // In multi-intent flows, other actions may have completed; keep the LLM's summary.
+    const hasOtherSuccessfulMutations = toolResults.some(
+      (toolResult) =>
+        toolResult.output &&
+        typeof toolResult.output === "object" &&
+        typeof toolResult.output.type === "string" &&
+        toolResult.output.type !== "contact_created" &&
+        (toolResult.output.type.endsWith("_created") || toolResult.output.type.endsWith("_updated"))
+    );
+    if (!hasOtherSuccessfulMutations) {
+      const lastUserText = messages[messages.length - 1]?.content || "";
+      text = buildCreateContactFailureText(lastUserText, createContactCalls, toolResults);
+    }
   }
 
-  console.log(`[assistant:llm] Final text (${text.length} chars), UI: ${ui ? ui.kind : "none"}`);
+  const hasConfirmationProposal = toolResults.some(
+    (tr) => tr.output?.type === "confirmation_requested"
+  );
+  const textIndicatesPlan =
+    /\b(going to|will|plan to|about to|shall I)\b/i.test(result.text) &&
+    /\b(go ahead|confirm|proceed|changes)\b/i.test(result.text);
 
-  return { text, ui };
+  const shouldShowConfirmationButtons =
+    confirmationRequired && (hasConfirmationProposal || textIndicatesPlan);
+
+  const actions: AssistantAction[] | undefined = shouldShowConfirmationButtons
+    ? [
+        { label: "Go ahead", message: "go ahead", style: "primary" },
+        { label: "I need changes", message: "No, I need changes", style: "secondary" },
+      ]
+    : undefined;
+
+  console.log(`[assistant:llm] Final text (${text.length} chars), UI: ${effectiveUi ? effectiveUi.kind : "none"}, actions: ${actions ? actions.length : "none"}`);
+
+  return { text, ui: effectiveUi, actions };
 }

@@ -6,7 +6,7 @@ export function getIntentGuidance(intent: AssistantIntent): string {
     case "create_contact":
       return "The user wants to create a new contact. Extract all available fields (name, phone, email, company, etc.) and call create_contact.";
     case "create_conversation":
-      return "The user wants to log a conversation. Resolve participant contacts first using search, then create the conversation with their IDs.";
+      return "The user wants to log a conversation. Search for participant contacts first. If a strong match is found, propose the conversation details for confirmation. If no match is found, inform the user and offer to create the contact. Extract ALL relevant details: who, what, where, when, and how (medium).";
     case "create_conversation_with_contact":
       return "The user wants to log a conversation and may need to create a new contact first. Create the contact if needed, then log the conversation.";
     case "create_event":
@@ -43,7 +43,7 @@ export function getIntentGuidance(intent: AssistantIntent): string {
 export function buildSystemPrompt(
   userContext: UserContext,
   enumConfig: AssistantEnumConfig,
-  intent: AssistantIntent,
+  intents: AssistantIntent[],
   confirmationRequired: boolean
 ): string {
   const today = formatToday(new Date());
@@ -70,13 +70,19 @@ Do NOT ask for raw IDs — always resolve names to contacts automatically.`;
   const confirmationSection = confirmationRequired
     ? `## Confirmation Gate
 This turn requires explicit confirmation before any create/update/delete action.
-- First resolve context with search tools.
-- If a search returns more than one match, ask the user to choose the exact context object.
-- After context is clear, ask exactly:
-  "I am going to <action> with these details: <details>. Shall I go ahead or you need any changes?"
-- Do not execute any mutating tool until the user explicitly confirms.`
+- First resolve context using search tools (e.g., search_contacts_fuzzy).
+- MATCH QUALITY ASSESSMENT:
+  - If a single strong match exists (exact name match or very high similarity), use it.
+  - If multiple matches exist but none closely match, tell the user you couldn't find an exact match and offer to create a new contact.
+  - If NO matches are found, clearly state this and offer to create the contact.
+- After context is clear, summarize the COMPLETE action plan. For example:
+  "I'll log a conversation: Met [Name] at [Location], discussed [topic]. Medium: In-Person. Date: Today (${today}). Shall I go ahead or do you need changes?"
+- CRITICAL: Your text response MUST describe the planned action, not just list search results.
+- Do NOT execute any mutating tool until the user explicitly confirms.`
     : `## Confirmation Gate
-The user has explicitly confirmed changes. You may execute mutating tools now.`;
+The user has explicitly confirmed changes. You may execute mutating tools now.
+IMPORTANT: The user's confirmation message (e.g. "go ahead", "yes", "sounds good") is NOT data.
+Extract all names, dates, details, and parameters from the EARLIER conversation messages, not from the confirmation message.`;
 
   return `You are a helpful assistant for Orbit, a personal CRM app. Help users manage contacts, conversations, events, and reminders.
 
@@ -84,8 +90,14 @@ Today's date is ${today}.
 ${userSection}
 
 ## Current Task
-Your tools have been scoped to this intent: **${intent}**.
-${getIntentGuidance(intent)}
+${intents.length === 1
+    ? `Your tools have been scoped to this intent: **${intents[0]}**.\n${getIntentGuidance(intents[0])}`
+    : `The user's message contains multiple intents: **${intents.join(", ")}**.
+Your tools have been scoped to handle ALL of these intents. Execute them in a logical order:
+${intents.map((intent, i) => `${i + 1}. ${getIntentGuidance(intent)}`).join("\n")}
+
+**Important**: Resolve shared context (like contact lookups) once and reuse across intents.
+When possible, make parallel tool calls for independent operations (e.g., search for multiple contacts simultaneously).`}
 
 ## Enum Values (from database)
 - Conversation medium values: ${enumConfig.conversationMediums.join(", ")}

@@ -283,8 +283,20 @@ export function buildUiFromToolResults(
   return null;
 }
 
-export function summarizeUiText(ui: AssistantUi | null, fallback: string): string {
+export function summarizeUiText(
+  ui: AssistantUi | null,
+  fallback: string,
+  confirmationRequired?: boolean
+): string {
   if (!ui) return fallback;
+
+  // During confirmation turns, the LLM text contains the action plan.
+  // Don't override it with count summaries for list-type UIs.
+  if (confirmationRequired && fallback && fallback.trim().length > 0) {
+    if (["contacts", "conversations", "events", "reminders"].includes(ui.kind)) {
+      return fallback;
+    }
+  }
 
   // ── List-type UIs: cards handle display, so use concise generated text ──
   // For non-zero counts we always override the LLM text (which tends to

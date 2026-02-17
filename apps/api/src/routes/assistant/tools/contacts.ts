@@ -23,6 +23,7 @@ import { assertValidGender } from "../enums";
 import { getOwnedContact } from "../ownership";
 import { findBestContactMatch, resolveContactId } from "../db-helpers";
 import { enrichConversations, enrichEvents, enrichReminders } from "../enrichment";
+import { CONFIRMATION_TOKENS } from "../guardrails";
 
 // ── Implementation functions ─────────────────────────────────────────
 
@@ -615,7 +616,7 @@ export async function searchContactsFuzzy(
   name: string,
   limit?: number
 ): Promise<ToolResult> {
-  const takeLimit = limit || 10;
+  const takeLimit = limit || 5;
   if (!name) {
     return { type: "contacts_found", count: 0, contacts: [] };
   }
@@ -650,6 +651,10 @@ export async function searchContactsFuzzy(
       type: "contacts_found",
       count: rows.length,
       contacts: rows,
+      bestMatchSimilarity: rows.length > 0 ? Number(rows[0].similarity) : 0,
+      exactMatchFound: rows.some(
+        (r) => r.displayName.toLowerCase().trim() === name.toLowerCase().trim()
+      ),
     };
   } catch {
     const contactsResult = await db
@@ -664,6 +669,10 @@ export async function searchContactsFuzzy(
       type: "contacts_found",
       count: contactsResult.length,
       contacts: contactsResult,
+      bestMatchSimilarity: 0,
+      exactMatchFound: contactsResult.some(
+        (r) => r.displayName.toLowerCase().trim() === name.toLowerCase().trim()
+      ),
     };
   }
 }
@@ -981,8 +990,14 @@ export function createContactTools(userId: string, schemas: EnumSchemas, assista
         location,
         notes,
         tagIds,
-      }) =>
-        createContact(
+      }) => {
+        if (CONFIRMATION_TOKENS.has(displayName.trim().toLowerCase().replace(/[.!?]+$/, ""))) {
+          return {
+            type: "error",
+            message: `"${displayName}" is not a valid contact name — it looks like a confirmation phrase. Use the actual contact name from the earlier conversation.`,
+          };
+        }
+        return createContact(
           userId,
           displayName,
           primaryPhone,
@@ -995,7 +1010,8 @@ export function createContactTools(userId: string, schemas: EnumSchemas, assista
           notes,
           tagIds,
           assistantConversationId
-        ),
+        );
+      },
     }),
 
     update_contact: tool({

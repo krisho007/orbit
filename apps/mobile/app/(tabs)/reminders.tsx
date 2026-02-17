@@ -5,11 +5,12 @@ import {
   Text,
   FlatList,
   Pressable,
+  TextInput,
   RefreshControl,
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Bell, CheckCircle2, XCircle, Plus } from "lucide-react-native";
+import { Bell, CheckCircle2, XCircle, Plus, Search, X } from "lucide-react-native";
 import { format } from "date-fns";
 import { Reminder, ReminderStatus, remindersApi } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
@@ -36,6 +37,7 @@ export default function RemindersScreen() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [statusFilter, setStatusFilter] = useState<ReminderStatus | undefined>("OPEN");
@@ -49,6 +51,7 @@ export default function RemindersScreen() {
         }
 
         const data = await remindersApi.list({
+          search: search || undefined,
           cursor: refresh ? undefined : nextCursor || undefined,
           status: statusFilter,
         });
@@ -71,14 +74,14 @@ export default function RemindersScreen() {
         setIsLoadingMore(false);
       }
     },
-    [nextCursor, statusFilter]
+    [search, nextCursor, statusFilter]
   );
 
   useEffect(() => {
     setIsLoading(true);
     setNextCursor(null);
     loadReminders(true);
-  }, [statusFilter]);
+  }, [search, statusFilter]);
 
   const handleRefresh = () => {
     loadReminders(true);
@@ -145,8 +148,26 @@ export default function RemindersScreen() {
   };
 
   const ListHeader = () => (
-    <View className="bg-background-0">
-      <View className="px-4 pt-4">
+    <View className="bg-background-50">
+      <View className="px-4 pt-4 pb-2">
+        <View className="flex-row items-center bg-background-0 rounded-2xl px-4 py-3 border border-border-200">
+          <Search size={16} color={getThemeColor(colors, "typography-500")} />
+          <TextInput
+            className="flex-1 text-base text-typography-900 ml-2"
+            placeholder="Search reminders"
+            placeholderTextColor={getThemeColor(colors, "typography-500")}
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search.length > 0 && (
+            <Pressable onPress={() => setSearch("")} className="ml-2">
+              <X size={16} color={getThemeColor(colors, "typography-500")} />
+            </Pressable>
+          )}
+        </View>
+      </View>
+
+      <View className="px-4 pb-2">
         <View className="flex-row flex-wrap">
           {STATUS_FILTERS.map((filter) => {
             const isActive = statusFilter === filter.value;
@@ -173,7 +194,7 @@ export default function RemindersScreen() {
         </View>
       </View>
 
-      {totalCount > 0 && (
+      {!search && totalCount > 0 && (
         <View className="px-4 pb-2">
           <Text className="text-typography-500 text-sm">
             {totalCount} reminder{totalCount !== 1 ? "s" : ""}
@@ -192,9 +213,13 @@ export default function RemindersScreen() {
           <View className="w-16 h-16 rounded-3xl bg-primary-100 items-center justify-center mb-4">
             <Bell size={28} color={getThemeColor(colors, "primary-600")} />
           </View>
-          <Text className="text-typography-900 text-lg font-semibold mb-2">No reminders yet</Text>
+          <Text className="text-typography-900 text-lg font-semibold mb-2">
+            {search ? "No reminders found" : "No reminders yet"}
+          </Text>
           <Text className="text-typography-500 text-center px-8">
-            Create reminders manually or ask the assistant to generate follow-ups.
+            {search
+              ? "Try a different search term"
+              : "Create reminders manually or ask the assistant to generate follow-ups."}
           </Text>
         </>
       )}

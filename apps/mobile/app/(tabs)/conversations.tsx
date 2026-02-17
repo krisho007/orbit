@@ -6,6 +6,7 @@ import {
   Text,
   FlatList,
   Pressable,
+  TextInput,
   RefreshControl,
   ActivityIndicator,
 } from "react-native";
@@ -19,6 +20,8 @@ import {
   Building2,
   FileText,
   Plus,
+  Search,
+  X,
 } from "lucide-react-native";
 import { conversationsApi, Conversation } from "../../lib/api";
 import { format } from "date-fns";
@@ -43,6 +46,7 @@ export default function ConversationsScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -55,6 +59,7 @@ export default function ConversationsScreen() {
         }
 
         const data = await conversationsApi.list({
+          search: search || undefined,
           cursor: refresh ? undefined : nextCursor || undefined,
         });
 
@@ -77,12 +82,15 @@ export default function ConversationsScreen() {
         setIsLoadingMore(false);
       }
     },
-    [nextCursor]
+    [search, nextCursor]
   );
 
   useEffect(() => {
+    setIsLoading(true);
+    setConversations([]);
+    setNextCursor(null);
     loadConversations(true);
-  }, []);
+  }, [search]);
 
   const handleRefresh = () => {
     loadConversations(true);
@@ -148,9 +156,25 @@ export default function ConversationsScreen() {
   };
 
   const ListHeader = () => (
-    <View className="p-4 bg-background-0">
-      {totalCount > 0 && (
-        <Text className="text-typography-500 text-sm">
+    <View className="px-4 pt-4 pb-2 bg-background-50">
+      <View className="flex-row items-center bg-background-0 rounded-2xl px-4 py-3 border border-border-200">
+        <Search size={16} color={getThemeColor(colors, "typography-500")} />
+        <TextInput
+          className="flex-1 text-base text-typography-900 ml-2"
+          placeholder="Search conversations"
+          placeholderTextColor={getThemeColor(colors, "typography-500")}
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search.length > 0 && (
+          <Pressable onPress={() => setSearch("")} className="ml-2">
+            <X size={16} color={getThemeColor(colors, "typography-500")} />
+          </Pressable>
+        )}
+      </View>
+
+      {!search && totalCount > 0 && (
+        <Text className="text-typography-500 text-sm mt-3">
           {totalCount} conversation{totalCount !== 1 ? "s" : ""}
         </Text>
       )}
@@ -167,10 +191,12 @@ export default function ConversationsScreen() {
             <MessageCircle size={28} color={getThemeColor(colors, "primary-600")} />
           </View>
           <Text className="text-typography-900 text-lg font-semibold mb-2">
-            No conversations yet
+            {search ? "No conversations found" : "No conversations yet"}
           </Text>
           <Text className="text-typography-500 text-center px-8">
-            Record your first conversation to keep track of your interactions
+            {search
+              ? "Try a different search term"
+              : "Record your first conversation to keep track of your interactions"}
           </Text>
         </>
       )}

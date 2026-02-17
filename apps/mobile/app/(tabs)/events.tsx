@@ -6,6 +6,7 @@ import {
   Text,
   FlatList,
   Pressable,
+  TextInput,
   RefreshControl,
   ActivityIndicator,
 } from "react-native";
@@ -22,6 +23,8 @@ import {
   CalendarDays,
   MapPin,
   Plus,
+  Search,
+  X,
 } from "lucide-react-native";
 import { eventsApi, Event } from "../../lib/api";
 import { format, isPast } from "date-fns";
@@ -47,6 +50,7 @@ export default function EventsScreen() {
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -59,6 +63,7 @@ export default function EventsScreen() {
         }
 
         const data = await eventsApi.list({
+          search: search || undefined,
           cursor: refresh ? undefined : nextCursor || undefined,
         });
 
@@ -81,12 +86,15 @@ export default function EventsScreen() {
         setIsLoadingMore(false);
       }
     },
-    [nextCursor]
+    [search, nextCursor]
   );
 
   useEffect(() => {
+    setIsLoading(true);
+    setEvents([]);
+    setNextCursor(null);
     loadEvents(true);
-  }, []);
+  }, [search]);
 
   const handleRefresh = () => {
     loadEvents(true);
@@ -167,9 +175,25 @@ export default function EventsScreen() {
   };
 
   const ListHeader = () => (
-    <View className="p-4 bg-background-0">
-      {totalCount > 0 && (
-        <Text className="text-typography-500 text-sm">
+    <View className="px-4 pt-4 pb-2 bg-background-50">
+      <View className="flex-row items-center bg-background-0 rounded-2xl px-4 py-3 border border-border-200">
+        <Search size={16} color={getThemeColor(colors, "typography-500")} />
+        <TextInput
+          className="flex-1 text-base text-typography-900 ml-2"
+          placeholder="Search events"
+          placeholderTextColor={getThemeColor(colors, "typography-500")}
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search.length > 0 && (
+          <Pressable onPress={() => setSearch("")} className="ml-2">
+            <X size={16} color={getThemeColor(colors, "typography-500")} />
+          </Pressable>
+        )}
+      </View>
+
+      {!search && totalCount > 0 && (
+        <Text className="text-typography-500 text-sm mt-3">
           {totalCount} event{totalCount !== 1 ? "s" : ""}
         </Text>
       )}
@@ -186,10 +210,12 @@ export default function EventsScreen() {
             <CalendarIcon color={getThemeColor(colors, "primary-600")} />
           </View>
           <Text className="text-typography-900 text-lg font-semibold mb-2">
-            No events yet
+            {search ? "No events found" : "No events yet"}
           </Text>
           <Text className="text-typography-500 text-center px-8">
-            Create your first event to start tracking important dates
+            {search
+              ? "Try a different search term"
+              : "Create your first event to start tracking important dates"}
           </Text>
         </>
       )}

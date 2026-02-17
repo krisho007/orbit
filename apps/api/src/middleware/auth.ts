@@ -82,6 +82,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
           email: user.email,
           name: user.user_metadata?.full_name || user.user_metadata?.name || null,
           image: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
+          updatedAt: new Date(),
         })
         .returning({ id: users.id });
       

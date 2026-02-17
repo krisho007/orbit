@@ -8,10 +8,13 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.CallLog
 import android.telephony.TelephonyManager
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 
 class PhoneStateReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
@@ -20,18 +23,21 @@ class PhoneStateReceiver : BroadcastReceiver() {
     }
 
     val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE) ?: return
-    val incomingNumber = sanitizePhoneNumber(intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER))
+    val broadcastNumber = sanitizePhoneNumber(intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER))
 
     when (state) {
       TelephonyManager.EXTRA_STATE_RINGING -> {
-        val number = if (incomingNumber.isNullOrBlank()) null else incomingNumber
+        val number = broadcastNumber
+          ?: resolvePhoneFromCallLog(context)
         persistLastNumber(context, number)
         showIncomingNotification(context, number)
       }
 
       TelephonyManager.EXTRA_STATE_OFFHOOK -> {
         cancelIncomingNotification(context)
-        val number = incomingNumber ?: getLastNumber(context)
+        val number = broadcastNumber
+          ?: getLastNumber(context)
+          ?: resolvePhoneFromCallLog(context)
         if (number.isNullOrBlank()) {
           return
         }
@@ -43,10 +49,39 @@ class PhoneStateReceiver : BroadcastReceiver() {
 
       TelephonyManager.EXTRA_STATE_IDLE -> {
         cancelIncomingNotification(context)
-        val number = incomingNumber ?: getLastNumber(context)
+        val number = broadcastNumber
+          ?: getLastNumber(context)
+          ?: resolvePhoneFromCallLog(context)
         showCallEndedNotification(context, number)
         clearLastNumber(context)
       }
+    }
+  }
+
+  private fun resolvePhoneFromCallLog(context: Context): String? {
+    if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_CALL_LOG)
+      != PackageManager.PERMISSION_GRANTED
+    ) {
+      return null
+    }
+
+    return try {
+      val cutoffMs = System.currentTimeMillis() - 5_000
+      context.contentResolver.query(
+        CallLog.Calls.CONTENT_URI,
+        arrayOf(CallLog.Calls.NUMBER),
+        "${CallLog.Calls.DATE} > ? AND ${CallLog.Calls.TYPE} = ?",
+        arrayOf(cutoffMs.toString(), CallLog.Calls.INCOMING_TYPE.toString()),
+        "${CallLog.Calls.DATE} DESC"
+      )?.use { cursor ->
+        if (cursor.moveToFirst()) {
+          sanitizePhoneNumber(cursor.getString(0))
+        } else {
+          null
+        }
+      }
+    } catch (_: Exception) {
+      null
     }
   }
 

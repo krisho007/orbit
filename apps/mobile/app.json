@@ -28,6 +28,7 @@
       "versionCode": 1,
       "permissions": [
         "POST_NOTIFICATIONS",
+        "READ_CALL_LOG",
         "READ_PHONE_STATE"
       ]
     },

@@ -70,6 +70,12 @@ function RootLayoutNav() {
     const requestAndroidPermissions = async () => {
       try {
         await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_PHONE_STATE);
+        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CALL_LOG, {
+          title: "Call Log Access",
+          message: "Orbit needs call log access to identify incoming callers and show their contact info.",
+          buttonPositive: "Allow",
+          buttonNegative: "Deny",
+        });
         if (typeof Platform.Version === "number" && Platform.Version >= 33) {
           await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
         }

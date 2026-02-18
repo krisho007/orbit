@@ -70,7 +70,7 @@ type ConversationTurn = {
   content: string;
   ui?: AssistantResponse["ui"];
   actions?: AssistantResponse["actions"];
-  source: "scenario" | "auto-confirm" | "auto-select" | "auto-reject";
+  source: "scenario" | "auto-confirm" | "auto-select" | "auto-reject" | "auto-disambiguate";
   elapsed?: number;
   timestamp: number;
 };
@@ -93,6 +93,11 @@ type TestScenario = {
   messages: string[];
   /** What to do when a confirmation prompt appears: "confirm" (default) or "reject" */
   onConfirmation?: "confirm" | "reject";
+  /** If true, this scenario needs the disambiguation setup contacts to exist */
+  requiresSetup?: boolean;
+  /** Pre-canned replies for when the assistant asks a clarifying question (no actions/selection UI).
+   *  The harness sends these in order when it detects a question mark in the response. */
+  disambiguationReplies?: string[];
   expectations: Expectation;
 };
 
@@ -116,6 +121,57 @@ const API_BASE = process.env.API_BASE_URL || "http://localhost:3001";
 const MAX_TURNS = 10;
 const TEST_EMAIL = `orbit-test-harness-${Date.now()}@test.local`;
 const TEST_PASSWORD = `TestPass!${crypto.randomUUID().slice(0, 12)}`;
+
+// ── Setup Data ────────────────────────────────────────────────────
+// Pre-create contacts for disambiguation scenarios.
+// These contacts exist BEFORE the assistant is asked about them.
+
+type SetupContact = { displayName: string; company?: string; primaryEmail?: string; primaryPhone?: string; notes?: string };
+
+const SETUP_CONTACTS: SetupContact[] = [
+  // Two "John" contacts for disambiguation
+  { displayName: "TestBot John Smith", company: "TestCorp Engineering", primaryEmail: "john.smith@testcorp.example" },
+  { displayName: "TestBot John Doe", company: "TestCorp Marketing", primaryEmail: "john.doe@testcorp.example" },
+  // Two "Sarah" contacts for disambiguation
+  { displayName: "TestBot Sarah Lee", primaryPhone: "+1 555 000 2001" },
+  { displayName: "TestBot Sarah Kim", primaryPhone: "+1 555 000 2002" },
+  // Unique contacts for multi-participant and event scenarios
+  { displayName: "TestBot David", company: "TestCorp", primaryEmail: "david@testcorp.example" },
+  { displayName: "TestBot Emma", company: "TestCorp", primaryEmail: "emma@testcorp.example" },
+];
+
+async function setupTestData(token: string): Promise<string[]> {
+  const createdIds: string[] = [];
+  for (const contact of SETUP_CONTACTS) {
+    try {
+      const res = await fetch(`${API_BASE}/api/contacts`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(contact),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as any;
+        createdIds.push(data.id);
+      } else {
+        console.warn(`    Failed to create setup contact "${contact.displayName}": ${res.status}`);
+      }
+    } catch (err) {
+      console.warn(`    Error creating setup contact "${contact.displayName}": ${err}`);
+    }
+  }
+  return createdIds;
+}
+
+async function cleanupSetupData(token: string, ids: string[]): Promise<void> {
+  for (const id of ids) {
+    try {
+      await fetch(`${API_BASE}/api/contacts/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {}
+  }
+}
 
 // ── Auth ───────────────────────────────────────────────────────────
 
@@ -289,6 +345,7 @@ async function runScenario(scenario: TestScenario, token: string): Promise<Scena
 
       // Handle auto-responses for interactive flows
       let needsAutoResponse = true;
+      let disambiguationReplyIndex = 0;
       while (needsAutoResponse && turnCount < MAX_TURNS) {
         needsAutoResponse = false;
 
@@ -390,6 +447,49 @@ async function runScenario(scenario: TestScenario, token: string): Promise<Scena
             Object.assign(response, selectResponse);
             needsAutoResponse = true;
           }
+        }
+
+        // Disambiguation flow: assistant asked a clarifying question (no actions, no selection UI)
+        // Use pre-canned replies from the scenario to respond.
+        if (
+          !needsAutoResponse &&
+          scenario.disambiguationReplies &&
+          disambiguationReplyIndex < scenario.disambiguationReplies.length &&
+          !response.actions?.length &&
+          response.content?.includes("?")
+        ) {
+          const reply = scenario.disambiguationReplies[disambiguationReplyIndex++];
+          chatHistory.push({ role: "user", content: reply });
+          turns.push({
+            role: "user",
+            content: reply,
+            source: "auto-disambiguate",
+            timestamp: Date.now(),
+          });
+
+          const disambigStart = Date.now();
+          const disambigResponse = await callAssistant(token, chatHistory, conversationId);
+          const disambigElapsed = Date.now() - disambigStart;
+          turnCount++;
+
+          conversationId = disambigResponse.conversationId || conversationId;
+
+          chatHistory.push({ role: "assistant", content: disambigResponse.content });
+          turns.push({
+            role: "assistant",
+            content: disambigResponse.content,
+            ui: disambigResponse.ui,
+            actions: disambigResponse.actions,
+            source: "auto-disambiguate",
+            elapsed: disambigElapsed,
+            timestamp: Date.now(),
+          });
+
+          createdEntities.push(...extractCreatedEntities(disambigResponse));
+
+          // Continue the loop to handle follow-ups (confirmation, more disambiguation, etc.)
+          Object.assign(response, disambigResponse);
+          needsAutoResponse = true;
         }
       }
     }
@@ -624,6 +724,114 @@ const SCENARIOS: TestScenario[] = [
     messages: ["Hello! How are you doing today?"],
     expectations: {
       noUi: true,
+    },
+  },
+
+  // ─── Disambiguation (orbit-f41) ───────────────────────────
+  {
+    id: "disambiguate-search",
+    name: "Search ambiguous name shows multiple results",
+    category: "disambiguation",
+    requiresSetup: true,
+    messages: ["Find my contact John"],
+    expectations: {
+      finalUiKind: "contacts",
+    },
+  },
+  {
+    id: "disambiguate-conversation",
+    name: "Log call with ambiguous contact triggers disambiguation",
+    category: "disambiguation",
+    requiresSetup: true,
+    messages: [
+      "I just had a phone call with TestBot John about project status",
+    ],
+    disambiguationReplies: ["TestBot John Smith"],
+    expectations: {
+      finalUiKind: "created",
+    },
+  },
+  {
+    id: "disambiguate-with-detail",
+    name: "Narrow down ambiguous contact with extra detail",
+    category: "disambiguation",
+    requiresSetup: true,
+    messages: [
+      "Log a call with TestBot Sarah from phone number +1 555 000 2001 about the new proposal",
+    ],
+    disambiguationReplies: ["TestBot Sarah Lee"],
+    expectations: {
+      finalUiKind: "created",
+    },
+  },
+
+  // ─── Multi-Entity Disambiguation (orbit-7sc) ──────────────
+  {
+    id: "multi-disambiguate",
+    name: "Conversation with two ambiguous participants",
+    category: "multi-disambiguation",
+    requiresSetup: true,
+    messages: [
+      "I had a meeting with TestBot John and TestBot Sarah about the annual review",
+    ],
+    disambiguationReplies: [
+      "TestBot John Smith and TestBot Sarah Lee",
+    ],
+    expectations: {
+      finalUiKind: "created",
+    },
+  },
+  {
+    id: "mixed-resolution",
+    name: "One ambiguous + one unique participant",
+    category: "multi-disambiguation",
+    requiresSetup: true,
+    messages: [
+      "Log a phone call with TestBot John and TestBot David about the budget",
+    ],
+    disambiguationReplies: ["TestBot John Doe"],
+    expectations: {
+      finalUiKind: "created",
+    },
+  },
+
+  // ─── Event Creation + Linked Conversations (orbit-wq8) ────
+  {
+    id: "event-with-conversation",
+    name: "Create event and log what was discussed",
+    category: "event-linked",
+    requiresSetup: true,
+    messages: [
+      "I had a meeting with TestBot David and TestBot Emma yesterday about the product roadmap. Schedule a follow-up meeting next week.",
+    ],
+    expectations: {
+      finalUiKind: "created",
+    },
+  },
+  {
+    id: "event-multi-participant",
+    name: "Create event with multiple participants",
+    category: "event-linked",
+    requiresSetup: true,
+    messages: [
+      "Schedule a team meeting with TestBot David and TestBot Emma next Friday at 2pm to discuss Q3 planning",
+    ],
+    expectations: {
+      finalUiKind: "created",
+      createdEntityKinds: ["event"],
+    },
+  },
+  {
+    id: "event-birthday",
+    name: "Create birthday event for a contact",
+    category: "event-linked",
+    requiresSetup: true,
+    messages: [
+      "TestBot Emma's birthday is on March 15th. Add it as an event.",
+    ],
+    expectations: {
+      finalUiKind: "created",
+      createdEntityKinds: ["event"],
     },
   },
 ];
@@ -1003,9 +1211,18 @@ async function main() {
 
   const allResults: ScenarioResult[] = [];
   const allConversationIds = new Set<string>();
+  let setupContactIds: string[] = [];
 
   try {
-    // 2. Run scenarios
+    // 2. Setup test data (contacts for disambiguation scenarios)
+    const hasSetupScenarios = SCENARIOS.some((s) => s.requiresSetup);
+    if (hasSetupScenarios) {
+      console.log("\n📦 Setting up test data (disambiguation contacts)...");
+      setupContactIds = await setupTestData(token);
+      console.log(`  Created ${setupContactIds.length} setup contacts.`);
+    }
+
+    // 3. Run scenarios
     console.log(`\n🧪 Running ${SCENARIOS.length} scenarios...\n`);
 
     for (const scenario of SCENARIOS) {
@@ -1074,6 +1291,10 @@ async function main() {
     }
 
     await cleanupCreatedEntities(token, allEntities, allConversationIds);
+    if (setupContactIds.length > 0) {
+      console.log("  Cleaning up setup contacts...");
+      await cleanupSetupData(token, setupContactIds);
+    }
     console.log("  Entity cleanup complete.");
 
     // 6. Return exit code

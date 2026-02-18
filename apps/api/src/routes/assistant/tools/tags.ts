@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { tool } from "ai";
-import { eq, and, sql, asc } from "drizzle-orm";
+import { eq, and, sql, asc, inArray } from "drizzle-orm";
 import { db, tags, contactTags } from "../../../db";
 import type { ToolResult } from "../types";
 import { getOwnedTag } from "../ownership";
@@ -23,7 +23,7 @@ export async function listTags(userId: string): Promise<ToolResult> {
             count: sql<number>`count(*)`,
           })
           .from(contactTags)
-          .where(sql`${contactTags.tagId} = ANY(${tagIds})`)
+          .where(inArray(contactTags.tagId, tagIds))
           .groupBy(contactTags.tagId)
       : [];
 

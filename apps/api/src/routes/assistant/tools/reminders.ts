@@ -130,6 +130,7 @@ export async function createReminderByIds(
   },
   assistantConversationId?: string
 ): Promise<ToolResult> {
+  try {
   const uniqueParticipantIds = [...new Set(payload.participantIds)];
   if (uniqueParticipantIds.length === 0) {
     return { type: "error", message: "At least one participant is required" };
@@ -178,7 +179,7 @@ export async function createReminderByIds(
   const participantContacts = await db
     .select({ displayName: contacts.displayName })
     .from(contacts)
-    .where(sql`${contacts.id} = ANY(${uniqueParticipantIds})`);
+    .where(inArray(contacts.id, uniqueParticipantIds));
 
   return {
     type: "reminder_created",
@@ -188,6 +189,10 @@ export async function createReminderByIds(
     status: newReminder.status,
     participants: participantContacts.map((p) => p.displayName),
   };
+  } catch (err) {
+    console.error(`[assistant:tool] createReminderByIds FAILED:`, err);
+    return { type: "error", message: `Failed to create reminder: ${String(err)}` };
+  }
 }
 
 export async function updateReminderById(

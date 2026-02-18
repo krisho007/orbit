@@ -139,6 +139,7 @@ export async function createConversation(
   eventId?: string,
   assistantConversationId?: string
 ): Promise<ToolResult> {
+  try {
   let resolvedParticipantIds: string[] = [];
 
   if (participantIds.length > 0) {
@@ -223,7 +224,7 @@ export async function createConversation(
   const participantContacts = await db
     .select({ displayName: contacts.displayName })
     .from(contacts)
-    .where(sql`${contacts.id} = ANY(${resolvedParticipantIds})`);
+    .where(inArray(contacts.id, resolvedParticipantIds));
 
   return {
     type: "conversation_created",
@@ -233,6 +234,10 @@ export async function createConversation(
     content: conversation.content,
     participants: participantContacts.map((p) => p.displayName),
   };
+  } catch (err) {
+    console.error(`[assistant:tool] createConversation FAILED:`, err);
+    return { type: "error", message: `Failed to create conversation: ${String(err)}` };
+  }
 }
 
 export async function queryConversations(
@@ -421,6 +426,7 @@ export async function createConversationByIds(
   },
   assistantConversationId?: string
 ): Promise<ToolResult> {
+  try {
   const participantIds = [...new Set(payload.participantIds)];
 
   const [newConversation] = await db
@@ -471,7 +477,7 @@ export async function createConversationByIds(
       ? await db
           .select({ displayName: contacts.displayName })
           .from(contacts)
-          .where(sql`${contacts.id} = ANY(${participantIds})`)
+          .where(inArray(contacts.id, participantIds))
       : [];
 
   return {
@@ -482,6 +488,10 @@ export async function createConversationByIds(
     content: newConversation.content,
     participants: participantContacts.map((p) => p.displayName),
   };
+  } catch (err) {
+    console.error(`[assistant:tool] createConversationByIds FAILED:`, err);
+    return { type: "error", message: `Failed to create conversation: ${String(err)}` };
+  }
 }
 
 export async function updateConversationById(

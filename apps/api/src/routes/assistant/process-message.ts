@@ -244,14 +244,21 @@ export async function processMessageLLM(
   const toolCalls = capturedToolCalls.length > 0 ? capturedToolCalls : stepToolCalls;
   const ui = buildUiFromToolResults(toolResults);
 
-  // Suppress intermediate search UIs during confirmation turns.
-  // During create/edit flows, contact searches are context resolution,
-  // not the user's requested result.
-  const isIntermediateSearchUi =
-    confirmationRequired &&
+  // Suppress intermediate search UIs during create/edit flows.
+  // Contact/entity searches during these flows are context resolution (e.g.
+  // looking up a contact to link to a conversation), not the user's requested result.
+  // This applies both to confirmation turns AND execution turns.
+  const isMutatingFlow = inferredIntents.some(
+    (i) => i.startsWith("create_") || i.startsWith("edit_")
+  );
+  const isSearchUi =
     ui !== null &&
-    ["contacts", "conversations", "events", "reminders"].includes(ui.kind) &&
-    !inferredIntents.some((i) => i.startsWith("search_"));
+    ["contacts", "conversations", "events", "reminders"].includes(ui.kind);
+  const isUserSearchIntent = inferredIntents.some((i) => i.startsWith("search_"));
+  // If we have a "created" card, always prefer it over a search result
+  const hasCreatedUi = ui !== null && ui.kind === "created";
+  const isIntermediateSearchUi =
+    isSearchUi && isMutatingFlow && !isUserSearchIntent && !hasCreatedUi;
 
   const effectiveUi = isIntermediateSearchUi ? null : ui;
 
@@ -285,8 +292,8 @@ export async function processMessageLLM(
     (tr) => tr.output?.type === "confirmation_requested"
   );
   const textIndicatesPlan =
-    /\b(going to|will|plan to|about to|shall I)\b/i.test(result.text) &&
-    /\b(go ahead|confirm|proceed|changes)\b/i.test(result.text);
+    /\b(going to|will|plan to|about to|shall I|would you like me to|want me to|should I|ready to)\b/i.test(result.text) &&
+    /\b(go ahead|confirm|proceed|changes|create|log|add|set up|schedule|save)\b/i.test(result.text);
 
   const shouldShowConfirmationButtons =
     confirmationRequired && (hasConfirmationProposal || textIndicatesPlan);

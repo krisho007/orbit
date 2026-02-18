@@ -128,7 +128,7 @@ export async function buildAutoReminderTitle(participantIds: string[]) {
   const participantContacts = await db
     .select({ displayName: contacts.displayName })
     .from(contacts)
-    .where(sql`${contacts.id} = ANY(${participantIds})`);
+    .where(inArray(contacts.id, participantIds));
 
   const names = participantContacts.map((p) => p.displayName).filter(Boolean);
   if (names.length === 0) return "Follow up";

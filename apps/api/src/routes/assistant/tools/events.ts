@@ -89,7 +89,7 @@ export async function createEvent(
       ? await db
           .select({ displayName: contacts.displayName })
           .from(contacts)
-          .where(sql`${contacts.id} = ANY(${resolvedParticipantIds})`)
+          .where(inArray(contacts.id, resolvedParticipantIds))
       : [];
 
   return {
@@ -148,7 +148,7 @@ export async function queryEvents(
           .select()
           .from(eventParticipants)
           .innerJoin(contacts, eq(eventParticipants.contactId, contacts.id))
-          .where(sql`${eventParticipants.eventId} = ANY(${eventIds})`)
+          .where(inArray(eventParticipants.eventId, eventIds))
       : [];
 
   console.log(`[assistant:tool] queryEvents — returning ${eventsList.length} event(s)`);
@@ -314,7 +314,7 @@ export async function createEventByIds(
       ? await db
           .select({ displayName: contacts.displayName })
           .from(contacts)
-          .where(sql`${contacts.id} = ANY(${payload.participantIds})`)
+          .where(inArray(contacts.id, payload.participantIds))
       : [];
 
   return {

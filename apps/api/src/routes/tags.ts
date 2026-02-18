@@ -1,7 +1,7 @@
 // Tags API Routes
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, asc, sql } from "drizzle-orm";
+import { eq, and, asc, sql, inArray } from "drizzle-orm";
 import { db, tags, contactTags } from "../db";
 import { authMiddleware } from "../middleware/auth";
 
@@ -38,7 +38,7 @@ app.get("/", async (c) => {
             count: sql<number>`count(*)`,
           })
           .from(contactTags)
-          .where(sql`${contactTags.tagId} = ANY(${tagIds})`)
+          .where(inArray(contactTags.tagId, tagIds))
           .groupBy(contactTags.tagId)
       : [];
 

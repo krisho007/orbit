@@ -23,17 +23,6 @@ app.use("/*", authMiddleware);
 app.post("/", async (c) => {
   const userId = c.get("userId");
 
-  // Check third-party consent before processing
-  const [user] = await db
-    .select({ thirdPartyConsentGranted: users.thirdPartyConsentGranted })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-  if (!user?.thirdPartyConsentGranted) {
-    return c.json({ error: "AI consent required", code: "CONSENT_REQUIRED" }, 403);
-  }
-
   const body = await c.req.json();
 
   const validation = chatSchema.safeParse(body);
@@ -60,55 +49,72 @@ app.post("/", async (c) => {
   const startTime = Date.now();
 
   try {
-    // Resolve or create assistant conversation
-    let assistantConvId: string;
-
-    if (conversationId) {
-      // Verify ownership
-      const [existing] = await db
-        .select({ id: assistantConversations.id })
-        .from(assistantConversations)
-        .where(
-          and(
-            eq(assistantConversations.id, conversationId),
-            eq(assistantConversations.userId, userId)
+    // Run consent check in parallel with conversation resolution
+    const resolveConversation = async (): Promise<string> => {
+      if (conversationId) {
+        const [existing] = await db
+          .select({ id: assistantConversations.id })
+          .from(assistantConversations)
+          .where(
+            and(
+              eq(assistantConversations.id, conversationId),
+              eq(assistantConversations.userId, userId)
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      if (!existing) {
-        return c.json({ error: "Conversation not found" }, 404);
+        if (!existing) throw new Error("CONVERSATION_NOT_FOUND");
+        // Fire-and-forget timestamp update — not on the critical path
+        db.update(assistantConversations)
+          .set({ updatedAt: new Date() })
+          .where(eq(assistantConversations.id, existing.id))
+          .then(() => {}, () => {});
+        return existing.id;
+      } else {
+        const title = lastUserMessage.content.substring(0, 100);
+        const [newConv] = await db
+          .insert(assistantConversations)
+          .values({ userId, title })
+          .returning();
+        return newConv.id;
       }
-      assistantConvId = existing.id;
+    };
 
-      // Update updatedAt timestamp
-      await db
-        .update(assistantConversations)
-        .set({ updatedAt: new Date() })
-        .where(eq(assistantConversations.id, assistantConvId));
-    } else {
-      // Create new conversation with auto-title from first user message
-      const title = lastUserMessage.content.substring(0, 100);
-      const [newConv] = await db
-        .insert(assistantConversations)
-        .values({ userId, title })
-        .returning();
-      assistantConvId = newConv.id;
+    const [consentResult, assistantConvId] = await Promise.all([
+      db.select({ thirdPartyConsentGranted: users.thirdPartyConsentGranted })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1),
+      resolveConversation().catch((err) => err as Error),
+    ]);
+
+    const user = consentResult[0];
+    if (!user?.thirdPartyConsentGranted) {
+      return c.json({ error: "AI consent required", code: "CONSENT_REQUIRED" }, 403);
     }
 
-    // Save user message
-    await db.insert(assistantMessages).values({
-      assistantConversationId: assistantConvId,
-      role: "user",
-      content: lastUserMessage.content,
-    });
+    if (assistantConvId instanceof Error) {
+      if (assistantConvId.message === "CONVERSATION_NOT_FOUND") {
+        return c.json({ error: "Conversation not found" }, 404);
+      }
+      throw assistantConvId;
+    }
 
-    const response = await processMessageLLM(
-      userId,
-      messages as ChatMessage[],
-      undefined,
-      assistantConvId
-    );
+    // Fire user message save concurrently with LLM processing —
+    // processMessageLLM doesn't depend on the message being persisted
+    const [response] = await Promise.all([
+      processMessageLLM(
+        userId,
+        messages as ChatMessage[],
+        undefined,
+        assistantConvId
+      ),
+      db.insert(assistantMessages).values({
+        assistantConversationId: assistantConvId,
+        role: "user",
+        content: lastUserMessage.content,
+      }),
+    ]);
 
     // Save assistant response
     await db.insert(assistantMessages).values({
@@ -129,6 +135,7 @@ app.post("/", async (c) => {
       role: "assistant",
       content: response.text,
       ui: response.ui,
+      actions: response.actions,
       conversationId: assistantConvId,
     });
   } catch (error) {

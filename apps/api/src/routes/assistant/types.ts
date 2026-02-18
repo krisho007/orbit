@@ -84,6 +84,13 @@ export type AssistantUi =
   | { kind: "selection"; prompt: string; options: AssistantSelectionOption[] }
   | { kind: "confirmation"; action: string; details?: Record<string, unknown> };
 
+// ── Action buttons ──────────────────────────────────────────────────
+export type AssistantAction = {
+  label: string;
+  message: string;
+  style: "primary" | "secondary";
+};
+
 // ── Tool call metadata ───────────────────────────────────────────────
 export type ToolCallMeta = {
   toolName: string;

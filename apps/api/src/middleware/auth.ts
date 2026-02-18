@@ -21,6 +21,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn("Supabase URL or Anon Key not configured. Auth middleware will fail.");
 }
 
+// Module-level singleton — avoids re-creating HTTP client on every request
+const supabase = supabaseUrl && supabaseAnonKey
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
+
 /**
  * Auth middleware that verifies Supabase JWT tokens
  * Extracts user from the Authorization header and sets it in context
@@ -46,8 +51,10 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   }
 
   try {
-    const supabase = createClient(supabaseUrl!, supabaseAnonKey!);
-    
+    if (!supabase) {
+      throw new HTTPException(500, { message: "Supabase not configured" });
+    }
+
     // Verify the JWT and get user
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
@@ -115,9 +122,8 @@ export const optionalAuthMiddleware = createMiddleware(async (c, next) => {
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.slice(7);
 
-    if (token && supabaseUrl && supabaseAnonKey) {
+    if (token && supabase) {
       try {
-        const supabase = createClient(supabaseUrl, supabaseAnonKey);
         const { data: { user } } = await supabase.auth.getUser(token);
 
         if (user) {

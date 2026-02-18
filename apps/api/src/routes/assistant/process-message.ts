@@ -35,13 +35,30 @@ export async function processMessageLLM(
 
   const aiModel = process.env.AI_MODEL || "gemini-flash-lite-latest";
   const usingMockGenerate = generate !== generateText;
-  const enumConfig = usingMockGenerate
-    ? {
-        conversationMediums: [...SCHEMA_ENUM_CONFIG.conversationMediums],
-        eventTypes: [...SCHEMA_ENUM_CONFIG.eventTypes],
-        reminderStatuses: [...SCHEMA_ENUM_CONFIG.reminderStatuses],
-      }
-    : await loadAssistantEnumConfig();
+  const defaultEnumConfig = {
+    conversationMediums: [...SCHEMA_ENUM_CONFIG.conversationMediums],
+    eventTypes: [...SCHEMA_ENUM_CONFIG.eventTypes],
+    reminderStatuses: [...SCHEMA_ENUM_CONFIG.reminderStatuses],
+  };
+  const defaultContext = { userName: null, userEmail: "", primaryContactId: null, primaryContactName: null };
+
+  const lastUserText = extractLastUserText(messages as unknown[]);
+  const isConfirmation = isExplicitUserConfirmation(lastUserText);
+
+  // On confirmation turns, classify intents from earlier messages so the original
+  // intents (and their tool sets) are recovered instead of classifying "Sounds good." as unknown.
+  const messagesForClassification =
+    isConfirmation && messages.length >= 3 ? messages.slice(0, -2) : messages;
+
+  // Run independent operations in parallel: enum config, intent classification, and user context
+  const [enumConfig, inferredIntents, userContext] = await Promise.all([
+    usingMockGenerate ? Promise.resolve(defaultEnumConfig) : loadAssistantEnumConfig(),
+    identifyIntents(messagesForClassification, aiModel, generate),
+    usingMockGenerate ? Promise.resolve(defaultContext) : getUserContext(userId),
+  ]);
+
+  const confirmationRequired =
+    anyIntentRequiresConfirmation(inferredIntents) && !isConfirmation;
 
   const mediumSchema = enumValueSchema(enumConfig.conversationMediums, "Conversation medium");
   const optionalMediumSchema = enumValueSchema(
@@ -65,17 +82,6 @@ export async function processMessageLLM(
     true
   );
 
-  const lastUserText = extractLastUserText(messages as unknown[]);
-  const isConfirmation = isExplicitUserConfirmation(lastUserText);
-
-  // On confirmation turns, classify intents from earlier messages so the original
-  // intents (and their tool sets) are recovered instead of classifying "Sounds good." as unknown.
-  const messagesForClassification =
-    isConfirmation && messages.length >= 3 ? messages.slice(0, -2) : messages;
-  const inferredIntents = await identifyIntents(messagesForClassification, aiModel, generate);
-  const confirmationRequired =
-    anyIntentRequiresConfirmation(inferredIntents) && !isConfirmation;
-
   const toolsWithAliases = buildToolSet(userId, {
     mediumSchema,
     optionalMediumSchema,
@@ -84,11 +90,6 @@ export async function processMessageLLM(
     optionalReminderStatusSchema,
     completionStatusSchema,
   }, assistantConversationId);
-
-  // Fetch user context for personalized system prompt
-  const userContext = usingMockGenerate
-    ? { userName: null, userEmail: "", primaryContactId: null, primaryContactName: null }
-    : await getUserContext(userId);
   // Intent-based tool scoping: union tool sets from all classified intents
   const allowedToolNames = new Set(unionToolSets(inferredIntents));
 

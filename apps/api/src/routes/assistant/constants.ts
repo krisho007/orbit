@@ -151,3 +151,12 @@ export const INTENT_TOOL_SETS: Record<AssistantIntent, string[]> = {
     "request_confirmation",
   ],
 };
+
+export function unionToolSets(intents: AssistantIntent[]): string[] {
+  const union = new Set<string>();
+  for (const intent of intents) {
+    const tools = INTENT_TOOL_SETS[intent] ?? INTENT_TOOL_SETS.unknown;
+    for (const tool of tools) union.add(tool);
+  }
+  return [...union];
+}

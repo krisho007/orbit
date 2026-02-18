@@ -5,7 +5,7 @@ app = "orbit-app"
 primary_region = "sjc"
 
 [build]
-  # Build from repo root to access both apps/api and apps/mobile
+  # Relative to build context (repo root)
   dockerfile = "apps/api/Dockerfile"
 
 [env]

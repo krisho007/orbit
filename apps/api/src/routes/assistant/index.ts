@@ -3,11 +3,16 @@ export { default } from "./route";
 
 // Named exports used by tests (assistant.test.ts)
 export { processMessageLLM } from "./process-message";
-export { isExplicitUserConfirmation, parseIntentFromText } from "./guardrails";
+export {
+  isExplicitUserConfirmation,
+  parseIntentFromText,
+  parseIntentsFromText,
+  anyIntentRequiresConfirmation,
+} from "./guardrails";
 export {
   assertValidMedium,
   assertValidEventType,
   assertValidReminderStatus,
   assertValidGender,
 } from "./enums";
-export { DELETE_TOOL_NAMES, MUTATING_TOOL_NAMES, INTENT_TOOL_SETS } from "./constants";
+export { DELETE_TOOL_NAMES, MUTATING_TOOL_NAMES, INTENT_TOOL_SETS, unionToolSets } from "./constants";

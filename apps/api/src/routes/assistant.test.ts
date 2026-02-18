@@ -1280,6 +1280,17 @@ describe("processMessageLLM", () => {
       expect(isExplicitUserConfirmation("sure thing")).toBe(false);
     });
 
+    it("strips trailing punctuation (.!?)", () => {
+      expect(isExplicitUserConfirmation("Sounds good.")).toBe(true);
+      expect(isExplicitUserConfirmation("Yes!")).toBe(true);
+      expect(isExplicitUserConfirmation("Sure.")).toBe(true);
+      expect(isExplicitUserConfirmation("Go ahead!")).toBe(true);
+      expect(isExplicitUserConfirmation("Ok.")).toBe(true);
+      expect(isExplicitUserConfirmation("Confirmed!")).toBe(true);
+      expect(isExplicitUserConfirmation("yes...")).toBe(true);
+      expect(isExplicitUserConfirmation("yes?!")).toBe(true);
+    });
+
     it("rejects arbitrary text", () => {
       expect(isExplicitUserConfirmation("create a contact")).toBe(false);
       expect(isExplicitUserConfirmation("no")).toBe(false);
@@ -1335,6 +1346,139 @@ describe("processMessageLLM", () => {
     it("returns 'unknown' for malformed JSON", () => {
       expect(parseIntentFromText("{malformed")).toBe("unknown");
       expect(parseIntentFromText('{"intent": 42}')).toBe("unknown");
+    });
+  });
+
+  // ============================================
+  // 9b. MULTI-INTENT PARSING UNIT TESTS
+  // ============================================
+
+  describe("parseIntentsFromText", () => {
+    let parseIntentsFromText: typeof import("./assistant").parseIntentsFromText;
+
+    beforeEach(async () => {
+      ({ parseIntentsFromText } = await import("./assistant"));
+    });
+
+    it("parses JSON array format", () => {
+      const result = parseIntentsFromText('{"intents":["create_event","create_conversation"]}');
+      expect(result).toEqual(["create_event", "create_conversation"]);
+    });
+
+    it("falls back to old single-intent format", () => {
+      const result = parseIntentsFromText('{"intent":"create_contact"}');
+      expect(result).toEqual(["create_contact"]);
+    });
+
+    it("deduplicates repeated intents", () => {
+      const result = parseIntentsFromText('{"intents":["create_event","create_event","edit_contact"]}');
+      expect(result).toEqual(["create_event", "edit_contact"]);
+    });
+
+    it("filters invalid intents from array", () => {
+      const result = parseIntentsFromText('{"intents":["create_event","not_real","edit_contact"]}');
+      expect(result).toEqual(["create_event", "edit_contact"]);
+    });
+
+    it('returns ["unknown"] for empty array', () => {
+      const result = parseIntentsFromText('{"intents":[]}');
+      expect(result).toEqual(["unknown"]);
+    });
+
+    it('returns ["unknown"] for all-invalid array', () => {
+      const result = parseIntentsFromText('{"intents":["fake1","fake2"]}');
+      expect(result).toEqual(["unknown"]);
+    });
+
+    it("handles markdown code fences", () => {
+      const result = parseIntentsFromText('```json\n{"intents":["create_event","edit_contact"]}\n```');
+      expect(result).toEqual(["create_event", "edit_contact"]);
+    });
+
+    it("bare string fallback returns single-element array", () => {
+      const result = parseIntentsFromText("create_contact");
+      expect(result).toEqual(["create_contact"]);
+    });
+
+    it('returns ["unknown"] for empty input', () => {
+      expect(parseIntentsFromText("")).toEqual(["unknown"]);
+      expect(parseIntentsFromText("   ")).toEqual(["unknown"]);
+    });
+
+    it('returns ["unknown"] for gibberish', () => {
+      expect(parseIntentsFromText("hello world")).toEqual(["unknown"]);
+    });
+  });
+
+  // ============================================
+  // 9c. UNION TOOL SETS UNIT TESTS
+  // ============================================
+
+  describe("unionToolSets", () => {
+    let unionToolSets: typeof import("./assistant").unionToolSets;
+    let INTENT_TOOL_SETS: typeof import("./assistant").INTENT_TOOL_SETS;
+
+    beforeEach(async () => {
+      ({ unionToolSets, INTENT_TOOL_SETS } = await import("./assistant"));
+    });
+
+    it("single intent returns same tools as INTENT_TOOL_SETS[intent]", () => {
+      const result = unionToolSets(["create_event"]);
+      expect(result.sort()).toEqual([...INTENT_TOOL_SETS.create_event].sort());
+    });
+
+    it("two intents produce deduplicated union", () => {
+      const result = unionToolSets(["create_event", "edit_contact"]);
+      const expected = new Set([
+        ...INTENT_TOOL_SETS.create_event,
+        ...INTENT_TOOL_SETS.edit_contact,
+      ]);
+      expect(result.sort()).toEqual([...expected].sort());
+    });
+
+    it('["unknown"] returns INTENT_TOOL_SETS.unknown', () => {
+      const result = unionToolSets(["unknown"]);
+      expect(result.sort()).toEqual([...INTENT_TOOL_SETS.unknown].sort());
+    });
+
+    it("union does not contain duplicates", () => {
+      const result = unionToolSets(["create_event", "create_conversation"]);
+      // Both share search_contacts_fuzzy — should only appear once
+      const counts = result.reduce((acc, tool) => {
+        acc[tool] = (acc[tool] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      for (const [tool, count] of Object.entries(counts)) {
+        expect(count).toBe(1);
+      }
+    });
+  });
+
+  // ============================================
+  // 9d. ANY INTENT REQUIRES CONFIRMATION TESTS
+  // ============================================
+
+  describe("anyIntentRequiresConfirmation", () => {
+    let anyIntentRequiresConfirmation: typeof import("./assistant").anyIntentRequiresConfirmation;
+
+    beforeEach(async () => {
+      ({ anyIntentRequiresConfirmation } = await import("./assistant"));
+    });
+
+    it("returns true when any intent is mutating", () => {
+      expect(anyIntentRequiresConfirmation(["search_contact", "create_event"])).toBe(true);
+    });
+
+    it("returns false when all intents are read-only", () => {
+      expect(anyIntentRequiresConfirmation(["search_contact", "search_event"])).toBe(false);
+    });
+
+    it("returns false for unknown", () => {
+      expect(anyIntentRequiresConfirmation(["unknown"])).toBe(false);
+    });
+
+    it("returns true for single mutating intent", () => {
+      expect(anyIntentRequiresConfirmation(["create_contact"])).toBe(true);
     });
   });
 

@@ -44,7 +44,12 @@ async function fetchPgEnumValues(enumName: string): Promise<string[]> {
     .filter((value): value is string => typeof value === "string" && value.length > 0);
 }
 
+let cachedConfig: AssistantEnumConfig | null = null;
+let cacheExpiry = 0;
+
 export async function loadAssistantEnumConfig(): Promise<AssistantEnumConfig> {
+  if (cachedConfig && Date.now() < cacheExpiry) return cachedConfig;
+
   try {
     const [conversationMediums, eventTypes, reminderStatuses] = await Promise.all([
       fetchPgEnumValues(ASSISTANT_ENUM_NAMES.conversationMediums),
@@ -56,11 +61,10 @@ export async function loadAssistantEnumConfig(): Promise<AssistantEnumConfig> {
       throw new Error("Missing enum values from pg_enum.");
     }
 
-    return {
-      conversationMediums,
-      eventTypes,
-      reminderStatuses,
-    };
+    const result = { conversationMediums, eventTypes, reminderStatuses };
+    cachedConfig = result;
+    cacheExpiry = Date.now() + 5 * 60 * 1000; // 5 min TTL
+    return result;
   } catch (error) {
     console.warn(
       "[assistant:enum] Falling back to schema enum definitions because pg_enum fetch failed:",

@@ -58,6 +58,7 @@ import {
   userApi,
   ChatMessage,
   AssistantUi,
+  AssistantAction,
   AssistantContactCard,
   AssistantConversationCard,
   AssistantEventCard,
@@ -652,6 +653,7 @@ export default function AssistantScreen() {
               role: "assistant",
               content: response.content,
               ui: response.ui ?? null,
+              actions: response.actions,
             },
           ];
         });
@@ -1195,6 +1197,32 @@ export default function AssistantScreen() {
             {renderAssistantUi(item.ui!)}
           </View>
         )}
+        {!isUser && item.actions?.length ? (
+          <View className="flex-row gap-2 mt-2 px-4 ml-10">
+            {item.actions.map((action, i) => (
+              <Pressable
+                key={i}
+                onPress={() => sendMessage(action.message)}
+                disabled={isLoading}
+                className={
+                  action.style === "primary"
+                    ? `flex-1 rounded-xl px-3 py-2.5 items-center ${isLoading ? "bg-primary-200" : "bg-primary-600 active:bg-primary-700"}`
+                    : "flex-1 rounded-xl px-3 py-2.5 items-center border border-border-200 bg-background-50 active:bg-background-100"
+                }
+              >
+                <Text
+                  className={
+                    action.style === "primary"
+                      ? "text-typography-0 text-sm font-medium"
+                      : "text-typography-700 text-sm font-medium"
+                  }
+                >
+                  {action.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
       </View>
     );
   };
@@ -1349,13 +1377,20 @@ export default function AssistantScreen() {
                   value={input}
                   onChangeText={setInput}
                   multiline
-                  maxLength={500}
+                  maxLength={1000}
                   editable={!isLoading}
                   textAlignVertical="top"
-                  onSubmitEditing={() => sendMessage(input)}
-                  submitBehavior="submit"
                   blurOnSubmit={false}
-                  returnKeyType="send"
+                  onKeyPress={(e) => {
+                    if (
+                      Platform.OS === "web" &&
+                      e.nativeEvent.key === "Enter" &&
+                      !e.nativeEvent.shiftKey
+                    ) {
+                      e.preventDefault();
+                      sendMessage(input);
+                    }
+                  }}
                 />
               </View>
               <Pressable

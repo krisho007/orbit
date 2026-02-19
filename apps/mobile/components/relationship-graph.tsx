@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { View } from "react-native";
-import Svg, { Circle, Line, Text as SvgText } from "react-native-svg";
+import Svg, { Circle, G, Line, Text as SvgText } from "react-native-svg";
 import {
   forceSimulation,
   forceLink,
@@ -137,7 +137,7 @@ export function RelationshipGraph({
           const my = ((source.y || 0) + (target.y || 0)) / 2;
 
           return (
-            <View key={`link-${i}`}>
+            <G key={`link-${i}`}>
               <Line
                 x1={source.x || 0}
                 y1={source.y || 0}
@@ -155,7 +155,7 @@ export function RelationshipGraph({
               >
                 {link.label}
               </SvgText>
-            </View>
+            </G>
           );
         })}
 
@@ -164,19 +164,17 @@ export function RelationshipGraph({
           const r = node.isCenter ? 24 : 18;
           const fill = node.isCenter ? primaryColor : secondaryColor;
           const initials = getInitials(node.label);
+          const handlePress = !node.isCenter && onNodePress
+            ? () => onNodePress(node.id)
+            : undefined;
 
           return (
-            <View key={node.id}>
+            <G key={node.id} onPress={handlePress}>
               <Circle
                 cx={node.x || 0}
                 cy={node.y || 0}
                 r={r}
                 fill={fill}
-                onPress={() => {
-                  if (!node.isCenter && onNodePress) {
-                    onNodePress(node.id);
-                  }
-                }}
               />
               <SvgText
                 x={node.x || 0}
@@ -185,11 +183,6 @@ export function RelationshipGraph({
                 fill="white"
                 textAnchor="middle"
                 fontWeight="bold"
-                onPress={() => {
-                  if (!node.isCenter && onNodePress) {
-                    onNodePress(node.id);
-                  }
-                }}
               >
                 {initials}
               </SvgText>
@@ -199,17 +192,12 @@ export function RelationshipGraph({
                 fontSize={10}
                 fill={textColor}
                 textAnchor="middle"
-                onPress={() => {
-                  if (!node.isCenter && onNodePress) {
-                    onNodePress(node.id);
-                  }
-                }}
               >
                 {node.label.length > 12
                   ? node.label.slice(0, 11) + "..."
                   : node.label}
               </SvgText>
-            </View>
+            </G>
           );
         })}
       </Svg>

@@ -228,21 +228,19 @@ export default function RemindersScreen() {
   return (
     <AnimatedTabScreen tabName="reminders">
     <View className="flex-1 bg-background-50">
+      <RemindersListHeader
+        search={search}
+        onChangeSearch={handleSearchChange}
+        onClearSearch={handleClearSearch}
+        statusFilter={statusFilter}
+        onChangeStatusFilter={setStatusFilter}
+        totalCount={totalCount}
+        colors={colors}
+      />
       <FlatList
         data={reminders}
         keyExtractor={(item) => item.id}
         renderItem={renderReminder}
-        ListHeaderComponent={
-          <RemindersListHeader
-            search={search}
-            onChangeSearch={handleSearchChange}
-            onClearSearch={handleClearSearch}
-            statusFilter={statusFilter}
-            onChangeStatusFilter={setStatusFilter}
-            totalCount={totalCount}
-            colors={colors}
-          />
-        }
         ListEmptyComponent={ListEmpty}
         ListFooterComponent={ListFooter}
         refreshControl={

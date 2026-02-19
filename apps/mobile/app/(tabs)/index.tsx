@@ -389,19 +389,17 @@ export default function ContactsScreen() {
   return (
     <AnimatedTabScreen tabName="index">
     <View className="flex-1 bg-background-50">
+      <ContactsListHeader
+        search={search}
+        onChangeSearch={handleSearchChange}
+        totalCount={totalCount}
+        onClearSearch={handleClearSearch}
+        colors={colors}
+      />
       <FlatList
         data={contacts}
         keyExtractor={(item) => item.id}
         renderItem={renderContact}
-        ListHeaderComponent={
-          <ContactsListHeader
-            search={search}
-            onChangeSearch={handleSearchChange}
-            totalCount={totalCount}
-            onClearSearch={handleClearSearch}
-            colors={colors}
-          />
-        }
         ListEmptyComponent={ListEmpty}
         ListFooterComponent={ListFooter}
         refreshControl={

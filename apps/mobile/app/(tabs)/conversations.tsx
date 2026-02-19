@@ -197,19 +197,17 @@ export default function ConversationsScreen() {
   return (
     <AnimatedTabScreen tabName="conversations">
     <View className="flex-1 bg-background-50">
+      <ConversationsListHeader
+        search={search}
+        onChangeSearch={handleSearchChange}
+        onClearSearch={handleClearSearch}
+        totalCount={totalCount}
+        colors={colors}
+      />
       <FlatList
         data={conversations}
         keyExtractor={(item) => item.id}
         renderItem={renderConversation}
-        ListHeaderComponent={
-          <ConversationsListHeader
-            search={search}
-            onChangeSearch={handleSearchChange}
-            onClearSearch={handleClearSearch}
-            totalCount={totalCount}
-            colors={colors}
-          />
-        }
         ListEmptyComponent={ListEmpty}
         ListFooterComponent={ListFooter}
         refreshControl={

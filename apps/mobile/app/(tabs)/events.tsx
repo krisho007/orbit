@@ -216,19 +216,17 @@ export default function EventsScreen() {
   return (
     <AnimatedTabScreen tabName="events">
     <View className="flex-1 bg-background-50">
+      <EventsListHeader
+        search={search}
+        onChangeSearch={handleSearchChange}
+        onClearSearch={handleClearSearch}
+        totalCount={totalCount}
+        colors={colors}
+      />
       <FlatList
         data={events}
         keyExtractor={(item) => item.id}
         renderItem={renderEvent}
-        ListHeaderComponent={
-          <EventsListHeader
-            search={search}
-            onChangeSearch={handleSearchChange}
-            onClearSearch={handleClearSearch}
-            totalCount={totalCount}
-            colors={colors}
-          />
-        }
         ListEmptyComponent={ListEmpty}
         ListFooterComponent={ListFooter}
         refreshControl={

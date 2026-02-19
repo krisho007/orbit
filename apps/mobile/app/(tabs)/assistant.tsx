@@ -96,6 +96,7 @@ const SUGGESTIONS = [
   "What are my upcoming events?",
   "When did I speak with Katie last?",
   "I had a call with Sarah today",
+  "Feeling happy after the sprint demo",
 ];
 
 const RESULT_CARD_LIMIT = 10;
@@ -686,7 +687,7 @@ export default function AssistantScreen() {
             params: { id: contact.id, from: "/(tabs)/assistant" },
           })
         }
-        className="bg-background-0 border border-border-100 rounded-2xl p-4 mb-3 active:bg-background-50"
+        className="bg-background-0 border border-border-200 rounded-xl p-4 mb-3 active:bg-background-50"
       >
         <View className="flex-row items-center">
           <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mr-3">
@@ -734,7 +735,7 @@ export default function AssistantScreen() {
             params: { id: conversation.id, from: "/(tabs)/assistant" },
           })
         }
-        className="bg-background-0 border border-border-100 rounded-2xl p-4 mb-3 active:bg-background-50"
+        className="bg-background-0 border border-border-200 rounded-xl p-4 mb-3 active:bg-background-50"
       >
         <View className="flex-row items-start">
           <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mr-3">
@@ -772,7 +773,7 @@ export default function AssistantScreen() {
             params: { id: event.id, from: "/(tabs)/assistant" },
           })
         }
-        className="bg-background-0 border border-border-100 rounded-2xl p-4 mb-3 active:bg-background-50"
+        className="bg-background-0 border border-border-200 rounded-xl p-4 mb-3 active:bg-background-50"
       >
         <View className="flex-row items-start">
           <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mr-3">
@@ -822,7 +823,7 @@ export default function AssistantScreen() {
             params: { id: reminder.id, from: "/(tabs)/assistant" },
           })
         }
-        className="bg-background-0 border border-border-100 rounded-2xl p-4 mb-3 active:bg-background-50"
+        className="bg-background-0 border border-border-200 rounded-xl p-4 mb-3 active:bg-background-50"
       >
         <View className="flex-row items-start">
           <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mr-3">
@@ -888,7 +889,7 @@ export default function AssistantScreen() {
     return (
       <View
         key={`${option.entityKind}:${option.id}`}
-        className="bg-background-0 border border-border-100 rounded-2xl p-4 mb-3"
+        className="bg-background-0 border border-border-200 rounded-xl p-4 mb-3"
       >
         <Text className="text-typography-900 font-semibold text-base" numberOfLines={1}>
           {option.title}
@@ -1420,7 +1421,7 @@ export default function AssistantScreen() {
             renderItem={({ item }) => (
               <Pressable
                 onPress={() => loadConversation(item.id)}
-                className="bg-background-0 border border-border-100 rounded-2xl p-4 mb-3 active:bg-background-50"
+                className="bg-background-0 border border-border-200 rounded-xl p-4 mb-3 active:bg-background-50"
               >
                 <View className="flex-row items-start justify-between">
                   <View className="flex-1 mr-3">

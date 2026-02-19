@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { format } from "date-fns";
+import { format, isSameDay } from "date-fns";
 import {
   Briefcase,
   Phone,
@@ -30,6 +30,7 @@ import {
   ChevronLeft,
   Pencil,
   Trash2,
+  CalendarDays,
 } from "lucide-react-native";
 import { eventsApi, Event, Conversation } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
@@ -60,6 +61,29 @@ const CONVERSATION_MEDIUM_META: Record<
   IN_PERSON_MEETING: { label: "In-Person Meeting", icon: Building2 },
   OTHER: { label: "Other", icon: FileText },
 };
+
+function formatDateRange(startAt: string, endAt?: string | null): string {
+  const start = new Date(startAt);
+  if (Number.isNaN(start.getTime())) return "Date unknown";
+
+  const startFormatted = format(start, "MMM d, yyyy");
+  const startTime = format(start, "h:mm a");
+
+  if (!endAt) {
+    return `${startFormatted} at ${startTime}`;
+  }
+
+  const end = new Date(endAt);
+  if (Number.isNaN(end.getTime())) {
+    return `${startFormatted} at ${startTime}`;
+  }
+
+  if (isSameDay(start, end)) {
+    return `${startFormatted} at ${startTime} — ${format(end, "h:mm a")}`;
+  }
+
+  return `${startFormatted} at ${startTime} — ${format(end, "MMM d, yyyy")} at ${format(end, "h:mm a")}`;
+}
 
 export default function EventDetailScreen() {
   const router = useRouter();
@@ -199,17 +223,15 @@ export default function EventDetailScreen() {
 
   const meta = EVENT_META[event.eventType] || EVENT_META.OTHER;
   const EventIcon = meta.icon;
-  const startDate = new Date(event.startAt);
-  const endDate = event.endAt ? new Date(event.endAt) : null;
-  const startLabel = Number.isNaN(startDate.getTime())
-    ? "Date unknown"
-    : format(startDate, "MMM d, yyyy h:mm a");
-  const endLabel =
-    endDate && !Number.isNaN(endDate.getTime()) ? format(endDate, "h:mm a") : "";
+  const hasLocation = !!event.location;
+  const hasDescription = !!event.description;
+  const hasParticipants = !!(event.participants && event.participants.length > 0);
+  const hasDetailsCard = hasLocation || hasDescription || hasParticipants;
 
   return (
     <SafeAreaView className="flex-1 bg-background-0">
-      <View className="flex-row items-center justify-between px-4 py-3 border-b border-border-200">
+      {/* Header */}
+      <View className="flex-row items-center justify-between px-4 py-3">
         <Pressable onPress={handleBack} className="p-2">
           <ChevronLeft size={22} color={getThemeColor(colors, "primary-600")} />
         </Pressable>
@@ -225,69 +247,82 @@ export default function EventDetailScreen() {
       </View>
 
       <ScrollView className="flex-1">
-        <View className="px-4 py-6 border-b border-border-200">
-          <View className="flex-row items-center">
-            <View className="w-12 h-12 rounded-2xl bg-primary-100 items-center justify-center mr-3">
-              <EventIcon size={20} color={getThemeColor(colors, "primary-600")} />
-            </View>
-            <View className="flex-1">
-              <Text className="text-typography-900 text-lg font-semibold">
-                {event.title}
-              </Text>
-              <Text className="text-typography-500 text-sm mt-1">
-                {meta.label} · {startLabel}
-                {endLabel ? ` - ${endLabel}` : ""}
-              </Text>
-            </View>
+        {/* Hero — Icon, Title, Date Range */}
+        <View className="items-center py-8">
+          <View className="w-16 h-16 rounded-2xl bg-primary-100 items-center justify-center mb-4">
+            <CalendarDays size={28} color={getThemeColor(colors, "primary-600")} />
           </View>
+          <Text className="text-2xl font-bold text-typography-900 mb-1 text-center px-4">
+            {event.title}
+          </Text>
+          <Text className="text-typography-500 text-base text-center px-4 mb-1">
+            {meta.label}
+          </Text>
+          <Text className="text-typography-500 text-sm text-center px-4">
+            {formatDateRange(event.startAt, event.endAt)}
+          </Text>
         </View>
 
-        {event.location && (
-          <View className="px-4 py-6 border-b border-border-200">
-            <Text className="text-typography-500 text-sm font-medium mb-2">
-              Location
-            </Text>
-            <View className="flex-row items-center bg-background-50 rounded-lg p-4">
-              <MapPin size={14} color={getThemeColor(colors, "typography-500")} />
-              <Text className="text-typography-900 text-base ml-2">
-                {event.location}
-              </Text>
-            </View>
-          </View>
-        )}
+        {/* Consolidated Details Card */}
+        {hasDetailsCard && (
+          <View className="mx-4 mb-2 rounded-xl bg-background-50 border border-border-200 overflow-hidden">
+            {(() => {
+              const rows: React.ReactNode[] = [];
 
-        {event.description && (
-          <View className="px-4 py-6 border-b border-border-200">
-            <Text className="text-typography-500 text-sm font-medium mb-2">
-              Notes
-            </Text>
-            <View className="bg-background-50 rounded-lg p-4">
-              <Text className="text-typography-900 text-base">{event.description}</Text>
-            </View>
-          </View>
-        )}
+              if (hasLocation) {
+                rows.push(
+                  <View key="location" className="flex-row items-start px-4 py-3">
+                    <MapPin size={16} color={getThemeColor(colors, "typography-400")} />
+                    <View className="ml-3 flex-1">
+                      <Text className="text-typography-400 text-xs">Location</Text>
+                      <Text className="text-typography-900 text-base">{event.location}</Text>
+                    </View>
+                  </View>
+                );
+              }
 
-        {event.participants && event.participants.length > 0 && (
-          <View className="px-4 py-6 border-b border-border-200">
-            <Text className="text-typography-500 text-sm font-medium mb-2">
-              Participants
-            </Text>
-            <View className="flex-row flex-wrap">
-              {event.participants.map((participant) => (
-                <View
-                  key={participant.contact.id}
-                  className="px-3 py-1.5 rounded-full bg-primary-50 mr-2 mb-2"
-                >
-                  <Text className="text-primary-700 text-sm font-medium">
-                    {participant.contact.displayName}
-                  </Text>
+              if (hasDescription) {
+                rows.push(
+                  <View key="description" className="flex-row items-start px-4 py-3">
+                    <FileText size={16} color={getThemeColor(colors, "typography-400")} />
+                    <View className="ml-3 flex-1">
+                      <Text className="text-typography-400 text-xs">Description</Text>
+                      <Text className="text-typography-900 text-base" numberOfLines={3}>
+                        {event.description}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              if (hasParticipants) {
+                const participantNames = event.participants!
+                  .map((p) => p.contact.displayName)
+                  .filter(Boolean)
+                  .join(", ");
+                rows.push(
+                  <View key="participants" className="flex-row items-start px-4 py-3">
+                    <Users size={16} color={getThemeColor(colors, "typography-400")} />
+                    <View className="ml-3 flex-1">
+                      <Text className="text-typography-400 text-xs">Participants</Text>
+                      <Text className="text-typography-900 text-base">{participantNames}</Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              return rows.map((row, i) => (
+                <View key={i}>
+                  {i > 0 && <View className="border-b border-border-200 mx-4" />}
+                  {row}
                 </View>
-              ))}
-            </View>
+              ));
+            })()}
           </View>
         )}
 
-        <View className="px-4 py-6 border-t border-border-200">
+        {/* Linked Conversations */}
+        <View className="px-4 mt-6">
           <View className="mb-3">
             <Text className="text-typography-900 text-base font-semibold">
               Linked Conversations
@@ -299,10 +334,9 @@ export default function EventDetailScreen() {
               <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
             </View>
           ) : conversations.length === 0 ? (
-            <View className="py-6 px-4 bg-background-50 rounded-xl">
-              <Text className="text-typography-600 text-sm">
-                No conversations linked to this event yet.
-              </Text>
+            <View className="flex-row items-center py-2">
+              <MessageCircle size={16} color={getThemeColor(colors, "typography-400")} />
+              <Text className="text-typography-400 text-sm ml-2">No linked conversations</Text>
             </View>
           ) : (
             <>
@@ -380,6 +414,8 @@ export default function EventDetailScreen() {
             </>
           )}
         </View>
+
+        <View className="h-8" />
       </ScrollView>
     </SafeAreaView>
   );

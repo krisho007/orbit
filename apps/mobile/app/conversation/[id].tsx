@@ -22,6 +22,11 @@ import {
   ChevronLeft,
   Pencil,
   Trash2,
+  CalendarClock,
+  StickyNote,
+  Link,
+  Users,
+  Calendar,
 } from "lucide-react-native";
 import { conversationsApi, Conversation } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
@@ -134,11 +139,14 @@ export default function ConversationDetailScreen() {
   const happenedAt = new Date(conversation.happenedAt);
   const happenedAtLabel = Number.isNaN(happenedAt.getTime())
     ? "Date unknown"
-    : format(happenedAt, "MMM d, yyyy h:mm a");
+    : format(happenedAt, "EEEE, MMM d, yyyy 'at' h:mm a");
+
+  const hasDetails = !!(conversation.content || conversation.followUpAt || participants.length > 0);
 
   return (
     <SafeAreaView className="flex-1 bg-background-0">
-      <View className="flex-row items-center justify-between px-4 py-3 border-b border-border-200">
+      {/* Header */}
+      <View className="flex-row items-center justify-between px-4 py-3">
         <Pressable onPress={handleBack} className="p-2">
           <ChevronLeft size={22} color={getThemeColor(colors, "primary-600")} />
         </Pressable>
@@ -154,82 +162,113 @@ export default function ConversationDetailScreen() {
       </View>
 
       <ScrollView className="flex-1">
-        <View className="px-4 py-6 border-b border-border-200">
-          <View className="flex-row items-center">
-            <View className="w-12 h-12 rounded-2xl bg-primary-100 items-center justify-center mr-3">
-              <MediumIcon size={20} color={getThemeColor(colors, "primary-600")} />
-            </View>
-            <View className="flex-1">
-              <Text className="text-typography-900 text-lg font-semibold">
-                {participants.length > 0 ? participants.join(", ") : "Unknown"}
-              </Text>
-              <Text className="text-typography-500 text-sm mt-1">
-                {medium.label} · {happenedAtLabel}
-              </Text>
-            </View>
+        {/* Hero Section */}
+        <View className="items-center py-8">
+          <View className="w-16 h-16 rounded-2xl bg-primary-100 items-center justify-center mb-4">
+            <MediumIcon size={28} color={getThemeColor(colors, "primary-600")} />
           </View>
+          <Text className="text-2xl font-bold text-typography-900 mb-1">
+            {medium.label}
+          </Text>
+          <Text className="text-typography-500 text-base mb-1">
+            {happenedAtLabel}
+          </Text>
+          {participants.length > 0 && (
+            <Text className="text-typography-600 text-sm text-center px-4 mt-1">
+              {participants.join(", ")}
+            </Text>
+          )}
         </View>
 
-        {conversation.content && (
-          <View className="px-4 py-6 border-b border-border-200">
-            <Text className="text-typography-500 text-sm font-medium mb-2">
-              Notes
-            </Text>
-            <View className="bg-background-50 rounded-lg p-4">
-              <Text className="text-typography-900 text-base">
-                {conversation.content}
-              </Text>
-            </View>
-          </View>
-        )}
+        {/* Consolidated Details Card */}
+        {hasDetails && (
+          <View className="mx-4 mb-2 rounded-xl bg-background-50 border border-border-200 overflow-hidden">
+            {(() => {
+              const rows: React.ReactNode[] = [];
 
-        {conversation.followUpAt && (
-          <View className="px-4 py-6 border-b border-border-200">
-            <Text className="text-typography-500 text-sm font-medium mb-2">
-              Follow-up
-            </Text>
-            <View className="bg-background-50 rounded-lg p-4">
-              <Text className="text-typography-900 text-base">
-                {format(new Date(conversation.followUpAt), "MMM d, yyyy")}
-              </Text>
-            </View>
-          </View>
-        )}
+              if (participants.length > 0) {
+                rows.push(
+                  <View key="participants" className="flex-row items-start px-4 py-3">
+                    <Users size={16} color={getThemeColor(colors, "typography-400")} />
+                    <View className="ml-3 flex-1">
+                      <Text className="text-typography-400 text-xs">Participants</Text>
+                      <Text className="text-typography-900 text-base">
+                        {participants.join(", ")}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }
 
-        {participants.length > 0 && (
-          <View className="px-4 py-6">
-            <Text className="text-typography-500 text-sm font-medium mb-2">
-              Participants
-            </Text>
-            <View className="flex-row flex-wrap">
-              {participants.map((name) => (
-                <View
-                  key={name}
-                  className="px-3 py-1.5 rounded-full bg-primary-50 mr-2 mb-2"
-                >
-                  <Text className="text-primary-700 text-sm font-medium">{name}</Text>
+              if (conversation.content) {
+                rows.push(
+                  <View key="notes" className="flex-row items-start px-4 py-3">
+                    <StickyNote size={16} color={getThemeColor(colors, "typography-400")} />
+                    <View className="ml-3 flex-1">
+                      <Text className="text-typography-400 text-xs">Notes</Text>
+                      <Text className="text-typography-900 text-base" numberOfLines={3}>
+                        {conversation.content}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              if (conversation.followUpAt) {
+                rows.push(
+                  <View key="followup" className="flex-row items-center px-4 py-3">
+                    <CalendarClock size={16} color={getThemeColor(colors, "typography-400")} />
+                    <View className="ml-3 flex-1">
+                      <Text className="text-typography-400 text-xs">Follow-up</Text>
+                      <Text className="text-typography-900 text-base">
+                        {format(new Date(conversation.followUpAt), "MMM d, yyyy")}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              return rows.map((row, i) => (
+                <View key={i}>
+                  {i > 0 && <View className="border-b border-border-200 mx-4" />}
+                  {row}
                 </View>
-              ))}
-            </View>
+              ));
+            })()}
           </View>
         )}
 
-        {conversation.event && (
-          <View className="px-4 pb-8">
-            <Text className="text-typography-500 text-sm font-medium mb-2">
-              Linked Event
-            </Text>
+        {/* Linked Event */}
+        <View className="px-4 mt-6">
+          <Text className="text-typography-900 text-base font-semibold mb-3">
+            Linked Event
+          </Text>
+          {conversation.event ? (
             <Pressable
               onPress={() => router.push(`/event/${conversation.event!.id}`)}
-              className="bg-background-50 rounded-lg p-4 active:bg-background-100"
+              className="p-4 rounded-xl border border-border-200 bg-background-50 active:bg-background-100"
             >
-              <Text className="text-typography-900 text-base font-semibold">
-                {conversation.event.title}
-              </Text>
-              <Text className="text-primary-600 text-sm mt-1">View event</Text>
+              <View className="flex-row items-center">
+                <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mr-3">
+                  <Calendar size={18} color={getThemeColor(colors, "primary-600")} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-typography-900 text-sm font-semibold">
+                    {conversation.event.title}
+                  </Text>
+                  <Text className="text-primary-600 text-sm mt-1">View event</Text>
+                </View>
+              </View>
             </Pressable>
-          </View>
-        )}
+          ) : (
+            <View className="flex-row items-center py-2">
+              <Link size={16} color={getThemeColor(colors, "typography-400")} />
+              <Text className="text-typography-400 text-sm ml-2">No linked event</Text>
+            </View>
+          )}
+        </View>
+
+        <View className="h-8" />
       </ScrollView>
     </SafeAreaView>
   );

@@ -18,6 +18,11 @@ import {
   ChevronLeft,
   Pencil,
   Trash2,
+  Calendar,
+  StickyNote,
+  Repeat,
+  Link,
+  User,
 } from "lucide-react-native";
 import { Reminder, ReminderStatus, remindersApi } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
@@ -26,6 +31,12 @@ const STATUS_META: Record<ReminderStatus, { label: string; icon: typeof Bell }> 
   OPEN: { label: "Open", icon: Bell },
   DONE: { label: "Done", icon: CheckCircle2 },
   CANCELED: { label: "Canceled", icon: XCircle },
+};
+
+const STATUS_COLORS: Record<ReminderStatus, { icon: string; bg: string; pill: string; pillText: string }> = {
+  OPEN: { icon: "primary-600", bg: "bg-primary-100", pill: "bg-primary-100", pillText: "text-primary-700" },
+  DONE: { icon: "success-600", bg: "bg-success-100", pill: "bg-success-100", pillText: "text-success-700" },
+  CANCELED: { icon: "error-500", bg: "bg-error-100", pill: "bg-error-100", pillText: "text-error-700" },
 };
 
 function getRecurrenceLabel(reminder: Reminder): string {
@@ -158,24 +169,21 @@ export default function ReminderDetailScreen() {
   }
 
   const statusMeta = STATUS_META[reminder.status] || STATUS_META.OPEN;
+  const statusColors = STATUS_COLORS[reminder.status] || STATUS_COLORS.OPEN;
   const StatusIcon = statusMeta.icon;
-  const statusColor =
-    reminder.status === "DONE"
-      ? getThemeColor(colors, "success-600")
-      : reminder.status === "CANCELED"
-        ? getThemeColor(colors, "error-500")
-        : getThemeColor(colors, "primary-600");
+  const statusIconColor = getThemeColor(colors, statusColors.icon as any);
   const dueDate = new Date(reminder.dueAt);
   const dueLabel = Number.isNaN(dueDate.getTime())
     ? "Due date unknown"
-    : format(dueDate, "MMM d, yyyy h:mm a");
+    : format(dueDate, "MMMM d, yyyy");
   const participants =
-    reminder.participants?.map((p) => p.contact.displayName).filter(Boolean) || [];
+    reminder.participants?.map((p) => p.contact) || [];
   const recurrenceLabel = getRecurrenceLabel(reminder);
 
   return (
     <SafeAreaView className="flex-1 bg-background-0">
-      <View className="flex-row items-center justify-between px-4 py-3 border-b border-border-200">
+      {/* Header */}
+      <View className="flex-row items-center justify-between px-4 py-3">
         <Pressable onPress={handleBack} className="p-2">
           <ChevronLeft size={22} color={getThemeColor(colors, "primary-600")} />
         </Pressable>
@@ -191,67 +199,129 @@ export default function ReminderDetailScreen() {
       </View>
 
       <ScrollView className="flex-1">
-        <View className="px-4 py-6 border-b border-border-200">
-          <View className="flex-row items-center">
-            <View className="w-12 h-12 rounded-2xl bg-primary-100 items-center justify-center mr-3">
-              <StatusIcon size={20} color={statusColor} />
-            </View>
-            <View className="flex-1">
-              <Text className="text-typography-900 text-lg font-semibold">{reminder.title}</Text>
-              <Text className="text-typography-500 text-sm mt-1">
-                {statusMeta.label} · {dueLabel}
-              </Text>
-            </View>
+        {/* Hero Section */}
+        <View className="items-center py-8">
+          <View className={`w-16 h-16 rounded-2xl ${statusColors.bg} items-center justify-center mb-4`}>
+            <StatusIcon size={28} color={statusIconColor} />
+          </View>
+          <Text className="text-2xl font-bold text-typography-900 mb-1 text-center px-4">
+            {reminder.title}
+          </Text>
+          <Text className="text-typography-500 text-base mb-3">{dueLabel}</Text>
+          <View className={`px-3 py-1.5 rounded-full ${statusColors.pill}`}>
+            <Text className={`text-sm font-medium ${statusColors.pillText}`}>
+              {statusMeta.label}
+            </Text>
           </View>
         </View>
 
-        {reminder.notes && (
-          <View className="px-4 py-6 border-b border-border-200">
-            <Text className="text-typography-500 text-sm font-medium mb-2">Notes</Text>
-            <View className="bg-background-50 rounded-lg p-4">
-              <Text className="text-typography-900 text-base">{reminder.notes}</Text>
-            </View>
-          </View>
-        )}
+        {/* Consolidated Details Card */}
+        {(() => {
+          const rows: React.ReactNode[] = [];
 
-        <View className="px-4 py-6 border-b border-border-200">
-          <Text className="text-typography-500 text-sm font-medium mb-2">Participants</Text>
-          {participants.length > 0 ? (
-            <View className="flex-row flex-wrap">
-              {participants.map((name) => (
-                <View key={name} className="px-3 py-1.5 rounded-full bg-primary-50 mr-2 mb-2">
-                  <Text className="text-primary-700 text-sm font-medium">{name}</Text>
+          if (reminder.notes) {
+            rows.push(
+              <View key="notes" className="flex-row items-start px-4 py-3">
+                <StickyNote size={16} color={getThemeColor(colors, "typography-400")} />
+                <View className="ml-3 flex-1">
+                  <Text className="text-typography-400 text-xs">Notes</Text>
+                  <Text className="text-typography-900 text-base" numberOfLines={3}>
+                    {reminder.notes}
+                  </Text>
+                </View>
+              </View>
+            );
+          }
+
+          rows.push(
+            <View key="recurrence" className="flex-row items-center px-4 py-3">
+              <Repeat size={16} color={getThemeColor(colors, "typography-400")} />
+              <View className="ml-3 flex-1">
+                <Text className="text-typography-400 text-xs">Recurrence</Text>
+                <Text className="text-typography-900 text-base">{recurrenceLabel}</Text>
+              </View>
+            </View>
+          );
+
+          if (reminder.dueAt) {
+            rows.push(
+              <View key="due" className="flex-row items-center px-4 py-3">
+                <Calendar size={16} color={getThemeColor(colors, "typography-400")} />
+                <View className="ml-3 flex-1">
+                  <Text className="text-typography-400 text-xs">Due Date & Time</Text>
+                  <Text className="text-typography-900 text-base">
+                    {Number.isNaN(dueDate.getTime())
+                      ? "Unknown"
+                      : format(dueDate, "MMM d, yyyy h:mm a")}
+                  </Text>
+                </View>
+              </View>
+            );
+          }
+
+          if (participants.length > 0) {
+            participants.forEach((contact) => {
+              rows.push(
+                <Pressable
+                  key={`contact-${contact.id}`}
+                  onPress={() => router.push(`/contact/${contact.id}`)}
+                  className="flex-row items-center px-4 py-3 active:bg-background-100"
+                >
+                  <User size={16} color={getThemeColor(colors, "typography-400")} />
+                  <View className="ml-3 flex-1">
+                    <Text className="text-typography-400 text-xs">Contact</Text>
+                    <Text className="text-typography-900 text-base">{contact.displayName}</Text>
+                  </View>
+                </Pressable>
+              );
+            });
+          }
+
+          if (reminder.conversation) {
+            rows.push(
+              <Pressable
+                key="conversation"
+                onPress={() => router.push(`/conversation/${reminder.conversation!.id}`)}
+                className="flex-row items-center px-4 py-3 active:bg-background-100"
+              >
+                <Link size={16} color={getThemeColor(colors, "typography-400")} />
+                <View className="ml-3 flex-1">
+                  <Text className="text-typography-400 text-xs">Linked Conversation</Text>
+                  <Text className="text-typography-900 text-base">
+                    {reminder.conversation.medium.replace(/_/g, " ")} &middot;{" "}
+                    {format(new Date(reminder.conversation.happenedAt), "MMM d, yyyy")}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          }
+
+          if (rows.length === 0) return null;
+
+          return (
+            <View className="mx-4 mb-2 rounded-xl bg-background-50 border border-border-200 overflow-hidden">
+              {rows.map((row, i) => (
+                <View key={i}>
+                  {i > 0 && <View className="border-b border-border-200 mx-4" />}
+                  {row}
                 </View>
               ))}
             </View>
-          ) : (
-            <Text className="text-typography-500 text-sm">No participants linked.</Text>
-          )}
-        </View>
+          );
+        })()}
 
-        <View className="px-4 py-6 border-b border-border-200">
-          <Text className="text-typography-500 text-sm font-medium mb-2">Recurrence</Text>
-          <Text className="text-typography-900 text-base">{recurrenceLabel}</Text>
-        </View>
-
-        {reminder.conversation && (
-          <View className="px-4 py-6 border-b border-border-200">
-            <Text className="text-typography-500 text-sm font-medium mb-2">Linked Conversation</Text>
-            <Pressable
-              onPress={() => router.push(`/conversation/${reminder.conversation!.id}`)}
-              className="rounded-lg border border-border-200 bg-background-50 p-4 active:bg-background-100"
-            >
-              <Text className="text-typography-900 font-medium">
-                {reminder.conversation.medium.replace(/_/g, " ")}
-              </Text>
-              <Text className="text-typography-500 text-sm mt-1">
-                {format(new Date(reminder.conversation.happenedAt), "MMM d, yyyy")}
-              </Text>
-            </Pressable>
+        {/* Participants — empty state */}
+        {participants.length === 0 && (
+          <View className="px-4 mt-6">
+            <View className="flex-row items-center py-2">
+              <User size={16} color={getThemeColor(colors, "typography-400")} />
+              <Text className="text-typography-400 text-sm ml-2">No participants yet</Text>
+            </View>
           </View>
         )}
 
-        <View className="px-4 py-6">
+        {/* Status Buttons */}
+        <View className="px-4 mt-6">
           <Text className="text-typography-500 text-sm font-medium mb-3">Status</Text>
           <View className="flex-row flex-wrap">
             <Pressable
@@ -309,6 +379,8 @@ export default function ReminderDetailScreen() {
             </Pressable>
           </View>
         </View>
+
+        <View className="h-8" />
       </ScrollView>
     </SafeAreaView>
   );

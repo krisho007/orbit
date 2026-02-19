@@ -129,7 +129,7 @@ function SwipeAction({
   return (
     <Animated.View
       style={[actionStyle, { backgroundColor }]}
-      className={`mx-4 mb-3 rounded-2xl flex-1 px-6 justify-center ${align === "left" ? "items-start" : "items-end"}`}
+      className={`mx-4 mb-3 rounded-xl flex-1 px-6 justify-center ${align === "left" ? "items-start" : "items-end"}`}
     >
       {icon}
       <Text className="text-xs font-semibold mt-1" style={{ color: textColor }}>
@@ -224,15 +224,15 @@ function ContactRow({
       <Animated.View style={cardStyle}>
         <Pressable
           onPress={() => onOpenContact(item.id)}
-          className="relative overflow-hidden flex-row items-center px-4 py-3 bg-background-0 border border-border-100 rounded-2xl mx-4 mb-2.5 active:bg-background-50"
+          className="relative overflow-hidden flex-row items-center px-4 py-3 bg-background-0 border border-border-200 rounded-xl mx-4 mb-2.5 active:bg-background-50"
         >
           {item.images?.[0]?.imageUrl ? (
             <Image
               source={{ uri: item.images[0].imageUrl }}
-              className="w-11 h-11 rounded-2xl mr-3.5"
+              className="w-11 h-11 rounded-xl mr-3.5"
             />
           ) : (
-            <View className="w-11 h-11 rounded-2xl bg-primary-100 items-center justify-center mr-3.5">
+            <View className="w-11 h-11 rounded-xl bg-primary-100 items-center justify-center mr-3.5">
               <Text className="text-primary-700 text-lg font-semibold">
                 {item.displayName.charAt(0).toUpperCase()}
               </Text>
@@ -250,7 +250,7 @@ function ContactRow({
               blurOverlayStyle,
               {
                 backgroundColor: getThemeColor(colors, "background-50"),
-                borderRadius: 16,
+                borderRadius: 12,
               },
             ]}
           />

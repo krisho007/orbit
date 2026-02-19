@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -33,6 +33,9 @@ import {
   Plus,
   Maximize2,
   GitFork,
+  Cake,
+  StickyNote,
+  MapPin,
 } from "lucide-react-native";
 import Svg, { Path } from "react-native-svg";
 import { Conversation, Reminder, Relationship, ReminderStatus } from "../../lib/api";
@@ -178,7 +181,7 @@ export default function ContactDetailScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background-0">
       {/* Header */}
-      <View className="flex-row items-center justify-between px-4 py-3 border-b border-border-200">
+      <View className="flex-row items-center justify-between px-4 py-3">
         <Pressable onPress={handleBack} className="p-2">
           <ChevronLeft size={22} color={getThemeColor(colors, "primary-600")} />
         </Pressable>
@@ -194,8 +197,8 @@ export default function ContactDetailScreen() {
       </View>
 
       <ScrollView className="flex-1">
-        {/* Avatar & Name */}
-        <View className="items-center py-8 bg-background-50">
+        {/* Hero — Avatar, Name, Tags, Quick Actions */}
+        <View className="items-center py-8">
           {contact.images?.[0]?.imageUrl ? (
             <Image
               source={{ uri: contact.images[0].imageUrl }}
@@ -212,17 +215,14 @@ export default function ContactDetailScreen() {
             {contact.displayName}
           </Text>
           {(contact.company || contact.jobTitle) && (
-            <Text className="text-typography-500 text-base">
+            <Text className="text-typography-500 text-base text-center px-4 mb-2">
               {[contact.jobTitle, contact.company].filter(Boolean).join(" at ")}
             </Text>
           )}
-        </View>
 
-        {/* Tags */}
-        {contact.tags && contact.tags.length > 0 && (
-          <View className="px-4 py-4 border-b border-border-200">
-            <Text className="text-typography-500 text-sm font-medium mb-2">Tags</Text>
-            <View className="flex-row flex-wrap">
+          {/* Tags inline */}
+          {contact.tags && contact.tags.length > 0 && (
+            <View className="flex-row flex-wrap justify-center mt-2 px-4">
               {contact.tags.map((tag) => (
                 <View
                   key={tag.id}
@@ -238,64 +238,131 @@ export default function ContactDetailScreen() {
                 </View>
               ))}
             </View>
-          </View>
-        )}
-
-        {/* Contact Info */}
-        <View className="px-4 py-4">
-          {contact.primaryPhone && (
-            <View className="mb-4">
-              <Text className="text-typography-500 text-sm font-medium mb-2">Phone</Text>
-              <View className="flex-row items-center justify-between py-3 px-4 bg-background-50 rounded-lg">
-                <Text className="text-typography-900 text-base">{contact.primaryPhone}</Text>
-                <View className="flex-row items-center gap-4">
-                  <Pressable onPress={() => handleWhatsApp(contact.primaryPhone!)} hitSlop={8} className="active:opacity-50">
-                    <WhatsAppIcon size={22} color="#25D366" />
-                  </Pressable>
-                  <Pressable onPress={() => handleCall(contact.primaryPhone!)} hitSlop={8} className="active:opacity-50">
-                    <Phone size={20} color={getThemeColor(colors, "success-500")} />
-                  </Pressable>
-                </View>
-              </View>
-            </View>
           )}
 
-          {contact.primaryEmail && (
-            <View className="mb-4">
-              <Text className="text-typography-500 text-sm font-medium mb-2">Email</Text>
-              <Pressable
-                onPress={() => handleEmail(contact.primaryEmail!)}
-                className="flex-row items-center justify-between py-3 px-4 bg-background-50 rounded-lg active:bg-background-100"
-              >
-                <Text className="text-typography-900 text-base">{contact.primaryEmail}</Text>
-                <Text className="text-primary-600 text-base">Email</Text>
-              </Pressable>
-            </View>
-          )}
-
-          {contact.dateOfBirth && (
-            <View className="mb-4">
-              <Text className="text-typography-500 text-sm font-medium mb-2">Birthday</Text>
-              <View className="py-3 px-4 bg-background-50 rounded-lg">
-                <Text className="text-typography-900 text-base">
-                  {new Date(contact.dateOfBirth).toLocaleDateString()}
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {contact.notes && (
-            <View className="mb-4">
-              <Text className="text-typography-500 text-sm font-medium mb-2">Notes</Text>
-              <View className="py-3 px-4 bg-background-50 rounded-lg">
-                <Text className="text-typography-900 text-base">{contact.notes}</Text>
-              </View>
+          {/* Quick action buttons */}
+          {(contact.primaryPhone || contact.primaryEmail) && (
+            <View className="flex-row items-center justify-center mt-4 gap-6">
+              {contact.primaryPhone && (
+                <Pressable onPress={() => handleCall(contact.primaryPhone!)} className="items-center active:opacity-50">
+                  <View
+                    className="w-11 h-11 rounded-full bg-background-50 border border-border-200 items-center justify-center mb-1"
+                  >
+                    <Phone size={18} color={getThemeColor(colors, "primary-600")} />
+                  </View>
+                  <Text className="text-typography-500 text-xs">Call</Text>
+                </Pressable>
+              )}
+              {contact.primaryPhone && (
+                <Pressable onPress={() => handleWhatsApp(contact.primaryPhone!)} className="items-center active:opacity-50">
+                  <View
+                    className="w-11 h-11 rounded-full bg-background-50 border border-border-200 items-center justify-center mb-1"
+                  >
+                    <WhatsAppIcon size={18} color={getThemeColor(colors, "primary-600")} />
+                  </View>
+                  <Text className="text-typography-500 text-xs">WhatsApp</Text>
+                </Pressable>
+              )}
+              {contact.primaryEmail && (
+                <Pressable onPress={() => handleEmail(contact.primaryEmail!)} className="items-center active:opacity-50">
+                  <View
+                    className="w-11 h-11 rounded-full bg-background-50 border border-border-200 items-center justify-center mb-1"
+                  >
+                    <Mail size={18} color={getThemeColor(colors, "primary-600")} />
+                  </View>
+                  <Text className="text-typography-500 text-xs">Email</Text>
+                </Pressable>
+              )}
             </View>
           )}
         </View>
 
+        {/* Consolidated Details Card */}
+        {(contact.primaryPhone || contact.primaryEmail || contact.location || contact.dateOfBirth || contact.notes) && (
+          <View className="mx-4 mb-2 rounded-xl bg-background-50 border border-border-200 overflow-hidden">
+            {(() => {
+              const rows: React.ReactNode[] = [];
+
+              if (contact.primaryPhone) {
+                rows.push(
+                  <View key="phone" className="flex-row items-center px-4 py-3">
+                    <Phone size={16} color={getThemeColor(colors, "typography-400")} />
+                    <View className="ml-3 flex-1">
+                      <Text className="text-typography-400 text-xs">Phone</Text>
+                      <Text className="text-typography-900 text-base">{contact.primaryPhone}</Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              if (contact.primaryEmail) {
+                rows.push(
+                  <Pressable
+                    key="email"
+                    onPress={() => handleEmail(contact.primaryEmail!)}
+                    className="flex-row items-center px-4 py-3 active:bg-background-100"
+                  >
+                    <Mail size={16} color={getThemeColor(colors, "typography-400")} />
+                    <View className="ml-3 flex-1">
+                      <Text className="text-typography-400 text-xs">Email</Text>
+                      <Text className="text-typography-900 text-base">{contact.primaryEmail}</Text>
+                    </View>
+                  </Pressable>
+                );
+              }
+
+              if (contact.location) {
+                rows.push(
+                  <View key="location" className="flex-row items-start px-4 py-3">
+                    <MapPin size={16} color={getThemeColor(colors, "typography-400")} className="mt-0.5" />
+                    <View className="ml-3 flex-1">
+                      <Text className="text-typography-400 text-xs">Location</Text>
+                      <Text className="text-typography-900 text-base">{contact.location}</Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              if (contact.dateOfBirth) {
+                rows.push(
+                  <View key="birthday" className="flex-row items-center px-4 py-3">
+                    <Cake size={16} color={getThemeColor(colors, "typography-400")} />
+                    <View className="ml-3 flex-1">
+                      <Text className="text-typography-400 text-xs">Birthday</Text>
+                      <Text className="text-typography-900 text-base">
+                        {format(new Date(contact.dateOfBirth), "MMMM d, yyyy")}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              if (contact.notes) {
+                rows.push(
+                  <View key="notes" className="flex-row items-start px-4 py-3">
+                    <StickyNote size={16} color={getThemeColor(colors, "typography-400")} className="mt-0.5" />
+                    <View className="ml-3 flex-1">
+                      <Text className="text-typography-400 text-xs">Notes</Text>
+                      <Text className="text-typography-900 text-base" numberOfLines={2}>
+                        {contact.notes}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              return rows.map((row, i) => (
+                <View key={i}>
+                  {i > 0 && <View className="border-b border-border-200 mx-4" />}
+                  {row}
+                </View>
+              ));
+            })()}
+          </View>
+        )}
+
         {/* Conversations */}
-        <View className="px-4 py-4 border-t border-border-200">
+        <View className="px-4 mt-6">
           <View className="mb-3 flex-row items-center justify-between">
             <Text className="text-typography-900 text-base font-semibold">Conversations</Text>
             <Pressable
@@ -311,10 +378,9 @@ export default function ContactDetailScreen() {
               <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
             </View>
           ) : conversations.length === 0 ? (
-            <View className="py-6 px-4 bg-background-50 rounded-xl">
-              <Text className="text-typography-600 text-sm">
-                No conversations with this contact yet.
-              </Text>
+            <View className="flex-row items-center py-2">
+              <MessageCircle size={16} color={getThemeColor(colors, "typography-400")} />
+              <Text className="text-typography-400 text-sm ml-2">No conversations yet</Text>
             </View>
           ) : (
             <>
@@ -374,7 +440,7 @@ export default function ContactDetailScreen() {
         </View>
 
         {/* Reminders */}
-        <View className="px-4 py-4 border-t border-border-200">
+        <View className="px-4 mt-6">
           <View className="mb-3 flex-row items-center justify-between">
             <Text className="text-typography-900 text-base font-semibold">Reminders</Text>
             <Pressable
@@ -390,10 +456,9 @@ export default function ContactDetailScreen() {
               <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
             </View>
           ) : reminders.length === 0 ? (
-            <View className="py-6 px-4 bg-background-50 rounded-xl">
-              <Text className="text-typography-600 text-sm">
-                No reminders for this contact yet.
-              </Text>
+            <View className="flex-row items-center py-2">
+              <Bell size={16} color={getThemeColor(colors, "typography-400")} />
+              <Text className="text-typography-400 text-sm ml-2">No reminders yet</Text>
             </View>
           ) : (
             <>
@@ -466,7 +531,7 @@ export default function ContactDetailScreen() {
         </View>
 
         {/* Relationships */}
-        <View className="px-4 py-4 border-t border-border-200">
+        <View className="px-4 mt-6">
           <View className="mb-3 flex-row items-center justify-between">
             <View className="flex-row items-center">
               <Text className="text-typography-900 text-base font-semibold">Relationships</Text>
@@ -492,10 +557,9 @@ export default function ContactDetailScreen() {
               <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
             </View>
           ) : relationships.length === 0 ? (
-            <View className="py-6 px-4 bg-background-50 rounded-xl">
-              <Text className="text-typography-600 text-sm">
-                No relationships recorded for this contact yet.
-              </Text>
+            <View className="flex-row items-center py-2">
+              <GitFork size={16} color={getThemeColor(colors, "typography-400")} />
+              <Text className="text-typography-400 text-sm ml-2">No relationships yet</Text>
             </View>
           ) : (
             <>

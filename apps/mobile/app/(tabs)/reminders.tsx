@@ -168,10 +168,10 @@ export default function RemindersScreen() {
             params: { id: item.id, from: "/(tabs)/reminders" },
           })
         }
-        className="p-4 bg-background-0 border-b border-border-100 active:bg-background-50"
+        className="p-4 bg-background-0 border-b border-border-200 active:bg-background-50"
       >
         <View className="flex-row items-start">
-          <View className="w-10 h-10 rounded-2xl bg-primary-100 items-center justify-center mr-3">
+          <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mr-3">
             <StatusIcon size={18} color={iconColor} />
           </View>
 

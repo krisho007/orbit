@@ -132,7 +132,7 @@ export default function EventsScreen() {
             params: { id: item.id, from: "/(tabs)/events" },
           })
         }
-        className={`p-4 bg-background-0 border-b border-border-100 active:bg-background-50 ${
+        className={`p-4 bg-background-0 border-b border-border-200 active:bg-background-50 ${
           isPastEvent ? "opacity-60" : ""
         }`}
       >
@@ -151,7 +151,7 @@ export default function EventsScreen() {
 
           <View className="flex-1 border-l-2 border-primary-200 pl-3">
             <View className="flex-row items-center mb-1">
-              <View className="w-7 h-7 rounded-xl bg-primary-100 items-center justify-center mr-2">
+              <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mr-2">
                 <EventIcon size={14} color={getThemeColor(colors, "primary-600")} />
               </View>
               <Text className="text-typography-900 font-semibold flex-1" numberOfLines={1}>

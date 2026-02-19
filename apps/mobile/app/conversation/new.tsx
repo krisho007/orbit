@@ -17,9 +17,9 @@ import {
   Contact,
   ConversationMedium,
   contactsApi,
-  conversationsApi,
 } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
+import { useCreateConversation } from "../../hooks/use-conversations";
 
 const MEDIUM_OPTIONS: { value: ConversationMedium; label: string }[] = [
   { value: "PHONE_CALL", label: "Phone Call" },
@@ -36,7 +36,7 @@ export default function NewConversationScreen() {
   const { contactId } = useLocalSearchParams<{ contactId?: string }>();
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const createConversation = useCreateConversation();
   const [contactSearch, setContactSearch] = useState("");
   const [isSearchingContacts, setIsSearchingContacts] = useState(false);
   const [contactResults, setContactResults] = useState<Contact[]>([]);
@@ -116,8 +116,7 @@ export default function NewConversationScreen() {
 
   const handleSubmit = async () => {
     try {
-      setIsSubmitting(true);
-      const created = await conversationsApi.create({
+      const created = await createConversation.mutateAsync({
         content: formData.content.trim() || undefined,
         medium: formData.medium,
         happenedAt: happenedAt.toISOString(),
@@ -128,8 +127,6 @@ export default function NewConversationScreen() {
     } catch (error) {
       console.error("Failed to create conversation:", error);
       Alert.alert("Error", "Failed to create conversation");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -140,13 +137,13 @@ export default function NewConversationScreen() {
           <Text className="text-primary-600 text-base">Cancel</Text>
         </Pressable>
         <Text className="text-lg font-semibold text-typography-900">New Conversation</Text>
-        <Pressable onPress={handleSubmit} disabled={isSubmitting} className="p-2">
+        <Pressable onPress={handleSubmit} disabled={createConversation.isPending} className="p-2">
           <Text
             className={`text-base ${
-              isSubmitting ? "text-typography-400" : "text-primary-600"
+              createConversation.isPending ? "text-typography-400" : "text-primary-600"
             }`}
           >
-            {isSubmitting ? "Saving..." : "Save"}
+            {createConversation.isPending ? "Saving..." : "Save"}
           </Text>
         </Pressable>
       </View>

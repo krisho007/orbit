@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import { AnimatedTabScreen } from "../../components/animated-tab-screen";
 import {
   View,
@@ -12,8 +12,9 @@ import {
 import { useRouter } from "expo-router";
 import { Bell, CheckCircle2, XCircle, Plus, Search, X } from "lucide-react-native";
 import { format } from "date-fns";
-import { Reminder, ReminderStatus, remindersApi } from "../../lib/api";
+import { Reminder, ReminderStatus } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
+import { useReminders } from "../../hooks/use-reminders";
 
 const STATUS_META: Record<
   ReminderStatus,
@@ -109,15 +110,9 @@ function RemindersListHeader({
 export default function RemindersScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [statusFilter, setStatusFilter] = useState<ReminderStatus | undefined>("OPEN");
-  const [totalCount, setTotalCount] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const handleSearchChange = useCallback((text: string) => {
@@ -132,56 +127,21 @@ export default function RemindersScreen() {
     setDebouncedSearch("");
   }, []);
 
-  const loadReminders = useCallback(
-    async (refresh = false) => {
-      try {
-        if (refresh) {
-          setIsRefreshing(true);
-        }
+  const {
+    data,
+    isLoading,
+    isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch,
+  } = useReminders({
+    search: debouncedSearch || undefined,
+    status: statusFilter,
+  });
 
-        const data = await remindersApi.list({
-          search: debouncedSearch || undefined,
-          cursor: refresh ? undefined : nextCursor || undefined,
-          status: statusFilter,
-        });
-
-        if (refresh) {
-          setReminders(data.reminders);
-        } else {
-          setReminders((prev) => [...prev, ...data.reminders]);
-        }
-
-        setNextCursor(data.nextCursor);
-        if (data.stats) {
-          setTotalCount(data.stats.totalCount);
-        }
-      } catch (error) {
-        console.error("Failed to load reminders:", error);
-      } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
-        setIsLoadingMore(false);
-      }
-    },
-    [debouncedSearch, nextCursor, statusFilter]
-  );
-
-  useEffect(() => {
-    setIsLoading(true);
-    setNextCursor(null);
-    loadReminders(true);
-  }, [debouncedSearch, statusFilter]);
-
-  const handleRefresh = () => {
-    loadReminders(true);
-  };
-
-  const handleLoadMore = () => {
-    if (nextCursor && !isLoadingMore) {
-      setIsLoadingMore(true);
-      loadReminders(false);
-    }
-  };
+  const reminders = data?.pages.flatMap((p) => p.reminders) ?? [];
+  const totalCount = data?.pages[0]?.stats?.totalCount ?? 0;
 
   const renderReminder = ({ item }: { item: Reminder }) => {
     const statusMeta = STATUS_META[item.status] || STATUS_META.OPEN;
@@ -259,7 +219,7 @@ export default function RemindersScreen() {
   );
 
   const ListFooter = () =>
-    isLoadingMore ? (
+    isFetchingNextPage ? (
       <View className="py-4">
         <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
       </View>
@@ -287,12 +247,16 @@ export default function RemindersScreen() {
         ListFooterComponent={ListFooter}
         refreshControl={
           <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
+            refreshing={isRefetching && !isFetchingNextPage}
+            onRefresh={() => refetch()}
             tintColor={getThemeColor(colors, "primary-600")}
           />
         }
-        onEndReached={handleLoadMore}
+        onEndReached={() => {
+          if (hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
+          }
+        }}
         onEndReachedThreshold={0.3}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 120 }}
       />

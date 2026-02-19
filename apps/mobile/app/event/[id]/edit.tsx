@@ -13,6 +13,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { format } from "date-fns";
 import { eventsApi, Event, EventType } from "../../../lib/api";
 import { getThemeColor, useThemeColors } from "../../../lib/theme";
+import { useUpdateEvent } from "../../../hooks/use-events";
 
 const EVENT_TYPE_OPTIONS: { value: EventType; label: string }[] = [
   { value: "MEETING", label: "Meeting" },
@@ -44,8 +45,8 @@ export default function EditEventScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
+  const updateEvent = useUpdateEvent();
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [event, setEvent] = useState<Event | null>(null);
   const [formData, setFormData] = useState({
     title: "",
@@ -101,21 +102,21 @@ export default function EditEventScreen() {
     }
 
     try {
-      setIsSubmitting(true);
-      await eventsApi.update(id, {
-        title: formData.title.trim(),
-        description: formData.description.trim(),
-        eventType: formData.eventType,
-        startAt,
-        endAt: endAtParsed || undefined,
-        location: formData.location.trim() || undefined,
+      await updateEvent.mutateAsync({
+        id,
+        data: {
+          title: formData.title.trim(),
+          description: formData.description.trim(),
+          eventType: formData.eventType,
+          startAt,
+          endAt: endAtParsed || undefined,
+          location: formData.location.trim() || undefined,
+        },
       });
       router.back();
     } catch (error) {
       console.error("Failed to update event:", error);
       Alert.alert("Error", "Failed to update event");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -136,13 +137,13 @@ export default function EditEventScreen() {
           <Text className="text-primary-600 text-base">Cancel</Text>
         </Pressable>
         <Text className="text-lg font-semibold text-typography-900">Edit Event</Text>
-        <Pressable onPress={handleSubmit} disabled={isSubmitting} className="p-2">
+        <Pressable onPress={handleSubmit} disabled={updateEvent.isPending} className="p-2">
           <Text
             className={`text-base ${
-              isSubmitting ? "text-typography-400" : "text-primary-600"
+              updateEvent.isPending ? "text-typography-400" : "text-primary-600"
             }`}
           >
-            {isSubmitting ? "Saving..." : "Save"}
+            {updateEvent.isPending ? "Saving..." : "Save"}
           </Text>
         </Pressable>
       </View>

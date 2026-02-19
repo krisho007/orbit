@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import { AnimatedTabScreen } from "../../components/animated-tab-screen";
 import type { ComponentType } from "react";
 import {
@@ -23,9 +23,10 @@ import {
   Search,
   X,
 } from "lucide-react-native";
-import { conversationsApi, Conversation } from "../../lib/api";
+import { Conversation } from "../../lib/api";
 import { format } from "date-fns";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
+import { useConversations } from "../../hooks/use-conversations";
 
 const MEDIUM_META: Record<
   string,
@@ -83,14 +84,8 @@ function ConversationsListHeader({
 export default function ConversationsScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [totalCount, setTotalCount] = useState(0);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const handleSearchChange = useCallback((text: string) => {
@@ -105,57 +100,18 @@ export default function ConversationsScreen() {
     setDebouncedSearch("");
   }, []);
 
-  const loadConversations = useCallback(
-    async (refresh = false) => {
-      try {
-        if (refresh) {
-          setIsRefreshing(true);
-        }
+  const {
+    data,
+    isLoading,
+    isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch,
+  } = useConversations({ search: debouncedSearch || undefined });
 
-        const data = await conversationsApi.list({
-          search: debouncedSearch || undefined,
-          cursor: refresh ? undefined : nextCursor || undefined,
-        });
-
-        if (refresh) {
-          setConversations(data.conversations);
-        } else {
-          setConversations((prev) => [...prev, ...data.conversations]);
-        }
-
-        setNextCursor(data.nextCursor);
-
-        if (data.stats) {
-          setTotalCount(data.stats.totalCount);
-        }
-      } catch (error) {
-        console.error("Failed to load conversations:", error);
-      } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
-        setIsLoadingMore(false);
-      }
-    },
-    [debouncedSearch, nextCursor]
-  );
-
-  useEffect(() => {
-    setIsLoading(true);
-    setConversations([]);
-    setNextCursor(null);
-    loadConversations(true);
-  }, [debouncedSearch]);
-
-  const handleRefresh = () => {
-    loadConversations(true);
-  };
-
-  const handleLoadMore = () => {
-    if (nextCursor && !isLoadingMore) {
-      setIsLoadingMore(true);
-      loadConversations(false);
-    }
-  };
+  const conversations = data?.pages.flatMap((p) => p.conversations) ?? [];
+  const totalCount = data?.pages[0]?.stats?.totalCount ?? 0;
 
   const renderConversation = ({ item }: { item: Conversation }) => {
     const participants = item.participants?.map((p) => p.contact.displayName) || [];
@@ -232,7 +188,7 @@ export default function ConversationsScreen() {
   );
 
   const ListFooter = () =>
-    isLoadingMore ? (
+    isFetchingNextPage ? (
       <View className="py-4">
         <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
       </View>
@@ -258,12 +214,16 @@ export default function ConversationsScreen() {
         ListFooterComponent={ListFooter}
         refreshControl={
           <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
+            refreshing={isRefetching && !isFetchingNextPage}
+            onRefresh={() => refetch()}
             tintColor={getThemeColor(colors, "primary-600")}
           />
         }
-        onEndReached={handleLoadMore}
+        onEndReached={() => {
+          if (hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
+          }
+        }}
         onEndReachedThreshold={0.3}
         contentContainerStyle={{ flexGrow: 1 }}
       />

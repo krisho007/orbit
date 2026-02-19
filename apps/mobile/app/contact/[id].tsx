@@ -35,8 +35,12 @@ import {
   GitFork,
 } from "lucide-react-native";
 import Svg, { Path } from "react-native-svg";
-import { contactsApi, conversationsApi, remindersApi, relationshipsApi, Contact, Conversation, Reminder, Relationship, ReminderStatus } from "../../lib/api";
+import { Conversation, Reminder, Relationship, ReminderStatus } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
+import { useContact, useDeleteContact } from "../../hooks/use-contacts";
+import { useConversationsByContact } from "../../hooks/use-conversations";
+import { useReminders } from "../../hooks/use-reminders";
+import { useRelationshipsByContact } from "../../hooks/use-relationships";
 
 function WhatsAppIcon({ size = 20, color = "#25D366" }: { size?: number; color?: string }) {
   return (
@@ -76,22 +80,26 @@ export default function ContactDetailScreen() {
   }>();
   const colors = useThemeColors();
   const backHref = Array.isArray(from) ? from[0] : from;
-  const [contact, setContact] = useState<Contact | null>(null);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [isLoadingConversations, setIsLoadingConversations] = useState(true);
-  const [nextConversationCursor, setNextConversationCursor] = useState<string | null>(
-    null
-  );
-  const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
-  const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [isLoadingReminders, setIsLoadingReminders] = useState(true);
-  const [nextReminderCursor, setNextReminderCursor] = useState<string | null>(null);
-  const [isLoadingMoreReminders, setIsLoadingMoreReminders] = useState(false);
-  const [relationships, setRelationships] = useState<Relationship[]>([]);
-  const [isLoadingRelationships, setIsLoadingRelationships] = useState(true);
   const [showFullscreenGraph, setShowFullscreenGraph] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const { width: windowWidth } = useWindowDimensions();
+
+  const { data: contact, isLoading } = useContact(id);
+  const deleteContact = useDeleteContact();
+
+  const conversationsQuery = useConversationsByContact(id);
+  const conversations = conversationsQuery.data?.pages.flatMap((p) => p.conversations) ?? [];
+  const isLoadingConversations = conversationsQuery.isLoading;
+  const hasMoreConversations = conversationsQuery.hasNextPage;
+  const isLoadingMoreConversations = conversationsQuery.isFetchingNextPage;
+
+  const remindersQuery = useReminders({ contactId: id });
+  const reminders = remindersQuery.data?.pages.flatMap((p) => p.reminders) ?? [];
+  const isLoadingReminders = remindersQuery.isLoading;
+  const hasMoreReminders = remindersQuery.hasNextPage;
+  const isLoadingMoreReminders = remindersQuery.isFetchingNextPage;
+
+  const { data: relationships = [], isLoading: isLoadingRelationships } =
+    useRelationshipsByContact(id);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -102,135 +110,12 @@ export default function ContactDetailScreen() {
   }, [backHref, router]);
 
   useEffect(() => {
-    loadContact();
-  }, [id]);
-
-  useEffect(() => {
-    loadConversations();
-  }, [id]);
-
-  useEffect(() => {
-    loadReminders();
-  }, [id]);
-
-  useEffect(() => {
-    loadRelationships();
-  }, [id]);
-
-  useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
       handleBack();
       return true;
     });
     return () => subscription.remove();
   }, [handleBack]);
-
-  const loadContact = async () => {
-    try {
-      setIsLoading(true);
-      const data = await contactsApi.get(id);
-      setContact(data);
-    } catch (error) {
-      console.error("Failed to load contact:", error);
-      Alert.alert("Error", "Failed to load contact details");
-      handleBack();
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loadConversations = async () => {
-    try {
-      setIsLoadingConversations(true);
-      const data = await conversationsApi.listByContacts({
-        contactIds: [id],
-        limit: 10,
-      });
-      setConversations(data.conversations);
-      setNextConversationCursor(data.nextCursor);
-    } catch (error) {
-      console.error("Failed to load contact conversations:", error);
-      setConversations([]);
-      setNextConversationCursor(null);
-    } finally {
-      setIsLoadingConversations(false);
-    }
-  };
-
-  const loadMoreConversations = async () => {
-    if (!nextConversationCursor || isLoadingMoreConversations) {
-      return;
-    }
-
-    try {
-      setIsLoadingMoreConversations(true);
-      const data = await conversationsApi.listByContacts({
-        contactIds: [id],
-        cursor: nextConversationCursor,
-        limit: 10,
-      });
-      setConversations((prev) => [...prev, ...data.conversations]);
-      setNextConversationCursor(data.nextCursor);
-    } catch (error) {
-      console.error("Failed to load more contact conversations:", error);
-      setNextConversationCursor(null);
-    } finally {
-      setIsLoadingMoreConversations(false);
-    }
-  };
-
-  const loadReminders = async () => {
-    try {
-      setIsLoadingReminders(true);
-      const data = await remindersApi.list({
-        contactId: id,
-        limit: 10,
-      });
-      setReminders(data.reminders);
-      setNextReminderCursor(data.nextCursor);
-    } catch (error) {
-      console.error("Failed to load contact reminders:", error);
-      setReminders([]);
-      setNextReminderCursor(null);
-    } finally {
-      setIsLoadingReminders(false);
-    }
-  };
-
-  const loadMoreReminders = async () => {
-    if (!nextReminderCursor || isLoadingMoreReminders) {
-      return;
-    }
-
-    try {
-      setIsLoadingMoreReminders(true);
-      const data = await remindersApi.list({
-        contactId: id,
-        cursor: nextReminderCursor,
-        limit: 10,
-      });
-      setReminders((prev) => [...prev, ...data.reminders]);
-      setNextReminderCursor(data.nextCursor);
-    } catch (error) {
-      console.error("Failed to load more contact reminders:", error);
-      setNextReminderCursor(null);
-    } finally {
-      setIsLoadingMoreReminders(false);
-    }
-  };
-
-  const loadRelationships = async () => {
-    try {
-      setIsLoadingRelationships(true);
-      const data = await relationshipsApi.list({ contactId: id });
-      setRelationships(data.relationships);
-    } catch (error) {
-      console.error("Failed to load relationships:", error);
-      setRelationships([]);
-    } finally {
-      setIsLoadingRelationships(false);
-    }
-  };
 
   const handleCall = (phone: string) => {
     Linking.openURL(`tel:${phone}`);
@@ -258,7 +143,7 @@ export default function ContactDetailScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await contactsApi.delete(id);
+              await deleteContact.mutateAsync(id);
               handleBack();
             } catch (error) {
               console.error("Failed to delete contact:", error);
@@ -358,29 +243,16 @@ export default function ContactDetailScreen() {
 
         {/* Contact Info */}
         <View className="px-4 py-4">
-          {/* Phone Numbers */}
           {contact.primaryPhone && (
             <View className="mb-4">
-              <Text className="text-typography-500 text-sm font-medium mb-2">
-                Phone
-              </Text>
+              <Text className="text-typography-500 text-sm font-medium mb-2">Phone</Text>
               <View className="flex-row items-center justify-between py-3 px-4 bg-background-50 rounded-lg">
-                <Text className="text-typography-900 text-base">
-                  {contact.primaryPhone}
-                </Text>
+                <Text className="text-typography-900 text-base">{contact.primaryPhone}</Text>
                 <View className="flex-row items-center gap-4">
-                  <Pressable
-                    onPress={() => handleWhatsApp(contact.primaryPhone!)}
-                    hitSlop={8}
-                    className="active:opacity-50"
-                  >
+                  <Pressable onPress={() => handleWhatsApp(contact.primaryPhone!)} hitSlop={8} className="active:opacity-50">
                     <WhatsAppIcon size={22} color="#25D366" />
                   </Pressable>
-                  <Pressable
-                    onPress={() => handleCall(contact.primaryPhone!)}
-                    hitSlop={8}
-                    className="active:opacity-50"
-                  >
+                  <Pressable onPress={() => handleCall(contact.primaryPhone!)} hitSlop={8} className="active:opacity-50">
                     <Phone size={20} color={getThemeColor(colors, "success-500")} />
                   </Pressable>
                 </View>
@@ -388,30 +260,22 @@ export default function ContactDetailScreen() {
             </View>
           )}
 
-          {/* Email */}
           {contact.primaryEmail && (
             <View className="mb-4">
-              <Text className="text-typography-500 text-sm font-medium mb-2">
-                Email
-              </Text>
+              <Text className="text-typography-500 text-sm font-medium mb-2">Email</Text>
               <Pressable
                 onPress={() => handleEmail(contact.primaryEmail!)}
                 className="flex-row items-center justify-between py-3 px-4 bg-background-50 rounded-lg active:bg-background-100"
               >
-                <Text className="text-typography-900 text-base">
-                  {contact.primaryEmail}
-                </Text>
+                <Text className="text-typography-900 text-base">{contact.primaryEmail}</Text>
                 <Text className="text-primary-600 text-base">Email</Text>
               </Pressable>
             </View>
           )}
 
-          {/* Birthday */}
           {contact.dateOfBirth && (
             <View className="mb-4">
-              <Text className="text-typography-500 text-sm font-medium mb-2">
-                Birthday
-              </Text>
+              <Text className="text-typography-500 text-sm font-medium mb-2">Birthday</Text>
               <View className="py-3 px-4 bg-background-50 rounded-lg">
                 <Text className="text-typography-900 text-base">
                   {new Date(contact.dateOfBirth).toLocaleDateString()}
@@ -420,12 +284,9 @@ export default function ContactDetailScreen() {
             </View>
           )}
 
-          {/* Notes */}
           {contact.notes && (
             <View className="mb-4">
-              <Text className="text-typography-500 text-sm font-medium mb-2">
-                Notes
-              </Text>
+              <Text className="text-typography-500 text-sm font-medium mb-2">Notes</Text>
               <View className="py-3 px-4 bg-background-50 rounded-lg">
                 <Text className="text-typography-900 text-base">{contact.notes}</Text>
               </View>
@@ -471,7 +332,6 @@ export default function ContactDetailScreen() {
                       <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mr-3">
                         <MediumIcon size={18} color={getThemeColor(colors, "primary-600")} />
                       </View>
-
                       <View className="flex-1">
                         <View className="flex-row items-center justify-between mb-1">
                           <Text className="text-typography-900 text-sm font-semibold">
@@ -481,18 +341,12 @@ export default function ContactDetailScreen() {
                             {format(new Date(conversation.happenedAt), "MMM d, yyyy")}
                           </Text>
                         </View>
-
                         {conversation.content ? (
-                          <Text
-                            className="text-typography-700 text-sm"
-                            numberOfLines={2}
-                          >
+                          <Text className="text-typography-700 text-sm" numberOfLines={2}>
                             {conversation.content}
                           </Text>
                         ) : (
-                          <Text className="text-typography-400 text-sm italic">
-                            No notes
-                          </Text>
+                          <Text className="text-typography-400 text-sm italic">No notes</Text>
                         )}
                       </View>
                     </View>
@@ -500,17 +354,14 @@ export default function ContactDetailScreen() {
                 );
               })}
 
-              {nextConversationCursor && (
+              {hasMoreConversations && (
                 <Pressable
-                  onPress={loadMoreConversations}
+                  onPress={() => conversationsQuery.fetchNextPage()}
                   disabled={isLoadingMoreConversations}
                   className="mt-1 py-3 rounded-lg bg-background-100 active:bg-background-200"
                 >
                   {isLoadingMoreConversations ? (
-                    <ActivityIndicator
-                      size="small"
-                      color={getThemeColor(colors, "primary-600")}
-                    />
+                    <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
                   ) : (
                     <Text className="text-primary-600 text-center text-sm font-medium">
                       Load more conversations
@@ -575,28 +426,19 @@ export default function ContactDetailScreen() {
                       <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mr-3">
                         <StatusIcon size={18} color={iconColor} />
                       </View>
-
                       <View className="flex-1">
                         <View className="flex-row items-center justify-between mb-1">
                           <Text className="text-typography-900 text-sm font-semibold flex-1" numberOfLines={1}>
                             {reminder.title}
                           </Text>
-                          <Text className="text-typography-400 text-xs ml-2">
-                            {dueLabel}
-                          </Text>
+                          <Text className="text-typography-400 text-xs ml-2">{dueLabel}</Text>
                         </View>
-
                         {reminder.notes ? (
-                          <Text
-                            className="text-typography-700 text-sm"
-                            numberOfLines={2}
-                          >
+                          <Text className="text-typography-700 text-sm" numberOfLines={2}>
                             {reminder.notes}
                           </Text>
                         ) : (
-                          <Text className="text-typography-400 text-sm italic">
-                            No notes
-                          </Text>
+                          <Text className="text-typography-400 text-sm italic">No notes</Text>
                         )}
                       </View>
                     </View>
@@ -604,17 +446,14 @@ export default function ContactDetailScreen() {
                 );
               })}
 
-              {nextReminderCursor && (
+              {hasMoreReminders && (
                 <Pressable
-                  onPress={loadMoreReminders}
+                  onPress={() => remindersQuery.fetchNextPage()}
                   disabled={isLoadingMoreReminders}
                   className="mt-1 py-3 rounded-lg bg-background-100 active:bg-background-200"
                 >
                   {isLoadingMoreReminders ? (
-                    <ActivityIndicator
-                      size="small"
-                      color={getThemeColor(colors, "primary-600")}
-                    />
+                    <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
                   ) : (
                     <Text className="text-primary-600 text-center text-sm font-medium">
                       Load more reminders
@@ -660,7 +499,6 @@ export default function ContactDetailScreen() {
             </View>
           ) : (
             <>
-              {/* Graph */}
               <View className="mb-3 rounded-xl overflow-hidden border border-border-200 bg-background-50">
                 <RelationshipGraph
                   contactId={id}
@@ -677,7 +515,6 @@ export default function ContactDetailScreen() {
                 />
               </View>
 
-              {/* List */}
               {relationships.map((rel) => {
                 const isFrom = rel.fromContactId === id;
                 const otherName = isFrom
@@ -702,12 +539,8 @@ export default function ContactDetailScreen() {
                         <GitFork size={18} color={getThemeColor(colors, "primary-600")} />
                       </View>
                       <View className="flex-1">
-                        <Text className="text-typography-900 text-sm font-semibold">
-                          {typeName}
-                        </Text>
-                        <Text className="text-typography-600 text-sm">
-                          {otherName}
-                        </Text>
+                        <Text className="text-typography-900 text-sm font-semibold">{typeName}</Text>
+                        <Text className="text-typography-600 text-sm">{otherName}</Text>
                       </View>
                     </View>
                   </Pressable>
@@ -720,7 +553,6 @@ export default function ContactDetailScreen() {
         <View className="h-8" />
       </ScrollView>
 
-      {/* Fullscreen Graph Modal */}
       {contact && (
         <RelationshipGraphFullscreen
           visible={showFullscreenGraph}

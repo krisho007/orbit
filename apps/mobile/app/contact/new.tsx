@@ -11,14 +11,14 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { contactsApi } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
+import { useCreateContact } from "../../hooks/use-contacts";
 
 export default function NewContactScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const createContact = useCreateContact();
   const [selectedImage, setSelectedImage] = useState<ImagePicker.ImagePickerAsset | null>(
     null
   );
@@ -70,34 +70,29 @@ export default function NewContactScreen() {
     }
 
     try {
-      setIsSubmitting(true);
-      const newContact = await contactsApi.create({
-        displayName: formData.displayName.trim(),
-        company: formData.company.trim() || undefined,
-        jobTitle: formData.jobTitle.trim() || undefined,
-        primaryPhone: formData.primaryPhone.trim() || undefined,
-        primaryEmail: formData.primaryEmail.trim() || undefined,
-        notes: formData.notes.trim() || undefined,
+      await createContact.mutateAsync({
+        data: {
+          displayName: formData.displayName.trim(),
+          company: formData.company.trim() || undefined,
+          jobTitle: formData.jobTitle.trim() || undefined,
+          primaryPhone: formData.primaryPhone.trim() || undefined,
+          primaryEmail: formData.primaryEmail.trim() || undefined,
+          notes: formData.notes.trim() || undefined,
+        },
+        image:
+          selectedImage?.base64
+            ? {
+                base64Data: selectedImage.base64,
+                contentType: selectedImage.mimeType || "image/jpeg",
+                fileName: selectedImage.fileName || `contact-${Date.now()}.jpg`,
+              }
+            : undefined,
       });
-
-      if (selectedImage) {
-        if (!selectedImage.base64) {
-          throw new Error("Selected image did not include base64 payload");
-        }
-
-        await contactsApi.uploadImage(newContact.id, {
-          base64Data: selectedImage.base64,
-          contentType: selectedImage.mimeType || "image/jpeg",
-          fileName: selectedImage.fileName || `contact-${Date.now()}.jpg`,
-        });
-      }
 
       router.back();
     } catch (error) {
       console.error("Failed to create contact:", error);
       Alert.alert("Error", "Failed to create contact");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -111,15 +106,15 @@ export default function NewContactScreen() {
         <Text className="text-lg font-semibold text-typography-900">New Contact</Text>
         <Pressable
           onPress={handleSubmit}
-          disabled={isSubmitting}
+          disabled={createContact.isPending}
           className="p-2"
         >
           <Text
             className={`text-base ${
-              isSubmitting ? "text-typography-400" : "text-primary-600"
+              createContact.isPending ? "text-typography-400" : "text-primary-600"
             }`}
           >
-            {isSubmitting ? "Saving..." : "Save"}
+            {createContact.isPending ? "Saving..." : "Save"}
           </Text>
         </Pressable>
       </View>
@@ -158,26 +153,20 @@ export default function NewContactScreen() {
 
         {/* Name */}
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">
-            Name *
-          </Text>
+          <Text className="text-typography-700 text-sm font-medium mb-2">Name *</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="John Doe"
             placeholderTextColor={placeholderColor}
             value={formData.displayName}
-            onChangeText={(text) =>
-              setFormData({ ...formData, displayName: text })
-            }
+            onChangeText={(text) => setFormData({ ...formData, displayName: text })}
             autoCapitalize="words"
           />
         </View>
 
         {/* Company */}
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">
-            Company
-          </Text>
+          <Text className="text-typography-700 text-sm font-medium mb-2">Company</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="Acme Inc"
@@ -190,17 +179,13 @@ export default function NewContactScreen() {
 
         {/* Job Title */}
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">
-            Job Title
-          </Text>
+          <Text className="text-typography-700 text-sm font-medium mb-2">Job Title</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="Software Engineer"
             placeholderTextColor={placeholderColor}
             value={formData.jobTitle}
-            onChangeText={(text) =>
-              setFormData({ ...formData, jobTitle: text })
-            }
+            onChangeText={(text) => setFormData({ ...formData, jobTitle: text })}
             autoCapitalize="words"
           />
         </View>
@@ -213,9 +198,7 @@ export default function NewContactScreen() {
             placeholder="+1 (555) 123-4567"
             placeholderTextColor={placeholderColor}
             value={formData.primaryPhone}
-            onChangeText={(text) =>
-              setFormData({ ...formData, primaryPhone: text })
-            }
+            onChangeText={(text) => setFormData({ ...formData, primaryPhone: text })}
             keyboardType="phone-pad"
           />
         </View>
@@ -228,9 +211,7 @@ export default function NewContactScreen() {
             placeholder="john@example.com"
             placeholderTextColor={placeholderColor}
             value={formData.primaryEmail}
-            onChangeText={(text) =>
-              setFormData({ ...formData, primaryEmail: text })
-            }
+            onChangeText={(text) => setFormData({ ...formData, primaryEmail: text })}
             keyboardType="email-address"
             autoCapitalize="none"
           />

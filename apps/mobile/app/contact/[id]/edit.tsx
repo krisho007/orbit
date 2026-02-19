@@ -12,8 +12,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { contactsApi, ContactImage } from "../../../lib/api";
+import { ContactImage } from "../../../lib/api";
 import { getThemeColor, useThemeColors } from "../../../lib/theme";
+import { useContact, useUpdateContact } from "../../../hooks/use-contacts";
 
 export default function EditContactScreen() {
   const router = useRouter();
@@ -22,9 +23,6 @@ export default function EditContactScreen() {
   const placeholderColor = getThemeColor(colors, "typography-500");
   const notesInputRef = useRef<TextInput>(null);
   const shouldFocusNotes = focus === "notes";
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [existingImage, setExistingImage] = useState<ContactImage | null>(null);
   const [selectedImage, setSelectedImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [removeExistingImage, setRemoveExistingImage] = useState(false);
   const [formData, setFormData] = useState({
@@ -36,9 +34,21 @@ export default function EditContactScreen() {
     notes: "",
   });
 
+  const { data: contact, isLoading } = useContact(id);
+  const updateContact = useUpdateContact();
+  const existingImage = contact?.images?.[0] ?? null;
+
   useEffect(() => {
-    loadContact();
-  }, [id]);
+    if (!contact) return;
+    setFormData({
+      displayName: contact.displayName || "",
+      company: contact.company || "",
+      jobTitle: contact.jobTitle || "",
+      primaryPhone: contact.primaryPhone || "",
+      primaryEmail: contact.primaryEmail || "",
+      notes: contact.notes || "",
+    });
+  }, [contact]);
 
   useEffect(() => {
     if (!shouldFocusNotes || isLoading) return;
@@ -49,31 +59,6 @@ export default function EditContactScreen() {
 
     return () => clearTimeout(timer);
   }, [isLoading, shouldFocusNotes]);
-
-  const loadContact = async () => {
-    try {
-      setIsLoading(true);
-      const contact = await contactsApi.get(id);
-      const primaryImage = contact.images?.[0] ?? null;
-      setExistingImage(primaryImage);
-      setSelectedImage(null);
-      setRemoveExistingImage(false);
-      setFormData({
-        displayName: contact.displayName || "",
-        company: contact.company || "",
-        jobTitle: contact.jobTitle || "",
-        primaryPhone: contact.primaryPhone || "",
-        primaryEmail: contact.primaryEmail || "",
-        notes: contact.notes || "",
-      });
-    } catch (error) {
-      console.error("Failed to load contact:", error);
-      Alert.alert("Error", "Failed to load contact");
-      router.back();
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const pickImage = async () => {
     try {
@@ -121,39 +106,34 @@ export default function EditContactScreen() {
     }
 
     try {
-      setIsSubmitting(true);
-      await contactsApi.update(id, {
-        displayName: formData.displayName.trim(),
-        company: formData.company.trim() || undefined,
-        jobTitle: formData.jobTitle.trim() || undefined,
-        primaryPhone: formData.primaryPhone.trim() || undefined,
-        primaryEmail: formData.primaryEmail.trim() || undefined,
-        notes: formData.notes.trim() || undefined,
-      });
-
       const shouldDeleteExisting = Boolean(existingImage) && (removeExistingImage || selectedImage);
-      if (shouldDeleteExisting && existingImage) {
-        await contactsApi.deleteImage(id, existingImage.id);
-      }
 
-      if (selectedImage) {
-        if (!selectedImage.base64) {
-          throw new Error("Selected image did not include base64 payload");
-        }
-
-        await contactsApi.uploadImage(id, {
-          base64Data: selectedImage.base64,
-          contentType: selectedImage.mimeType || "image/jpeg",
-          fileName: selectedImage.fileName || `contact-${Date.now()}.jpg`,
-        });
-      }
+      await updateContact.mutateAsync({
+        id,
+        data: {
+          displayName: formData.displayName.trim(),
+          company: formData.company.trim() || undefined,
+          jobTitle: formData.jobTitle.trim() || undefined,
+          primaryPhone: formData.primaryPhone.trim() || undefined,
+          primaryEmail: formData.primaryEmail.trim() || undefined,
+          notes: formData.notes.trim() || undefined,
+        },
+        imageAction: {
+          deleteImageId: shouldDeleteExisting && existingImage ? existingImage.id : undefined,
+          upload: selectedImage?.base64
+            ? {
+                base64Data: selectedImage.base64,
+                contentType: selectedImage.mimeType || "image/jpeg",
+                fileName: selectedImage.fileName || `contact-${Date.now()}.jpg`,
+              }
+            : undefined,
+        },
+      });
 
       router.back();
     } catch (error) {
       console.error("Failed to update contact:", error);
       Alert.alert("Error", "Failed to update contact");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -177,15 +157,15 @@ export default function EditContactScreen() {
         <Text className="text-lg font-semibold text-typography-900">Edit Contact</Text>
         <Pressable
           onPress={handleSubmit}
-          disabled={isSubmitting}
+          disabled={updateContact.isPending}
           className="p-2"
         >
           <Text
             className={`text-base ${
-              isSubmitting ? "text-typography-400" : "text-primary-600"
+              updateContact.isPending ? "text-typography-400" : "text-primary-600"
             }`}
           >
-            {isSubmitting ? "Saving..." : "Save"}
+            {updateContact.isPending ? "Saving..." : "Save"}
           </Text>
         </Pressable>
       </View>
@@ -228,26 +208,20 @@ export default function EditContactScreen() {
 
         {/* Name */}
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">
-            Name *
-          </Text>
+          <Text className="text-typography-700 text-sm font-medium mb-2">Name *</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="John Doe"
             placeholderTextColor={placeholderColor}
             value={formData.displayName}
-            onChangeText={(text) =>
-              setFormData({ ...formData, displayName: text })
-            }
+            onChangeText={(text) => setFormData({ ...formData, displayName: text })}
             autoCapitalize="words"
           />
         </View>
 
         {/* Company */}
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">
-            Company
-          </Text>
+          <Text className="text-typography-700 text-sm font-medium mb-2">Company</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="Acme Inc"
@@ -260,17 +234,13 @@ export default function EditContactScreen() {
 
         {/* Job Title */}
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">
-            Job Title
-          </Text>
+          <Text className="text-typography-700 text-sm font-medium mb-2">Job Title</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="Software Engineer"
             placeholderTextColor={placeholderColor}
             value={formData.jobTitle}
-            onChangeText={(text) =>
-              setFormData({ ...formData, jobTitle: text })
-            }
+            onChangeText={(text) => setFormData({ ...formData, jobTitle: text })}
             autoCapitalize="words"
           />
         </View>
@@ -283,9 +253,7 @@ export default function EditContactScreen() {
             placeholder="+1 (555) 123-4567"
             placeholderTextColor={placeholderColor}
             value={formData.primaryPhone}
-            onChangeText={(text) =>
-              setFormData({ ...formData, primaryPhone: text })
-            }
+            onChangeText={(text) => setFormData({ ...formData, primaryPhone: text })}
             keyboardType="phone-pad"
           />
         </View>
@@ -298,9 +266,7 @@ export default function EditContactScreen() {
             placeholder="john@example.com"
             placeholderTextColor={placeholderColor}
             value={formData.primaryEmail}
-            onChangeText={(text) =>
-              setFormData({ ...formData, primaryEmail: text })
-            }
+            onChangeText={(text) => setFormData({ ...formData, primaryEmail: text })}
             keyboardType="email-address"
             autoCapitalize="none"
           />

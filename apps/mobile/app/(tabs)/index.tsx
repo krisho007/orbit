@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, type ReactNode } from "react";
+import { useState, useCallback, useRef, type ReactNode } from "react";
 import { AnimatedTabScreen } from "../../components/animated-tab-screen";
 import {
   View,
@@ -35,9 +35,11 @@ import Animated, {
   useSharedValue,
   type SharedValue,
 } from "react-native-reanimated";
-import { contactsApi, Contact } from "../../lib/api";
+import { Contact } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { getThemeColor, useThemeColors, type ThemeColors } from "../../lib/theme";
+import { useContacts } from "../../hooks/use-contacts";
+import { useEffect } from "react";
 
 function WhatsAppIcon({ size = 20, color = "#25D366" }: { size?: number; color?: string }) {
   return (
@@ -297,70 +299,35 @@ export default function ContactsScreen() {
   const router = useRouter();
   const { session } = useAuth();
   const colors = useThemeColors();
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [search, setSearch] = useState("");
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [totalCount, setTotalCount] = useState(0);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const swipeableRefs = useRef<Record<string, { current: SwipeableMethods | null }>>({});
 
-  const loadContacts = useCallback(
-    async (refresh = false) => {
-      try {
-        if (refresh) {
-          setIsRefreshing(true);
-        }
+  const handleSearchChange = useCallback((text: string) => {
+    setSearch(text);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(text), 300);
+  }, []);
 
-        const data = await contactsApi.list({
-          search: search || undefined,
-          cursor: refresh ? undefined : nextCursor || undefined,
-        });
+  const handleClearSearch = useCallback(() => {
+    setSearch("");
+    clearTimeout(debounceRef.current);
+    setDebouncedSearch("");
+  }, []);
 
-        if (refresh) {
-          setContacts(data.contacts);
-        } else {
-          setContacts((prev) => [...prev, ...data.contacts]);
-        }
+  const {
+    data,
+    isLoading,
+    isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch,
+  } = useContacts({ search: debouncedSearch || undefined });
 
-        setNextCursor(data.nextCursor);
-
-        if (data.stats) {
-          setTotalCount(data.stats.totalCount);
-        }
-      } catch (error) {
-        console.error("Failed to load contacts:", error);
-      } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
-        setIsLoadingMore(false);
-      }
-    },
-    [search, nextCursor]
-  );
-
-  useEffect(() => {
-    if (!session) {
-      setIsLoading(false);
-      return;
-    }
-    setIsLoading(true);
-    setContacts([]);
-    setNextCursor(null);
-    loadContacts(true);
-  }, [search, session]);
-
-  const handleRefresh = () => {
-    loadContacts(true);
-  };
-
-  const handleLoadMore = () => {
-    if (nextCursor && !isLoadingMore) {
-      setIsLoadingMore(true);
-      loadContacts(false);
-    }
-  };
+  const contacts = data?.pages.flatMap((p) => p.contacts) ?? [];
+  const totalCount = data?.pages[0]?.stats?.totalCount ?? 0;
 
   const getSwipeableRef = useCallback((id: string) => {
     if (!swipeableRefs.current[id]) {
@@ -448,7 +415,7 @@ export default function ContactsScreen() {
   );
 
   const ListFooter = () =>
-    isLoadingMore ? (
+    isFetchingNextPage ? (
       <View className="py-4">
         <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
       </View>
@@ -464,9 +431,9 @@ export default function ContactsScreen() {
         ListHeaderComponent={
           <ContactsListHeader
             search={search}
-            onChangeSearch={setSearch}
+            onChangeSearch={handleSearchChange}
             totalCount={totalCount}
-            onClearSearch={() => setSearch("")}
+            onClearSearch={handleClearSearch}
             colors={colors}
           />
         }
@@ -474,12 +441,16 @@ export default function ContactsScreen() {
         ListFooterComponent={ListFooter}
         refreshControl={
           <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
+            refreshing={isRefetching && !isFetchingNextPage}
+            onRefresh={() => refetch()}
             tintColor={getThemeColor(colors, "primary-600")}
           />
         }
-        onEndReached={handleLoadMore}
+        onEndReached={() => {
+          if (hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
+          }
+        }}
         onEndReachedThreshold={0.3}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 140 }}
       />

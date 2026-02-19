@@ -4,6 +4,8 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { queryClient, asyncStoragePersister } from "../lib/query-client";
 import { AuthProvider, useAuth } from "../lib/auth";
 import { View, ActivityIndicator, PermissionsAndroid, Platform } from "react-native";
 import {
@@ -172,10 +174,15 @@ function AppShell() {
 
   return (
     <GluestackUIProvider mode={mode}>
-      <AuthProvider>
-        <ThemedStatusBar />
-        <RootLayoutNav />
-      </AuthProvider>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{ persister: asyncStoragePersister }}
+      >
+        <AuthProvider>
+          <ThemedStatusBar />
+          <RootLayoutNav />
+        </AuthProvider>
+      </PersistQueryClientProvider>
     </GluestackUIProvider>
   );
 }

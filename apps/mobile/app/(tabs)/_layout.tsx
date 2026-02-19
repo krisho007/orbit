@@ -1,5 +1,5 @@
-import { Tabs, useRouter } from "expo-router";
-import { View, Platform, Pressable } from "react-native";
+import { Tabs } from "expo-router";
+import { View, Platform } from "react-native";
 import type { ComponentType } from "react";
 import {
   Users,
@@ -7,11 +7,9 @@ import {
   CalendarDays,
   Bell,
   Sparkles,
-  Settings as SettingsIcon,
-  LogOut,
 } from "lucide-react-native";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
-import { useAuth } from "../../lib/auth";
+import { HeaderMenu } from "../../components/header-menu";
 
 type TabIconProps = {
   focused: boolean;
@@ -39,29 +37,6 @@ function TabIcon({ focused, icon: Icon }: TabIconProps) {
 
 export default function TabsLayout() {
   const colors = useThemeColors();
-  const { signOut } = useAuth();
-  const router = useRouter();
-
-  const webHeaderRight = Platform.OS === "web" ? () => (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginRight: 16 }}>
-      <Pressable
-        onPress={() => router.push("/(tabs)/settings")}
-        style={{ padding: 6, borderRadius: 8 }}
-      >
-        <SettingsIcon size={20} color={getThemeColor(colors, "typography-600")} />
-      </Pressable>
-      <Pressable
-        onPress={() => {
-          if (window.confirm("Are you sure you want to sign out?")) {
-            signOut();
-          }
-        }}
-        style={{ padding: 6, borderRadius: 8 }}
-      >
-        <LogOut size={20} color={getThemeColor(colors, "typography-600")} />
-      </Pressable>
-    </View>
-  ) : undefined;
 
   return (
     <Tabs
@@ -69,7 +44,7 @@ export default function TabsLayout() {
       backBehavior="history"
       screenOptions={{
         headerShown: true,
-        headerRight: webHeaderRight,
+        headerRight: () => <HeaderMenu />,
         headerStyle: {
           backgroundColor: getThemeColor(colors, "background-0"),
         },
@@ -137,10 +112,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="settings"
         options={{
+          href: null,
           title: "Settings",
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={SettingsIcon} />
-          ),
         }}
       />
     </Tabs>

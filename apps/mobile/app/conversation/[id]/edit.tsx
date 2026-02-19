@@ -17,6 +17,7 @@ import {
   ConversationMedium,
 } from "../../../lib/api";
 import { getThemeColor, useThemeColors } from "../../../lib/theme";
+import { useUpdateConversation } from "../../../hooks/use-conversations";
 
 const MEDIUM_OPTIONS: { value: ConversationMedium; label: string }[] = [
   { value: "PHONE_CALL", label: "Phone Call" },
@@ -47,8 +48,8 @@ export default function EditConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
+  const updateConversation = useUpdateConversation();
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [formData, setFormData] = useState({
     content: "",
@@ -99,20 +100,20 @@ export default function EditConversationScreen() {
     }
 
     try {
-      setIsSubmitting(true);
-      await conversationsApi.update(id, {
-        content: formData.content.trim(),
-        medium: formData.medium,
-        happenedAt,
-        followUpAt: followUpAtParsed || undefined,
-        eventId: formData.eventId.trim() || undefined,
+      await updateConversation.mutateAsync({
+        id,
+        data: {
+          content: formData.content.trim(),
+          medium: formData.medium,
+          happenedAt,
+          followUpAt: followUpAtParsed || undefined,
+          eventId: formData.eventId.trim() || undefined,
+        },
       });
       router.back();
     } catch (error) {
       console.error("Failed to update conversation:", error);
       Alert.alert("Error", "Failed to update conversation");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -133,13 +134,13 @@ export default function EditConversationScreen() {
           <Text className="text-primary-600 text-base">Cancel</Text>
         </Pressable>
         <Text className="text-lg font-semibold text-typography-900">Edit Conversation</Text>
-        <Pressable onPress={handleSubmit} disabled={isSubmitting} className="p-2">
+        <Pressable onPress={handleSubmit} disabled={updateConversation.isPending} className="p-2">
           <Text
             className={`text-base ${
-              isSubmitting ? "text-typography-400" : "text-primary-600"
+              updateConversation.isPending ? "text-typography-400" : "text-primary-600"
             }`}
           >
-            {isSubmitting ? "Saving..." : "Save"}
+            {updateConversation.isPending ? "Saving..." : "Save"}
           </Text>
         </Pressable>
       </View>

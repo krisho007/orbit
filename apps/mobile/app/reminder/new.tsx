@@ -18,9 +18,9 @@ import {
   ReminderRecurrence,
   ReminderStatus,
   contactsApi,
-  remindersApi,
 } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
+import { useCreateReminder } from "../../hooks/use-reminders";
 
 const STATUS_OPTIONS: ReminderStatus[] = ["OPEN", "DONE", "CANCELED"];
 const RECURRENCE_OPTIONS: Array<{ value: ReminderRecurrence; label: string }> = [
@@ -36,7 +36,7 @@ export default function NewReminderScreen() {
   const { contactId } = useLocalSearchParams<{ contactId?: string }>();
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const createReminder = useCreateReminder();
   const [contactSearch, setContactSearch] = useState("");
   const [isSearchingContacts, setIsSearchingContacts] = useState(false);
   const [contactResults, setContactResults] = useState<Contact[]>([]);
@@ -130,8 +130,7 @@ export default function NewReminderScreen() {
     }
 
     try {
-      setIsSubmitting(true);
-      const created = await remindersApi.create({
+      const created = await createReminder.mutateAsync({
         title: formData.title.trim(),
         notes: formData.notes.trim() || undefined,
         dueAt: dueDate.toISOString(),
@@ -146,8 +145,6 @@ export default function NewReminderScreen() {
     } catch (error) {
       console.error("Failed to create reminder:", error);
       Alert.alert("Error", "Failed to create reminder");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -158,13 +155,13 @@ export default function NewReminderScreen() {
           <Text className="text-primary-600 text-base">Cancel</Text>
         </Pressable>
         <Text className="text-lg font-semibold text-typography-900">New Reminder</Text>
-        <Pressable onPress={handleSubmit} disabled={isSubmitting} className="p-2">
+        <Pressable onPress={handleSubmit} disabled={createReminder.isPending} className="p-2">
           <Text
             className={`text-base ${
-              isSubmitting ? "text-typography-400" : "text-primary-600"
+              createReminder.isPending ? "text-typography-400" : "text-primary-600"
             }`}
           >
-            {isSubmitting ? "Saving..." : "Save"}
+            {createReminder.isPending ? "Saving..." : "Save"}
           </Text>
         </Pressable>
       </View>

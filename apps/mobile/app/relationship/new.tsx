@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   View,
   Text,
@@ -15,10 +16,10 @@ import {
   Contact,
   RelationshipType,
   contactsApi,
-  relationshipsApi,
   relationshipTypesApi,
 } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
+import { useCreateRelationship, useRelationshipTypes } from "../../hooks/use-relationships";
 
 export default function NewRelationshipScreen() {
   const router = useRouter();
@@ -26,8 +27,9 @@ export default function NewRelationshipScreen() {
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoadingTypes, setIsLoadingTypes] = useState(true);
+  const queryClient = useQueryClient();
+  const createRelationship = useCreateRelationship();
+  const { data: types = [], isLoading: isLoadingTypes } = useRelationshipTypes();
 
   // From contact (pre-filled)
   const [fromContact, setFromContact] = useState<Contact | null>(null);
@@ -38,8 +40,6 @@ export default function NewRelationshipScreen() {
   const [isSearchingTo, setIsSearchingTo] = useState(false);
   const [toResults, setToResults] = useState<Contact[]>([]);
 
-  // Relationship types
-  const [types, setTypes] = useState<RelationshipType[]>([]);
   const [selectedType, setSelectedType] = useState<RelationshipType | null>(null);
   const [typeSearch, setTypeSearch] = useState("");
 
@@ -61,27 +61,6 @@ export default function NewRelationshipScreen() {
       .then(setFromContact)
       .catch((err) => console.error("Failed to load from contact:", err));
   }, [contactId]);
-
-  // Load relationship types (auto-seed if empty)
-  useEffect(() => {
-    loadTypes();
-  }, []);
-
-  const loadTypes = async () => {
-    try {
-      setIsLoadingTypes(true);
-      let data = await relationshipTypesApi.list();
-      if (data.types.length === 0) {
-        await relationshipTypesApi.seed();
-        data = await relationshipTypesApi.list();
-      }
-      setTypes(data.types);
-    } catch (error) {
-      console.error("Failed to load relationship types:", error);
-    } finally {
-      setIsLoadingTypes(false);
-    }
-  };
 
   // To contact search
   useEffect(() => {
@@ -144,7 +123,7 @@ export default function NewRelationshipScreen() {
       setNewTypeName("");
       setNewTypeReverseName("");
       setNewTypeSymmetric(false);
-      await loadTypes();
+      await queryClient.invalidateQueries({ queryKey: ["relationshipTypes"] });
     } catch (error) {
       console.error("Failed to create type:", error);
       Alert.alert("Error", "Failed to create relationship type");
@@ -168,10 +147,8 @@ export default function NewRelationshipScreen() {
     }
 
     try {
-      setIsSubmitting(true);
-
       // Create forward relationship
-      await relationshipsApi.create({
+      await createRelationship.mutateAsync({
         fromContactId: fromContact.id,
         toContactId: toContact.id,
         typeId: selectedType.id,
@@ -182,7 +159,7 @@ export default function NewRelationshipScreen() {
       const reverseTypeId = getReverseTypeId(selectedType, toContact);
       if (reverseTypeId) {
         try {
-          await relationshipsApi.create({
+          await createRelationship.mutateAsync({
             fromContactId: toContact.id,
             toContactId: fromContact.id,
             typeId: reverseTypeId,
@@ -200,8 +177,6 @@ export default function NewRelationshipScreen() {
     } catch (error: any) {
       console.error("Failed to create relationship:", error);
       Alert.alert("Error", error.message || "Failed to create relationship");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -236,13 +211,13 @@ export default function NewRelationshipScreen() {
         <Text className="text-lg font-semibold text-typography-900">
           New Relationship
         </Text>
-        <Pressable onPress={handleSubmit} disabled={isSubmitting} className="p-2">
+        <Pressable onPress={handleSubmit} disabled={createRelationship.isPending} className="p-2">
           <Text
             className={`text-base ${
-              isSubmitting ? "text-typography-400" : "text-primary-600"
+              createRelationship.isPending ? "text-typography-400" : "text-primary-600"
             }`}
           >
-            {isSubmitting ? "Saving..." : "Save"}
+            {createRelationship.isPending ? "Saving..." : "Save"}
           </Text>
         </Pressable>
       </View>

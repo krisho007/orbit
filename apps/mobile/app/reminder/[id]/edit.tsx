@@ -22,6 +22,7 @@ import {
   remindersApi,
 } from "../../../lib/api";
 import { getThemeColor, useThemeColors } from "../../../lib/theme";
+import { useUpdateReminder } from "../../../hooks/use-reminders";
 
 const STATUS_OPTIONS: ReminderStatus[] = ["OPEN", "DONE", "CANCELED"];
 const RECURRENCE_OPTIONS: Array<{ value: ReminderRecurrence; label: string }> = [
@@ -37,8 +38,8 @@ export default function EditReminderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
+  const updateReminder = useUpdateReminder();
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [reminder, setReminder] = useState<Reminder | null>(null);
   const [contactSearch, setContactSearch] = useState("");
   const [isSearchingContacts, setIsSearchingContacts] = useState(false);
@@ -154,24 +155,24 @@ export default function EditReminderScreen() {
     }
 
     try {
-      setIsSubmitting(true);
-      await remindersApi.update(id, {
-        title: formData.title.trim(),
-        notes: formData.notes.trim() || undefined,
-        dueAt: dueDate.toISOString(),
-        status: formData.status,
-        recurrence: formData.recurrence,
-        recurrenceInterval: formData.recurrence === "NONE" ? 1 : recurrenceInterval,
-        recurrenceEndsAt:
-          formData.recurrence === "NONE" ? null : recurrenceEndsAt?.toISOString() || null,
-        participantIds: selectedParticipants.map((p) => p.id),
+      await updateReminder.mutateAsync({
+        id,
+        data: {
+          title: formData.title.trim(),
+          notes: formData.notes.trim() || undefined,
+          dueAt: dueDate.toISOString(),
+          status: formData.status,
+          recurrence: formData.recurrence,
+          recurrenceInterval: formData.recurrence === "NONE" ? 1 : recurrenceInterval,
+          recurrenceEndsAt:
+            formData.recurrence === "NONE" ? null : recurrenceEndsAt?.toISOString() || null,
+          participantIds: selectedParticipants.map((p) => p.id),
+        },
       });
       router.back();
     } catch (error) {
       console.error("Failed to update reminder:", error);
       Alert.alert("Error", "Failed to update reminder");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -192,13 +193,13 @@ export default function EditReminderScreen() {
           <Text className="text-primary-600 text-base">Cancel</Text>
         </Pressable>
         <Text className="text-lg font-semibold text-typography-900">Edit Reminder</Text>
-        <Pressable onPress={handleSubmit} disabled={isSubmitting} className="p-2">
+        <Pressable onPress={handleSubmit} disabled={updateReminder.isPending} className="p-2">
           <Text
             className={`text-base ${
-              isSubmitting ? "text-typography-400" : "text-primary-600"
+              updateReminder.isPending ? "text-typography-400" : "text-primary-600"
             }`}
           >
-            {isSubmitting ? "Saving..." : "Save"}
+            {updateReminder.isPending ? "Saving..." : "Save"}
           </Text>
         </Pressable>
       </View>

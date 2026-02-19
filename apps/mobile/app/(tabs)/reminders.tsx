@@ -140,7 +140,9 @@ export default function RemindersScreen() {
     status: statusFilter,
   });
 
-  const reminders = data?.pages.flatMap((p) => p.reminders) ?? [];
+  const reminders = [
+    ...new Map((data?.pages.flatMap((p) => p.reminders) ?? []).map((r) => [r.id, r])).values(),
+  ];
   const totalCount = data?.pages[0]?.stats?.totalCount ?? 0;
 
   const renderReminder = ({ item }: { item: Reminder }) => {

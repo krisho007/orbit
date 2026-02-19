@@ -291,7 +291,9 @@ export default function ContactsScreen() {
     refetch,
   } = useContacts({ search: debouncedSearch || undefined });
 
-  const contacts = data?.pages.flatMap((p) => p.contacts) ?? [];
+  const contacts = [
+    ...new Map((data?.pages.flatMap((p) => p.contacts) ?? []).map((c) => [c.id, c])).values(),
+  ];
   const totalCount = data?.pages[0]?.stats?.totalCount ?? 0;
 
   const getSwipeableRef = useCallback((id: string) => {

@@ -114,7 +114,9 @@ export default function EventsScreen() {
     refetch,
   } = useEvents({ search: debouncedSearch || undefined });
 
-  const events = data?.pages.flatMap((p) => p.events) ?? [];
+  const events = [
+    ...new Map((data?.pages.flatMap((p) => p.events) ?? []).map((e) => [e.id, e])).values(),
+  ];
   const totalCount = data?.pages[0]?.stats?.totalCount ?? 0;
 
   const renderEvent = ({ item }: { item: Event }) => {

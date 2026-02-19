@@ -110,7 +110,9 @@ export default function ConversationsScreen() {
     refetch,
   } = useConversations({ search: debouncedSearch || undefined });
 
-  const conversations = data?.pages.flatMap((p) => p.conversations) ?? [];
+  const conversations = [
+    ...new Map((data?.pages.flatMap((p) => p.conversations) ?? []).map((c) => [c.id, c])).values(),
+  ];
   const totalCount = data?.pages[0]?.stats?.totalCount ?? 0;
 
   const renderConversation = ({ item }: { item: Conversation }) => {

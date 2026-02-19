@@ -46,8 +46,6 @@ import {
   MapPin,
   Bell,
   SquarePen,
-  LogOut,
-  Settings as SettingsIcon,
   History,
   X,
   Trash2,
@@ -71,6 +69,7 @@ import { isAssistantCoachmarkSeen, markAssistantCoachmarkSeen } from "../../lib/
 import { getThemeColor, useThemeColors } from "../../lib/theme";
 import { useGluestackUI } from "../../components/ui/gluestack-ui-provider";
 import { AiConsentDialog } from "../../components/ai-consent-dialog";
+import { HeaderMenu } from "../../components/header-menu";
 
 type Message = ChatMessage & {
   id: string;
@@ -96,13 +95,6 @@ const SUGGESTIONS = [
   "Show my recent conversations",
   "What are my upcoming events?",
   "I had a call with Sarah today",
-];
-
-const CAPABILITY_TAGS = [
-  "Log conversations",
-  "Find contacts quickly",
-  "Track reminders",
-  "Review recent activity",
 ];
 
 const RESULT_CARD_LIMIT = 10;
@@ -152,7 +144,7 @@ const REMINDER_STATUS_META: Record<string, string> = {
 export default function AssistantScreen() {
   const router = useRouter();
   const navigation = useNavigation();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
@@ -551,34 +543,15 @@ export default function AssistantScreen() {
           </Pressable>
           <Pressable
             onPress={resetChat}
-            className="mr-2 w-9 h-9 rounded-xl items-center justify-center active:bg-background-100"
+            className="mr-1 w-9 h-9 rounded-xl items-center justify-center active:bg-background-100"
           >
             <SquarePen size={20} color={getThemeColor(colors, "typography-700")} />
           </Pressable>
-          {Platform.OS === "web" && (
-            <>
-              <Pressable
-                onPress={() => router.push("/(tabs)/settings")}
-                style={{ padding: 6, borderRadius: 8, marginRight: 4 }}
-              >
-                <SettingsIcon size={20} color={getThemeColor(colors, "typography-600")} />
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  if (window.confirm("Are you sure you want to sign out?")) {
-                    signOut();
-                  }
-                }}
-                style={{ padding: 6, borderRadius: 8, marginRight: 16 }}
-              >
-                <LogOut size={20} color={getThemeColor(colors, "typography-600")} />
-              </Pressable>
-            </>
-          )}
+          <HeaderMenu />
         </View>
       ),
     });
-  }, [navigation, resetChat, openHistory, colors, router, signOut]);
+  }, [navigation, resetChat, openHistory, colors]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1238,61 +1211,28 @@ export default function AssistantScreen() {
     );
   };
 
-  const ListHeader = () => (
-    <View className="px-4 pt-4 pb-6">
-      <View className="relative overflow-hidden rounded-3xl border border-border-200 bg-background-0 p-5">
-        <View className="absolute -top-10 -right-10 w-28 h-28 rounded-full bg-primary-100" />
-        <View className="absolute -bottom-10 -left-10 w-24 h-24 rounded-full bg-background-100" />
-
-        <View className="flex-row items-center mb-4">
-          <View className="w-12 h-12 bg-primary-600 rounded-2xl items-center justify-center mr-3">
-            <Sparkles size={20} color={getThemeColor(colors, "typography-0")} />
-          </View>
-          <View className="flex-1">
-            <Text className="text-typography-600 text-sm">
-              Chat naturally to search, log, and plan.
-            </Text>
-          </View>
+  const EmptyState = () => (
+    <View className="flex-1 justify-center px-5 pb-6">
+      <View className="items-center mb-8">
+        <View className="w-14 h-14 bg-primary-600 rounded-2xl items-center justify-center mb-4">
+          <Sparkles size={22} color={getThemeColor(colors, "typography-0")} />
         </View>
-
-        <View className="flex-row flex-wrap">
-          {CAPABILITY_TAGS.map((tag) => (
-            <View
-              key={tag}
-              className="rounded-full border border-border-200 bg-background-50 px-3 py-1.5 mr-2 mb-2"
-            >
-              <Text className="text-typography-700 text-xs font-medium">{tag}</Text>
-            </View>
-          ))}
-        </View>
+        <Text className="text-typography-900 text-lg font-semibold">What can I help with?</Text>
+        <Text className="text-typography-500 text-sm mt-1">
+          Search, log, and plan — just ask.
+        </Text>
       </View>
-    </View>
-  );
-
-  const ListFooter = () => (
-    <View className="pb-6">
-      {messages.length === 0 && (
-        <View className="px-4 mt-1">
-          <View className="rounded-2xl border border-border-200 bg-background-0 p-4">
-            <Text className="text-typography-900 text-sm font-semibold">Try a quick prompt</Text>
-            <Text className="text-typography-500 text-sm mt-1 mb-3">
-              Tap one to get started.
-            </Text>
-            <View className="flex-row flex-wrap">
-              {SUGGESTIONS.map((suggestion) => (
-                <Pressable
-                  key={suggestion}
-                  onPress={() => handleSuggestion(suggestion)}
-                  className="flex-row items-center bg-primary-50 border border-primary-200 rounded-full px-3 py-2 mr-2 mb-2 active:bg-primary-100"
-                >
-                  <Sparkles size={12} color={getThemeColor(colors, "primary-600")} />
-                  <Text className="text-primary-700 text-sm ml-1">{suggestion}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        </View>
-      )}
+      <View className="flex-row flex-wrap justify-center">
+        {SUGGESTIONS.map((suggestion) => (
+          <Pressable
+            key={suggestion}
+            onPress={() => handleSuggestion(suggestion)}
+            className="bg-background-0 border border-border-200 rounded-2xl px-4 py-3 m-1 active:bg-background-100"
+          >
+            <Text className="text-typography-800 text-sm">{suggestion}</Text>
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 
@@ -1303,21 +1243,23 @@ export default function AssistantScreen() {
       className="flex-1 bg-background-50"
       keyboardVerticalOffset={headerHeight}
     >
-      <FlatList
-        ref={flatListRef}
-        style={{ flex: 1 }}
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderMessage}
-        ListHeaderComponent={ListHeader}
-        ListFooterComponent={ListFooter}
-        nestedScrollEnabled
-        showsVerticalScrollIndicator
-        contentContainerStyle={{ flexGrow: 1 }}
-        onContentSizeChange={() =>
-          flatListRef.current?.scrollToEnd({ animated: false })
-        }
-      />
+      {messages.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <FlatList
+          ref={flatListRef}
+          style={{ flex: 1 }}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={renderMessage}
+          contentContainerStyle={{ flexGrow: 1, paddingTop: 16, paddingBottom: 8 }}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+          onContentSizeChange={() =>
+            flatListRef.current?.scrollToEnd({ animated: false })
+          }
+        />
+      )}
 
       <View
         className="border-t border-border-200 px-4 pt-3 bg-background-0"

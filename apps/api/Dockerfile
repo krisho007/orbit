@@ -21,8 +21,9 @@ ENV EXPO_PUBLIC_SUPABASE_URL=$EXPO_PUBLIC_SUPABASE_URL
 ENV EXPO_PUBLIC_SUPABASE_ANON_KEY=$EXPO_PUBLIC_SUPABASE_ANON_KEY
 ENV EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL
 
-# Copy mobile app package files
+# Copy mobile app package files and patches
 COPY apps/mobile/package.json apps/mobile/bun.lock* ./
+COPY apps/mobile/patches/ ./patches/
 
 # Install dependencies with Bun (resolves peer deps properly)
 RUN bun install --frozen-lockfile

@@ -6,9 +6,9 @@ export function getIntentGuidance(intent: AssistantIntent): string {
     case "create_contact":
       return "The user wants to create a new contact. Extract all available fields (name, phone, email, company, etc.) and call create_contact.";
     case "create_conversation":
-      return "The user wants to log a conversation. Search for participant contacts first. If a strong match is found, propose the conversation details for confirmation. If no match is found, inform the user and offer to create the contact. Extract ALL relevant details: who, what, where, when, and how (medium).";
+      return "The user wants to log a conversation. Search for participant contacts first. If a strong match is found, propose the conversation details for confirmation. If no match is found, inform the user and offer to create the contact. Extract ALL relevant details: who, what, where, when, and how (medium). If the conversation mentions new details about a contact (e.g. new job, company, location, phone, email), also update the contact using update_contact_by_id.";
     case "create_conversation_with_contact":
-      return "The user wants to log a conversation and may need to create a new contact first. Create the contact if needed, then log the conversation.";
+      return "The user wants to log a conversation and may need to create a new contact first. Create the contact if needed, then log the conversation. If the conversation mentions new details about an existing contact (e.g. new job, company, location, phone, email), also update the contact using update_contact_by_id.";
     case "create_event":
       return "The user wants to create an event. Resolve participant contacts first, then create the event.";
     case "create_event_with_conversation":
@@ -67,8 +67,18 @@ IMPORTANT: The user has NOT yet linked their contact record. If the user refers 
 Do NOT ask for raw IDs — always resolve names to contacts automatically.`;
   }
 
+  const isDirectCreateContact = intents.length === 1 && intents[0] === "create_contact";
+
   const confirmationSection = confirmationRequired
-    ? `## Confirmation Gate
+    ? isDirectCreateContact
+      ? `## Confirmation Gate
+This turn requires explicit confirmation before creating the contact.
+- The user explicitly wants to create a NEW contact. Do NOT search for existing contacts.
+- Extract all available fields from the user's message (name, phone, email, company, jobTitle, location, notes, etc.).
+- Summarize the planned creation and ask for confirmation.
+  Example: "I'll create a new contact for Lisa Chen, PM at Google. Shall I go ahead?"
+- Do NOT execute any mutating tool until the user explicitly confirms.`
+      : `## Confirmation Gate
 This turn requires explicit confirmation before any create/update/delete action.
 - First resolve context using search tools (e.g., search_contacts_fuzzy).
 - MATCH QUALITY ASSESSMENT:

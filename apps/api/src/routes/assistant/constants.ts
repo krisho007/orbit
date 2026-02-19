@@ -78,14 +78,16 @@ export const DELETE_TOOL_NAMES = new Set([
 // Fewer tools = higher LLM accuracy in tool selection and parameter filling.
 export const INTENT_TOOL_SETS: Record<AssistantIntent, string[]> = {
   create_contact: [
-    "create_contact", "list_tags", "search_contacts_fuzzy", "request_confirmation",
+    "create_contact", "list_tags", "request_confirmation",
   ],
   create_conversation: [
-    "search_contacts_fuzzy", "query_contacts", "create_conversation",
+    "search_contacts_fuzzy", "query_contacts", "get_contact_details",
+    "update_contact_by_id", "create_conversation",
     "create_conversation_by_ids", "request_confirmation",
   ],
   create_conversation_with_contact: [
-    "search_contacts_fuzzy", "query_contacts", "create_contact",
+    "search_contacts_fuzzy", "query_contacts", "get_contact_details",
+    "update_contact_by_id", "create_contact",
     "create_conversation", "create_conversation_by_ids", "request_confirmation",
   ],
   create_event: [

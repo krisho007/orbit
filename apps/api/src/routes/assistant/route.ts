@@ -109,12 +109,21 @@ app.post("/", async (c) => {
       if ("error" in setup) return setup.error;
       const { userId, messages, lastUserMessage, assistantConvId } = setup;
 
-      // Use a ReadableStream to emit NDJSON lines
+      // Use a ReadableStream to emit NDJSON lines.
+      // Bun's idle timeout or client disconnect can close the controller while
+      // processMessageLLM is still running — guard all writes with a closed flag.
       const encoder = new TextEncoder();
+      let streamClosed = false;
       const stream = new ReadableStream({
         async start(controller) {
           const writeLine = (obj: Record<string, unknown>) => {
-            controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+            if (streamClosed) return;
+            try {
+              controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+            } catch {
+              // Controller already closed (timeout / client disconnect)
+              streamClosed = true;
+            }
           };
 
           try {
@@ -164,8 +173,14 @@ app.post("/", async (c) => {
             const message = error instanceof Error ? error.message : "Unknown error";
             writeLine({ type: "error", error: `Failed to process message: ${message}` });
           } finally {
-            controller.close();
+            if (!streamClosed) {
+              try { controller.close(); } catch { /* already closed */ }
+            }
+            streamClosed = true;
           }
+        },
+        cancel() {
+          streamClosed = true;
         },
       });
 

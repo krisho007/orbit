@@ -96,6 +96,7 @@ app.notFound((c) => {
 export default {
   port: process.env.PORT || 3001,
   fetch: app.fetch,
+  idleTimeout: 120, // seconds — LLM streaming responses need >10s default
 };
 
 console.log(`🚀 Orbit API server running on port ${process.env.PORT || 3001}`);

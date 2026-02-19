@@ -134,12 +134,17 @@ app.post("/", async (c) => {
               }),
             ]);
 
+            // Embed cached intents in stored UI for retrieval on confirmation turns
+            const streamUiForStorage = response.cachedIntents?.length
+              ? JSON.stringify({ ...(response.ui || {}), _cachedIntents: response.cachedIntents })
+              : response.ui ? JSON.stringify(response.ui) : null;
+
             // Save assistant response
             await db.insert(assistantMessages).values({
               assistantConversationId: assistantConvId,
               role: "assistant",
               content: response.text,
-              ui: response.ui ? JSON.stringify(response.ui) : null,
+              ui: streamUiForStorage,
             });
 
             const elapsed = Date.now() - startTime;
@@ -203,12 +208,17 @@ app.post("/", async (c) => {
       }),
     ]);
 
+    // Embed cached intents in stored UI for retrieval on confirmation turns
+    const uiForStorage = response.cachedIntents?.length
+      ? JSON.stringify({ ...(response.ui || {}), _cachedIntents: response.cachedIntents })
+      : response.ui ? JSON.stringify(response.ui) : null;
+
     // Save assistant response
     await db.insert(assistantMessages).values({
       assistantConversationId: assistantConvId,
       role: "assistant",
       content: response.text,
-      ui: response.ui ? JSON.stringify(response.ui) : null,
+      ui: uiForStorage,
     });
 
     const elapsed = Date.now() - startTime;
@@ -332,13 +342,20 @@ app.get("/conversations/:id", async (c) => {
     title: conv.title,
     createdAt: conv.createdAt.toISOString(),
     updatedAt: conv.updatedAt.toISOString(),
-    messages: msgs.map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      ui: m.ui ? JSON.parse(m.ui) : null,
-      createdAt: m.createdAt.toISOString(),
-    })),
+    messages: msgs.map((m) => {
+      let ui = m.ui ? JSON.parse(m.ui) : null;
+      if (ui && "_cachedIntents" in ui) {
+        const { _cachedIntents, ...rest } = ui;
+        ui = rest.kind ? rest : null;
+      }
+      return {
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        ui,
+        createdAt: m.createdAt.toISOString(),
+      };
+    }),
   });
 });
 

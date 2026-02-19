@@ -1,11 +1,13 @@
 import { generateText, InvalidToolInputError, NoSuchToolError } from "ai";
 import { google } from "@ai-sdk/google";
 import { stepCountIs } from "ai";
-import type { ChatMessage, ToolResult, ToolCallMeta, AssistantUi, AssistantAction, StatusCallback } from "./types";
+import type { ChatMessage, ToolResult, ToolCallMeta, AssistantUi, AssistantAction, AssistantIntent, StatusCallback } from "./types";
+import { eq, and, desc } from "drizzle-orm";
+import { db, assistantMessages } from "../../db";
 import { SCHEMA_ENUM_CONFIG, loadAssistantEnumConfig, enumValueSchema } from "./enums";
 import { identifyIntents } from "./guardrails";
 import { anyIntentRequiresConfirmation, isExplicitUserConfirmation } from "./guardrails";
-import { MUTATING_TOOL_NAMES, DELETE_TOOL_NAMES, unionToolSets } from "./constants";
+import { ASSISTANT_INTENTS, MUTATING_TOOL_NAMES, DELETE_TOOL_NAMES, unionToolSets } from "./constants";
 import { getUserContext } from "./db-helpers";
 import { buildSystemPrompt } from "./system-prompt";
 import { buildUiFromToolResults, summarizeUiText } from "./ui-builder";
@@ -75,13 +77,42 @@ function toolNameToStatus(toolName: string): string | null {
   return TOOL_STATUS_MAP[toolName] ?? null;
 }
 
+async function loadCachedIntents(assistantConversationId: string): Promise<AssistantIntent[] | null> {
+  const [lastMsg] = await db
+    .select({ ui: assistantMessages.ui })
+    .from(assistantMessages)
+    .where(
+      and(
+        eq(assistantMessages.assistantConversationId, assistantConversationId),
+        eq(assistantMessages.role, "assistant")
+      )
+    )
+    .orderBy(desc(assistantMessages.createdAt))
+    .limit(1);
+
+  if (!lastMsg?.ui) return null;
+
+  try {
+    const parsed = JSON.parse(lastMsg.ui);
+    if (Array.isArray(parsed?._cachedIntents) && parsed._cachedIntents.length > 0) {
+      const valid = parsed._cachedIntents.filter(
+        (i: unknown) => typeof i === "string" && ASSISTANT_INTENTS.includes(i as AssistantIntent)
+      ) as AssistantIntent[];
+      return valid.length > 0 ? valid : null;
+    }
+  } catch {
+    // Invalid JSON, fall through
+  }
+  return null;
+}
+
 export async function processMessageLLM(
   userId: string,
   messages: ChatMessage[],
   generate: typeof generateText = generateText,
   assistantConversationId?: string,
   onStatus?: StatusCallback
-): Promise<{ text: string; ui: AssistantUi | null; actions?: AssistantAction[] }> {
+): Promise<{ text: string; ui: AssistantUi | null; actions?: AssistantAction[]; cachedIntents?: AssistantIntent[] }> {
   if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     return {
       text:
@@ -102,17 +133,28 @@ export async function processMessageLLM(
   const lastUserText = extractLastUserText(messages as unknown[]);
   const isConfirmation = isExplicitUserConfirmation(lastUserText);
 
-  // On confirmation turns, classify intents from earlier messages so the original
-  // intents (and their tool sets) are recovered instead of classifying "Sounds good." as unknown.
+  onStatus?.("Classifying intent...");
+
+  // On confirmation turns, use cached intents from the previous assistant message
+  // instead of re-classifying (LLM classification is non-deterministic and may drop intents).
+  let cachedIntents: AssistantIntent[] | null = null;
+  if (isConfirmation && assistantConversationId) {
+    cachedIntents = await loadCachedIntents(assistantConversationId);
+    if (cachedIntents) {
+      console.log(`[assistant:llm] Using cached intents from previous turn: [${cachedIntents.join(", ")}]`);
+    }
+  }
+
+  // Fallback: classify from earlier messages if no cache hit
   const messagesForClassification =
     isConfirmation && messages.length >= 3 ? messages.slice(0, -2) : messages;
-
-  onStatus?.("Classifying intent...");
 
   // Run independent operations in parallel: enum config, intent classification, and user context
   const [enumConfig, inferredIntents, userContext] = await Promise.all([
     usingMockGenerate ? Promise.resolve(defaultEnumConfig) : loadAssistantEnumConfig(),
-    identifyIntents(messagesForClassification, aiModel, generate),
+    cachedIntents
+      ? Promise.resolve(cachedIntents)
+      : identifyIntents(messagesForClassification, aiModel, generate),
     usingMockGenerate ? Promise.resolve(defaultContext) : getUserContext(userId),
   ]);
 
@@ -380,5 +422,5 @@ export async function processMessageLLM(
 
   console.log(`[assistant:llm] Final text (${text.length} chars), UI: ${effectiveUi ? effectiveUi.kind : "none"}, actions: ${actions ? actions.length : "none"}`);
 
-  return { text, ui: effectiveUi, actions };
+  return { text, ui: effectiveUi, actions, cachedIntents: inferredIntents };
 }

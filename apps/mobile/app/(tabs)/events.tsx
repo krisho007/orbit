@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import type { ComponentType } from "react";
 import { AnimatedTabScreen } from "../../components/animated-tab-screen";
 import {
@@ -44,6 +44,46 @@ const EVENT_META: Record<
   OTHER: { label: "Other", icon: Bookmark },
 };
 
+function EventsListHeader({
+  search,
+  onChangeSearch,
+  onClearSearch,
+  totalCount,
+  colors,
+}: {
+  search: string;
+  onChangeSearch: (value: string) => void;
+  onClearSearch: () => void;
+  totalCount: number;
+  colors: ReturnType<typeof useThemeColors>;
+}) {
+  return (
+    <View className="px-4 pt-4 pb-2 bg-background-50">
+      <View className="flex-row items-center bg-background-0 rounded-2xl px-4 py-3 border border-border-200">
+        <Search size={16} color={getThemeColor(colors, "typography-500")} />
+        <TextInput
+          className="flex-1 text-base text-typography-900 ml-2"
+          placeholder="Search events"
+          placeholderTextColor={getThemeColor(colors, "typography-500")}
+          value={search}
+          onChangeText={onChangeSearch}
+        />
+        {search.length > 0 && (
+          <Pressable onPress={onClearSearch} className="ml-2">
+            <X size={16} color={getThemeColor(colors, "typography-500")} />
+          </Pressable>
+        )}
+      </View>
+
+      {!search && totalCount > 0 && (
+        <Text className="text-typography-500 text-sm mt-3">
+          {totalCount} event{totalCount !== 1 ? "s" : ""}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 export default function EventsScreen() {
   const router = useRouter();
   const colors = useThemeColors();
@@ -51,9 +91,23 @@ export default function EventsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const handleSearchChange = useCallback((text: string) => {
+    setSearch(text);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(text), 300);
+  }, []);
+
+  const handleClearSearch = useCallback(() => {
+    setSearch("");
+    clearTimeout(debounceRef.current);
+    setDebouncedSearch("");
+  }, []);
 
   const loadEvents = useCallback(
     async (refresh = false) => {
@@ -63,7 +117,7 @@ export default function EventsScreen() {
         }
 
         const data = await eventsApi.list({
-          search: search || undefined,
+          search: debouncedSearch || undefined,
           cursor: refresh ? undefined : nextCursor || undefined,
         });
 
@@ -86,7 +140,7 @@ export default function EventsScreen() {
         setIsLoadingMore(false);
       }
     },
-    [search, nextCursor]
+    [debouncedSearch, nextCursor]
   );
 
   useEffect(() => {
@@ -94,7 +148,7 @@ export default function EventsScreen() {
     setEvents([]);
     setNextCursor(null);
     loadEvents(true);
-  }, [search]);
+  }, [debouncedSearch]);
 
   const handleRefresh = () => {
     loadEvents(true);
@@ -174,32 +228,6 @@ export default function EventsScreen() {
     );
   };
 
-  const ListHeader = () => (
-    <View className="px-4 pt-4 pb-2 bg-background-50">
-      <View className="flex-row items-center bg-background-0 rounded-2xl px-4 py-3 border border-border-200">
-        <Search size={16} color={getThemeColor(colors, "typography-500")} />
-        <TextInput
-          className="flex-1 text-base text-typography-900 ml-2"
-          placeholder="Search events"
-          placeholderTextColor={getThemeColor(colors, "typography-500")}
-          value={search}
-          onChangeText={setSearch}
-        />
-        {search.length > 0 && (
-          <Pressable onPress={() => setSearch("")} className="ml-2">
-            <X size={16} color={getThemeColor(colors, "typography-500")} />
-          </Pressable>
-        )}
-      </View>
-
-      {!search && totalCount > 0 && (
-        <Text className="text-typography-500 text-sm mt-3">
-          {totalCount} event{totalCount !== 1 ? "s" : ""}
-        </Text>
-      )}
-    </View>
-  );
-
   const ListEmpty = () => (
     <View className="flex-1 items-center justify-center py-20">
       {isLoading ? (
@@ -236,7 +264,15 @@ export default function EventsScreen() {
         data={events}
         keyExtractor={(item) => item.id}
         renderItem={renderEvent}
-        ListHeaderComponent={ListHeader}
+        ListHeaderComponent={
+          <EventsListHeader
+            search={search}
+            onChangeSearch={handleSearchChange}
+            onClearSearch={handleClearSearch}
+            totalCount={totalCount}
+            colors={colors}
+          />
+        }
         ListEmptyComponent={ListEmpty}
         ListFooterComponent={ListFooter}
         refreshControl={

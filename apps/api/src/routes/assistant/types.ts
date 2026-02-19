@@ -91,6 +91,9 @@ export type AssistantAction = {
   style: "primary" | "secondary";
 };
 
+// ── Status callback ─────────────────────────────────────────────────
+export type StatusCallback = (message: string) => void;
+
 // ── Tool call metadata ───────────────────────────────────────────────
 export type ToolCallMeta = {
   toolName: string;

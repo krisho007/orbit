@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { AnimatedTabScreen } from "../../components/animated-tab-screen";
 import {
   View,
@@ -31,6 +31,81 @@ const STATUS_FILTERS: Array<{ label: string; value?: ReminderStatus }> = [
   { label: "Canceled", value: "CANCELED" },
 ];
 
+function RemindersListHeader({
+  search,
+  onChangeSearch,
+  onClearSearch,
+  statusFilter,
+  onChangeStatusFilter,
+  totalCount,
+  colors,
+}: {
+  search: string;
+  onChangeSearch: (value: string) => void;
+  onClearSearch: () => void;
+  statusFilter: ReminderStatus | undefined;
+  onChangeStatusFilter: (value: ReminderStatus | undefined) => void;
+  totalCount: number;
+  colors: ReturnType<typeof useThemeColors>;
+}) {
+  return (
+    <View className="bg-background-50">
+      <View className="px-4 pt-4 pb-2">
+        <View className="flex-row items-center bg-background-0 rounded-2xl px-4 py-3 border border-border-200">
+          <Search size={16} color={getThemeColor(colors, "typography-500")} />
+          <TextInput
+            className="flex-1 text-base text-typography-900 ml-2"
+            placeholder="Search reminders"
+            placeholderTextColor={getThemeColor(colors, "typography-500")}
+            value={search}
+            onChangeText={onChangeSearch}
+          />
+          {search.length > 0 && (
+            <Pressable onPress={onClearSearch} className="ml-2">
+              <X size={16} color={getThemeColor(colors, "typography-500")} />
+            </Pressable>
+          )}
+        </View>
+      </View>
+
+      <View className="px-4 pb-2">
+        <View className="flex-row flex-wrap">
+          {STATUS_FILTERS.map((filter) => {
+            const isActive = statusFilter === filter.value;
+            return (
+              <Pressable
+                key={filter.label}
+                onPress={() => onChangeStatusFilter(filter.value)}
+                className={`px-3 py-1.5 rounded-full mr-2 mb-2 border ${
+                  isActive
+                    ? "bg-primary-100 border-primary-300"
+                    : "bg-background-50 border-border-200"
+                }`}
+              >
+                <Text
+                  className={`text-sm font-medium ${
+                    isActive ? "text-primary-700" : "text-typography-700"
+                  }`}
+                >
+                  {filter.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      {!search && totalCount > 0 && (
+        <View className="px-4 pb-2">
+          <Text className="text-typography-500 text-sm">
+            {totalCount} reminder{totalCount !== 1 ? "s" : ""}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 export default function RemindersScreen() {
   const router = useRouter();
   const colors = useThemeColors();
@@ -38,10 +113,24 @@ export default function RemindersScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [statusFilter, setStatusFilter] = useState<ReminderStatus | undefined>("OPEN");
   const [totalCount, setTotalCount] = useState(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const handleSearchChange = useCallback((text: string) => {
+    setSearch(text);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(text), 300);
+  }, []);
+
+  const handleClearSearch = useCallback(() => {
+    setSearch("");
+    clearTimeout(debounceRef.current);
+    setDebouncedSearch("");
+  }, []);
 
   const loadReminders = useCallback(
     async (refresh = false) => {
@@ -51,7 +140,7 @@ export default function RemindersScreen() {
         }
 
         const data = await remindersApi.list({
-          search: search || undefined,
+          search: debouncedSearch || undefined,
           cursor: refresh ? undefined : nextCursor || undefined,
           status: statusFilter,
         });
@@ -74,14 +163,14 @@ export default function RemindersScreen() {
         setIsLoadingMore(false);
       }
     },
-    [search, nextCursor, statusFilter]
+    [debouncedSearch, nextCursor, statusFilter]
   );
 
   useEffect(() => {
     setIsLoading(true);
     setNextCursor(null);
     loadReminders(true);
-  }, [search, statusFilter]);
+  }, [debouncedSearch, statusFilter]);
 
   const handleRefresh = () => {
     loadReminders(true);
@@ -147,63 +236,6 @@ export default function RemindersScreen() {
     );
   };
 
-  const ListHeader = () => (
-    <View className="bg-background-50">
-      <View className="px-4 pt-4 pb-2">
-        <View className="flex-row items-center bg-background-0 rounded-2xl px-4 py-3 border border-border-200">
-          <Search size={16} color={getThemeColor(colors, "typography-500")} />
-          <TextInput
-            className="flex-1 text-base text-typography-900 ml-2"
-            placeholder="Search reminders"
-            placeholderTextColor={getThemeColor(colors, "typography-500")}
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch("")} className="ml-2">
-              <X size={16} color={getThemeColor(colors, "typography-500")} />
-            </Pressable>
-          )}
-        </View>
-      </View>
-
-      <View className="px-4 pb-2">
-        <View className="flex-row flex-wrap">
-          {STATUS_FILTERS.map((filter) => {
-            const isActive = statusFilter === filter.value;
-            return (
-              <Pressable
-                key={filter.label}
-                onPress={() => setStatusFilter(filter.value)}
-                className={`px-3 py-1.5 rounded-full mr-2 mb-2 border ${
-                  isActive
-                    ? "bg-primary-100 border-primary-300"
-                    : "bg-background-50 border-border-200"
-                }`}
-              >
-                <Text
-                  className={`text-sm font-medium ${
-                    isActive ? "text-primary-700" : "text-typography-700"
-                  }`}
-                >
-                  {filter.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      {!search && totalCount > 0 && (
-        <View className="px-4 pb-2">
-          <Text className="text-typography-500 text-sm">
-            {totalCount} reminder{totalCount !== 1 ? "s" : ""}
-          </Text>
-        </View>
-      )}
-    </View>
-  );
-
   const ListEmpty = () => (
     <View className="flex-1 items-center justify-center py-20">
       {isLoading ? (
@@ -240,7 +272,17 @@ export default function RemindersScreen() {
         data={reminders}
         keyExtractor={(item) => item.id}
         renderItem={renderReminder}
-        ListHeaderComponent={ListHeader}
+        ListHeaderComponent={
+          <RemindersListHeader
+            search={search}
+            onChangeSearch={handleSearchChange}
+            onClearSearch={handleClearSearch}
+            statusFilter={statusFilter}
+            onChangeStatusFilter={setStatusFilter}
+            totalCount={totalCount}
+            colors={colors}
+          />
+        }
         ListEmptyComponent={ListEmpty}
         ListFooterComponent={ListFooter}
         refreshControl={

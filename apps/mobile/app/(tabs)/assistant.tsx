@@ -163,6 +163,7 @@ export default function AssistantScreen() {
   const [input, setInput] = useState(assistantDraftState.input);
   const [conversationId, setConversationId] = useState<string | null>(assistantDraftState.conversationId);
   const [isLoading, setIsLoading] = useState(false);
+  const [statusText, setStatusText] = useState("");
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [showCoachmark, setShowCoachmark] = useState(false);
   const [consent, setConsent] = useState<boolean | null>(null);
@@ -638,7 +639,11 @@ export default function AssistantScreen() {
           { role: "user" as const, content: trimmed },
         ];
 
-        const response = await assistantApi.chat(chatHistory, conversationId ?? undefined);
+        const response = await assistantApi.chat(
+          chatHistory,
+          conversationId ?? undefined,
+          (status) => setStatusText(status)
+        );
 
         if (response.conversationId) {
           setConversationId(response.conversationId);
@@ -673,6 +678,7 @@ export default function AssistantScreen() {
       } finally {
         isSendingRef.current = false;
         setIsLoading(false);
+        setStatusText("");
         setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: true });
         }, 100);
@@ -1161,7 +1167,12 @@ export default function AssistantScreen() {
         <View className="flex-row justify-start mb-3 px-4">
           {assistantAvatar}
           <View className="bg-background-0 border border-border-200 rounded-2xl rounded-bl-md px-4 py-3 max-w-[78%]">
-            <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
+            <View className="flex-row items-center">
+              <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
+              {statusText ? (
+                <Text className="text-typography-500 text-sm ml-2">{statusText}</Text>
+              ) : null}
+            </View>
           </View>
         </View>
       );

@@ -19,26 +19,23 @@ const app = new Hono();
 
 app.use("/*", authMiddleware);
 
-// POST /api/assistant - Process chat message
-app.post("/", async (c) => {
+// Shared validation & setup for both streaming and non-streaming paths
+async function validateAndSetup(c: any) {
   const userId = c.get("userId");
-
   const body = await c.req.json();
 
   const validation = chatSchema.safeParse(body);
   if (!validation.success) {
     console.warn("[assistant] Invalid request body:", JSON.stringify(validation.error.issues));
-    return c.json({ error: validation.error.issues }, 400);
+    return { error: c.json({ error: validation.error.issues }, 400) };
   }
 
   const { messages, conversationId } = validation.data;
-
-  // Get the last user message
-  const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
+  const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user");
 
   if (!lastUserMessage) {
     console.warn("[assistant] No user message found in request");
-    return c.json({ error: "No user message provided" }, 400);
+    return { error: c.json({ error: "No user message provided" }, 400) };
   }
 
   console.log(`\n${"=".repeat(70)}`);
@@ -46,59 +43,149 @@ app.post("/", async (c) => {
   console.log(`[assistant] Chat history: ${messages.length} message(s)`);
   console.log(`${"=".repeat(70)}`);
 
+  const resolveConversation = async (): Promise<string> => {
+    if (conversationId) {
+      const [existing] = await db
+        .select({ id: assistantConversations.id })
+        .from(assistantConversations)
+        .where(
+          and(
+            eq(assistantConversations.id, conversationId),
+            eq(assistantConversations.userId, userId)
+          )
+        )
+        .limit(1);
+
+      if (!existing) throw new Error("CONVERSATION_NOT_FOUND");
+      db.update(assistantConversations)
+        .set({ updatedAt: new Date() })
+        .where(eq(assistantConversations.id, existing.id))
+        .then(() => {}, () => {});
+      return existing.id;
+    } else {
+      const title = lastUserMessage.content.substring(0, 100);
+      const [newConv] = await db
+        .insert(assistantConversations)
+        .values({ userId, title })
+        .returning();
+      return newConv.id;
+    }
+  };
+
+  const [consentResult, assistantConvId] = await Promise.all([
+    db.select({ thirdPartyConsentGranted: users.thirdPartyConsentGranted })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1),
+    resolveConversation().catch((err) => err as Error),
+  ]);
+
+  const user = consentResult[0];
+  if (!user?.thirdPartyConsentGranted) {
+    return { error: c.json({ error: "AI consent required", code: "CONSENT_REQUIRED" }, 403) };
+  }
+
+  if (assistantConvId instanceof Error) {
+    if (assistantConvId.message === "CONVERSATION_NOT_FOUND") {
+      return { error: c.json({ error: "Conversation not found" }, 404) };
+    }
+    throw assistantConvId;
+  }
+
+  return { userId, messages, lastUserMessage, assistantConvId };
+}
+
+// POST /api/assistant - Process chat message
+app.post("/", async (c) => {
+  const accept = c.req.header("Accept") || "";
+  const wantsStream = accept.includes("text/x-ndjson");
+
+  // ── Streaming (NDJSON) path ──────────────────────────────────────
+  if (wantsStream) {
+    const startTime = Date.now();
+
+    try {
+      const setup = await validateAndSetup(c);
+      if ("error" in setup) return setup.error;
+      const { userId, messages, lastUserMessage, assistantConvId } = setup;
+
+      // Use a ReadableStream to emit NDJSON lines
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        async start(controller) {
+          const writeLine = (obj: Record<string, unknown>) => {
+            controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+          };
+
+          try {
+            // Fire user message save concurrently
+            const [response] = await Promise.all([
+              processMessageLLM(
+                userId,
+                messages as ChatMessage[],
+                undefined,
+                assistantConvId,
+                (message) => writeLine({ type: "status", message })
+              ),
+              db.insert(assistantMessages).values({
+                assistantConversationId: assistantConvId,
+                role: "user",
+                content: lastUserMessage.content,
+              }),
+            ]);
+
+            // Save assistant response
+            await db.insert(assistantMessages).values({
+              assistantConversationId: assistantConvId,
+              role: "assistant",
+              content: response.text,
+              ui: response.ui ? JSON.stringify(response.ui) : null,
+            });
+
+            const elapsed = Date.now() - startTime;
+            console.log(`[assistant] ✅ Stream response (${elapsed}ms): "${response.text.substring(0, 200)}${response.text.length > 200 ? "..." : ""}"`);
+
+            writeLine({
+              type: "result",
+              role: "assistant",
+              content: response.text,
+              ui: response.ui,
+              actions: response.actions,
+              conversationId: assistantConvId,
+            });
+          } catch (error) {
+            const elapsed = Date.now() - startTime;
+            console.error(`[assistant] ❌ Stream error after ${elapsed}ms:`, error);
+            const message = error instanceof Error ? error.message : "Unknown error";
+            writeLine({ type: "error", error: `Failed to process message: ${message}` });
+          } finally {
+            controller.close();
+          }
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/x-ndjson",
+          "Cache-Control": "no-cache",
+          "X-Accel-Buffering": "no",
+        },
+      });
+    } catch (error) {
+      const elapsed = Date.now() - startTime;
+      console.error(`[assistant] ❌ Stream setup error after ${elapsed}ms:`, error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      return c.json({ error: `Failed to process message: ${message}` }, 500);
+    }
+  }
+
+  // ── Non-streaming (JSON) path — unchanged ────────────────────────
   const startTime = Date.now();
 
   try {
-    // Run consent check in parallel with conversation resolution
-    const resolveConversation = async (): Promise<string> => {
-      if (conversationId) {
-        const [existing] = await db
-          .select({ id: assistantConversations.id })
-          .from(assistantConversations)
-          .where(
-            and(
-              eq(assistantConversations.id, conversationId),
-              eq(assistantConversations.userId, userId)
-            )
-          )
-          .limit(1);
-
-        if (!existing) throw new Error("CONVERSATION_NOT_FOUND");
-        // Fire-and-forget timestamp update — not on the critical path
-        db.update(assistantConversations)
-          .set({ updatedAt: new Date() })
-          .where(eq(assistantConversations.id, existing.id))
-          .then(() => {}, () => {});
-        return existing.id;
-      } else {
-        const title = lastUserMessage.content.substring(0, 100);
-        const [newConv] = await db
-          .insert(assistantConversations)
-          .values({ userId, title })
-          .returning();
-        return newConv.id;
-      }
-    };
-
-    const [consentResult, assistantConvId] = await Promise.all([
-      db.select({ thirdPartyConsentGranted: users.thirdPartyConsentGranted })
-        .from(users)
-        .where(eq(users.id, userId))
-        .limit(1),
-      resolveConversation().catch((err) => err as Error),
-    ]);
-
-    const user = consentResult[0];
-    if (!user?.thirdPartyConsentGranted) {
-      return c.json({ error: "AI consent required", code: "CONSENT_REQUIRED" }, 403);
-    }
-
-    if (assistantConvId instanceof Error) {
-      if (assistantConvId.message === "CONVERSATION_NOT_FOUND") {
-        return c.json({ error: "Conversation not found" }, 404);
-      }
-      throw assistantConvId;
-    }
+    const setup = await validateAndSetup(c);
+    if ("error" in setup) return setup.error;
+    const { userId, messages, lastUserMessage, assistantConvId } = setup;
 
     // Fire user message save concurrently with LLM processing —
     // processMessageLLM doesn't depend on the message being persisted

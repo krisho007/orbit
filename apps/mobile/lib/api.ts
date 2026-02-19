@@ -95,6 +95,75 @@ class ApiClient {
   delete<T>(path: string) {
     return this.request<T>(path, { method: "DELETE" });
   }
+
+  /**
+   * Stream a POST request using NDJSON. Calls `onStatus` for each status line
+   * and returns the final result object.
+   * Falls back to regular JSON if ReadableStream is unavailable.
+   */
+  async streamPost<T>(path: string, body: unknown, onStatus: (message: string) => void): Promise<T> {
+    const headers = await this.getAuthHeaders();
+    (headers as Record<string, string>)["Accept"] = "text/x-ndjson";
+    const url = this.buildUrl(path);
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || `HTTP error ${response.status}`);
+    }
+
+    // If the response doesn't support streaming, fall back to JSON
+    if (!response.body) {
+      return response.json() as Promise<T>;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let result: T | null = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (value) {
+        buffer += decoder.decode(value, { stream: true });
+      }
+
+      // Process complete lines
+      let newlineIdx: number;
+      while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, newlineIdx).trim();
+        buffer = buffer.slice(newlineIdx + 1);
+
+        if (!line) continue;
+
+        try {
+          const parsed = JSON.parse(line);
+          if (parsed.type === "status") {
+            onStatus(parsed.message);
+          } else if (parsed.type === "result") {
+            result = parsed as T;
+          } else if (parsed.type === "error") {
+            throw new Error(parsed.error || "Stream error");
+          }
+        } catch (e) {
+          if (e instanceof SyntaxError) continue; // skip malformed lines
+          throw e;
+        }
+      }
+
+      if (done) break;
+    }
+
+    if (!result) {
+      throw new Error("No result received from stream");
+    }
+    return result;
+  }
 }
 
 export const api = new ApiClient(API_URL);
@@ -393,8 +462,12 @@ export type AssistantConversationDetail = {
 };
 
 export const assistantApi = {
-  chat: (messages: ChatMessage[], conversationId?: string) =>
-    api.post<ChatResponse>("/api/assistant", { messages, conversationId }),
+  chat: (messages: ChatMessage[], conversationId?: string, onStatus?: (message: string) => void) => {
+    if (onStatus) {
+      return api.streamPost<ChatResponse>("/api/assistant", { messages, conversationId }, onStatus);
+    }
+    return api.post<ChatResponse>("/api/assistant", { messages, conversationId });
+  },
 
   listConversations: (cursor?: string) =>
     api.get<{

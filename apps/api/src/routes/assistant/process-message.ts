@@ -1,7 +1,7 @@
 import { generateText, InvalidToolInputError, NoSuchToolError } from "ai";
 import { google } from "@ai-sdk/google";
 import { stepCountIs } from "ai";
-import type { ChatMessage, ToolResult, ToolCallMeta, AssistantUi, AssistantAction } from "./types";
+import type { ChatMessage, ToolResult, ToolCallMeta, AssistantUi, AssistantAction, StatusCallback } from "./types";
 import { SCHEMA_ENUM_CONFIG, loadAssistantEnumConfig, enumValueSchema } from "./enums";
 import { identifyIntents } from "./guardrails";
 import { anyIntentRequiresConfirmation, isExplicitUserConfirmation } from "./guardrails";
@@ -19,11 +19,68 @@ import {
 } from "./error-helpers";
 import { buildToolSet } from "./tools";
 
+const TOOL_STATUS_MAP: Record<string, string> = {
+  // Contact tools
+  search_contacts_fuzzy: "Searching contacts...",
+  query_contacts: "Searching contacts...",
+  searchContacts: "Searching contacts...",
+  list_contacts: "Loading contacts...",
+  get_contact_details: "Loading contact details...",
+  search_contacts_by_phone: "Searching by phone...",
+  resolve_contact: "Resolving contact...",
+  create_contact: "Creating contact...",
+  update_contact: "Updating contact...",
+  update_contact_by_id: "Updating contact...",
+  add_contact_image: "Adding contact image...",
+  set_my_contact: "Setting your contact...",
+  // Conversation tools
+  searchConversations: "Searching conversations...",
+  query_conversations: "Searching conversations...",
+  list_conversations: "Loading conversations...",
+  get_conversation: "Loading conversation...",
+  create_conversation: "Logging conversation...",
+  create_conversation_by_ids: "Logging conversation...",
+  update_conversation_by_id: "Updating conversation...",
+  // Event tools
+  searchEvents: "Searching events...",
+  query_events: "Searching events...",
+  list_events: "Loading events...",
+  get_event: "Loading event...",
+  create_event: "Creating event...",
+  create_event_by_ids: "Creating event...",
+  update_event_by_id: "Updating event...",
+  // Reminder tools
+  searchReminders: "Searching reminders...",
+  list_reminders: "Loading reminders...",
+  get_reminder: "Loading reminder...",
+  create_reminder_by_ids: "Creating reminder...",
+  update_reminder_by_id: "Updating reminder...",
+  complete_reminder: "Completing reminder...",
+  // Tag & relationship tools
+  list_tags: "Loading tags...",
+  create_tag: "Creating tag...",
+  update_tag: "Updating tag...",
+  list_relationships: "Loading relationships...",
+  list_relationship_types: "Loading relationship types...",
+  create_relationship: "Creating relationship...",
+  create_relationship_smart: "Creating relationship...",
+  update_relationship: "Updating relationship...",
+  create_relationship_type: "Creating relationship type...",
+  update_relationship_type: "Updating relationship type...",
+  // Confirmation
+  request_confirmation: "Reviewing changes...",
+};
+
+function toolNameToStatus(toolName: string): string | null {
+  return TOOL_STATUS_MAP[toolName] ?? null;
+}
+
 export async function processMessageLLM(
   userId: string,
   messages: ChatMessage[],
   generate: typeof generateText = generateText,
-  assistantConversationId?: string
+  assistantConversationId?: string,
+  onStatus?: StatusCallback
 ): Promise<{ text: string; ui: AssistantUi | null; actions?: AssistantAction[] }> {
   if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     return {
@@ -49,6 +106,8 @@ export async function processMessageLLM(
   // intents (and their tool sets) are recovered instead of classifying "Sounds good." as unknown.
   const messagesForClassification =
     isConfirmation && messages.length >= 3 ? messages.slice(0, -2) : messages;
+
+  onStatus?.("Classifying intent...");
 
   // Run independent operations in parallel: enum config, intent classification, and user context
   const [enumConfig, inferredIntents, userContext] = await Promise.all([
@@ -165,6 +224,17 @@ export async function processMessageLLM(
       stepIndex++;
       const toolCalls = event.toolCalls || [];
       const toolResultsList = event.toolResults || [];
+
+      // Emit status for the first recognized tool call in this step
+      if (onStatus && toolCalls.length > 0) {
+        for (const tc of toolCalls) {
+          const status = toolNameToStatus(String((tc as any).toolName || ""));
+          if (status) {
+            onStatus(status);
+            break;
+          }
+        }
+      }
       const failedToolCalls = toolCalls.filter((tc) => (tc as any).invalid).length;
       capturedToolCalls.push(
         ...toolCalls.map((tc) => ({
@@ -230,6 +300,8 @@ export async function processMessageLLM(
       console.log(`[assistant:llm] Finished — ${event.steps.length} step(s), ${capturedToolResults.length} tool result(s)`);
     },
   });
+
+  onStatus?.("Preparing response...");
 
   const fallbackToolResults = result.toolResults as Array<{ output?: ToolResult }>;
   const toolResults = capturedToolResults.length > 0 ? capturedToolResults : fallbackToolResults;

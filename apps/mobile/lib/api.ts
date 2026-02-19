@@ -350,6 +350,37 @@ export const tagsApi = {
   delete: (id: string) => api.delete(`/api/tags/${id}`),
 };
 
+// Relationships
+export const relationshipsApi = {
+  list: (params?: { contactId?: string }) =>
+    api.get<{ relationships: Relationship[] }>("/api/relationships", params),
+
+  create: (data: CreateRelationshipData) =>
+    api.post<Relationship>("/api/relationships", data),
+
+  update: (id: string, data: { typeId?: string; notes?: string }) =>
+    api.put<Relationship>(`/api/relationships/${id}`, data),
+
+  delete: (id: string) => api.delete<{ success: true }>(`/api/relationships/${id}`),
+};
+
+// Relationship Types
+export const relationshipTypesApi = {
+  list: () => api.get<{ types: RelationshipType[] }>("/api/relationships/types"),
+
+  create: (data: CreateRelationshipTypeData) =>
+    api.post<RelationshipType>("/api/relationships/types", data),
+
+  update: (id: string, data: Partial<CreateRelationshipTypeData>) =>
+    api.put<RelationshipType>(`/api/relationships/types/${id}`, data),
+
+  delete: (id: string) =>
+    api.delete<{ success: true }>(`/api/relationships/types/${id}`),
+
+  seed: () =>
+    api.post<{ seeded: number; existing: number }>("/api/relationships/types/seed"),
+};
+
 // User / GDPR
 export const userApi = {
   getConsent: () =>
@@ -755,4 +786,45 @@ export type CreateReminderData = {
   recurrenceEndsAt?: string | null;
   conversationId?: string;
   participantIds?: string[];
+};
+
+// Relationships
+export type RelationshipType = {
+  id: string;
+  name: string;
+  reverseTypeId?: string | null;
+  maleReverseTypeId?: string | null;
+  femaleReverseTypeId?: string | null;
+  isSymmetric: boolean;
+  isSystem: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Relationship = {
+  id: string;
+  fromContactId: string;
+  toContactId: string;
+  typeId: string;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  fromContact?: { id: string; displayName: string } | null;
+  toContact?: { id: string; displayName: string } | null;
+  type?: RelationshipType | null;
+};
+
+export type CreateRelationshipData = {
+  fromContactId: string;
+  toContactId: string;
+  typeId: string;
+  notes?: string;
+};
+
+export type CreateRelationshipTypeData = {
+  name: string;
+  reverseTypeId?: string;
+  maleReverseTypeId?: string;
+  femaleReverseTypeId?: string;
+  isSymmetric?: boolean;
 };

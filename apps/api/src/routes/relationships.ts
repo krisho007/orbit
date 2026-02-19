@@ -175,6 +175,147 @@ app.delete("/types/:id", async (c) => {
   }
 });
 
+// POST /api/relationships/types/seed - Seed default relationship types
+app.post("/types/seed", async (c) => {
+  const userId = c.get("userId");
+
+  try {
+    // Check if user already has system types
+    const existingSystem = await db
+      .select({ id: relationshipTypes.id })
+      .from(relationshipTypes)
+      .where(
+        and(eq(relationshipTypes.userId, userId), eq(relationshipTypes.isSystem, true))
+      );
+
+    if (existingSystem.length > 0) {
+      return c.json({ seeded: 0, existing: existingSystem.length });
+    }
+
+    // Helper to insert a type and return its id
+    const insertType = async (
+      name: string,
+      isSymmetric: boolean
+    ): Promise<string> => {
+      const [t] = await db
+        .insert(relationshipTypes)
+        .values({ userId, name, isSymmetric, isSystem: true })
+        .returning({ id: relationshipTypes.id });
+      return t.id;
+    };
+
+    // Helper to link reverse types
+    const linkReverse = async (id: string, reverseId: string) => {
+      await db
+        .update(relationshipTypes)
+        .set({ reverseTypeId: reverseId })
+        .where(eq(relationshipTypes.id, id));
+    };
+
+    const linkGenderReverse = async (
+      id: string,
+      maleId: string,
+      femaleId: string
+    ) => {
+      await db
+        .update(relationshipTypes)
+        .set({ maleReverseTypeId: maleId, femaleReverseTypeId: femaleId })
+        .where(eq(relationshipTypes.id, id));
+    };
+
+    let seeded = 0;
+
+    // Create all types first
+    const son = await insertType("Son", false); seeded++;
+    const daughter = await insertType("Daughter", false); seeded++;
+    const father = await insertType("Father", false); seeded++;
+    const mother = await insertType("Mother", false); seeded++;
+    const brother = await insertType("Brother", false); seeded++;
+    const sister = await insertType("Sister", false); seeded++;
+    const uncle = await insertType("Uncle", false); seeded++;
+    const aunt = await insertType("Aunt", false); seeded++;
+    const nephew = await insertType("Nephew", false); seeded++;
+    const niece = await insertType("Niece", false); seeded++;
+    const grandfather = await insertType("Grandfather", false); seeded++;
+    const grandmother = await insertType("Grandmother", false); seeded++;
+    const grandson = await insertType("Grandson", false); seeded++;
+    const granddaughter = await insertType("Granddaughter", false); seeded++;
+    const husband = await insertType("Husband", false); seeded++;
+    const wife = await insertType("Wife", false); seeded++;
+    const cousin = await insertType("Cousin", true); seeded++;
+    const employer = await insertType("Employer", false); seeded++;
+    const employee = await insertType("Employee", false); seeded++;
+    const manager = await insertType("Manager", false); seeded++;
+    const report = await insertType("Report", false); seeded++;
+    const mentor = await insertType("Mentor", false); seeded++;
+    const mentee = await insertType("Mentee", false); seeded++;
+    const colleague = await insertType("Colleague", true); seeded++;
+    const businessPartner = await insertType("Business Partner", true); seeded++;
+    const friend = await insertType("Friend", true); seeded++;
+    const neighbor = await insertType("Neighbor", true); seeded++;
+
+    // Link reverse pairs
+    // Father -> gender-aware: Son/Daughter
+    await linkGenderReverse(father, son, daughter);
+    // Mother -> gender-aware: Son/Daughter
+    await linkGenderReverse(mother, son, daughter);
+    // Son -> gender-aware: Father/Mother
+    await linkGenderReverse(son, father, mother);
+    // Daughter -> gender-aware: Father/Mother
+    await linkGenderReverse(daughter, father, mother);
+
+    // Brother <-> Sister (simple reverse)
+    await linkReverse(brother, sister);
+    await linkReverse(sister, brother);
+
+    // Uncle -> gender-aware: Nephew/Niece
+    await linkGenderReverse(uncle, nephew, niece);
+    // Aunt -> gender-aware: Nephew/Niece
+    await linkGenderReverse(aunt, nephew, niece);
+    // Nephew -> gender-aware: Uncle/Aunt
+    await linkGenderReverse(nephew, uncle, aunt);
+    // Niece -> gender-aware: Uncle/Aunt
+    await linkGenderReverse(niece, uncle, aunt);
+
+    // Grandfather -> gender-aware: Grandson/Granddaughter
+    await linkGenderReverse(grandfather, grandson, granddaughter);
+    // Grandmother -> gender-aware: Grandson/Granddaughter
+    await linkGenderReverse(grandmother, grandson, granddaughter);
+    // Grandson -> gender-aware: Grandfather/Grandmother
+    await linkGenderReverse(grandson, grandfather, grandmother);
+    // Granddaughter -> gender-aware: Grandfather/Grandmother
+    await linkGenderReverse(granddaughter, grandfather, grandmother);
+
+    // Husband <-> Wife
+    await linkReverse(husband, wife);
+    await linkReverse(wife, husband);
+
+    // Employer <-> Employee
+    await linkReverse(employer, employee);
+    await linkReverse(employee, employer);
+
+    // Manager <-> Report
+    await linkReverse(manager, report);
+    await linkReverse(report, manager);
+
+    // Mentor <-> Mentee
+    await linkReverse(mentor, mentee);
+    await linkReverse(mentee, mentor);
+
+    // Symmetric types link to themselves
+    await linkReverse(cousin, cousin);
+    await linkReverse(colleague, colleague);
+    await linkReverse(businessPartner, businessPartner);
+    await linkReverse(friend, friend);
+    await linkReverse(neighbor, neighbor);
+
+    return c.json({ seeded, existing: 0 });
+  } catch (error) {
+    console.error("Error seeding relationship types:", error);
+    return c.json({ error: "Failed to seed relationship types" }, 500);
+  }
+});
+
 // ============================================
 // Relationships Routes
 // ============================================

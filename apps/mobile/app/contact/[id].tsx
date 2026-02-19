@@ -9,7 +9,10 @@ import {
   Alert,
   Image,
   BackHandler,
+  useWindowDimensions,
 } from "react-native";
+import { RelationshipGraph } from "../../components/relationship-graph";
+import { RelationshipGraphFullscreen } from "../../components/relationship-graph-fullscreen";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { format } from "date-fns";
@@ -28,9 +31,11 @@ import {
   CheckCircle2,
   XCircle,
   Plus,
+  Maximize2,
+  GitFork,
 } from "lucide-react-native";
 import Svg, { Path } from "react-native-svg";
-import { contactsApi, conversationsApi, remindersApi, Contact, Conversation, Reminder, ReminderStatus } from "../../lib/api";
+import { contactsApi, conversationsApi, remindersApi, relationshipsApi, Contact, Conversation, Reminder, Relationship, ReminderStatus } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
 
 function WhatsAppIcon({ size = 20, color = "#25D366" }: { size?: number; color?: string }) {
@@ -82,7 +87,11 @@ export default function ContactDetailScreen() {
   const [isLoadingReminders, setIsLoadingReminders] = useState(true);
   const [nextReminderCursor, setNextReminderCursor] = useState<string | null>(null);
   const [isLoadingMoreReminders, setIsLoadingMoreReminders] = useState(false);
+  const [relationships, setRelationships] = useState<Relationship[]>([]);
+  const [isLoadingRelationships, setIsLoadingRelationships] = useState(true);
+  const [showFullscreenGraph, setShowFullscreenGraph] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const { width: windowWidth } = useWindowDimensions();
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -102,6 +111,10 @@ export default function ContactDetailScreen() {
 
   useEffect(() => {
     loadReminders();
+  }, [id]);
+
+  useEffect(() => {
+    loadRelationships();
   }, [id]);
 
   useEffect(() => {
@@ -203,6 +216,19 @@ export default function ContactDetailScreen() {
       setNextReminderCursor(null);
     } finally {
       setIsLoadingMoreReminders(false);
+    }
+  };
+
+  const loadRelationships = async () => {
+    try {
+      setIsLoadingRelationships(true);
+      const data = await relationshipsApi.list({ contactId: id });
+      setRelationships(data.relationships);
+    } catch (error) {
+      console.error("Failed to load relationships:", error);
+      setRelationships([]);
+    } finally {
+      setIsLoadingRelationships(false);
     }
   };
 
@@ -600,8 +626,116 @@ export default function ContactDetailScreen() {
           )}
         </View>
 
+        {/* Relationships */}
+        <View className="px-4 py-4 border-t border-border-200">
+          <View className="mb-3 flex-row items-center justify-between">
+            <View className="flex-row items-center">
+              <Text className="text-typography-900 text-base font-semibold">Relationships</Text>
+              {relationships.length > 0 && (
+                <Pressable
+                  onPress={() => setShowFullscreenGraph(true)}
+                  className="p-1 ml-2 active:opacity-50"
+                >
+                  <Maximize2 size={16} color={getThemeColor(colors, "primary-600")} />
+                </Pressable>
+              )}
+            </View>
+            <Pressable
+              onPress={() => router.push(`/relationship/new?contactId=${id}`)}
+              className="p-1 active:opacity-50"
+            >
+              <Plus size={20} color={getThemeColor(colors, "primary-600")} />
+            </Pressable>
+          </View>
+
+          {isLoadingRelationships ? (
+            <View className="py-8 items-center">
+              <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
+            </View>
+          ) : relationships.length === 0 ? (
+            <View className="py-6 px-4 bg-background-50 rounded-xl">
+              <Text className="text-typography-600 text-sm">
+                No relationships recorded for this contact yet.
+              </Text>
+            </View>
+          ) : (
+            <>
+              {/* Graph */}
+              <View className="mb-3 rounded-xl overflow-hidden border border-border-200 bg-background-50">
+                <RelationshipGraph
+                  contactId={id}
+                  contactName={contact.displayName}
+                  relationships={relationships}
+                  width={windowWidth - 32}
+                  height={240}
+                  onNodePress={(nodeId) =>
+                    router.push({
+                      pathname: "/contact/[id]",
+                      params: { id: nodeId, from: `/contact/${id}` },
+                    })
+                  }
+                />
+              </View>
+
+              {/* List */}
+              {relationships.map((rel) => {
+                const isFrom = rel.fromContactId === id;
+                const otherName = isFrom
+                  ? rel.toContact?.displayName || "Unknown"
+                  : rel.fromContact?.displayName || "Unknown";
+                const otherId = isFrom ? rel.toContactId : rel.fromContactId;
+                const typeName = rel.type?.name || "Related";
+
+                return (
+                  <Pressable
+                    key={rel.id}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/contact/[id]",
+                        params: { id: otherId, from: `/contact/${id}` },
+                      })
+                    }
+                    className="mb-3 p-4 rounded-xl border border-border-200 bg-background-50 active:bg-background-100"
+                  >
+                    <View className="flex-row items-center">
+                      <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mr-3">
+                        <GitFork size={18} color={getThemeColor(colors, "primary-600")} />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-typography-900 text-sm font-semibold">
+                          {typeName}
+                        </Text>
+                        <Text className="text-typography-600 text-sm">
+                          {otherName}
+                        </Text>
+                      </View>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </>
+          )}
+        </View>
+
         <View className="h-8" />
       </ScrollView>
+
+      {/* Fullscreen Graph Modal */}
+      {contact && (
+        <RelationshipGraphFullscreen
+          visible={showFullscreenGraph}
+          onClose={() => setShowFullscreenGraph(false)}
+          contactId={id}
+          contactName={contact.displayName}
+          relationships={relationships}
+          onNodePress={(nodeId) =>
+            router.push({
+              pathname: "/contact/[id]",
+              params: { id: nodeId, from: `/contact/${id}` },
+            })
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }

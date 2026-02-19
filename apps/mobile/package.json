@@ -21,6 +21,7 @@
     "@react-native-community/datetimepicker": "8.4.4",
     "@supabase/supabase-js": "^2.91.1",
     "babel-preset-expo": "~54.0.10",
+    "d3-force": "^3.0.0",
     "date-fns": "^4.1.0",
     "expo": "~54.0.33",
     "expo-audio": "~1.1.1",
@@ -50,6 +51,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.28.6",
+    "@types/d3-force": "^3.0.10",
     "@types/react": "~19.1.0",
     "eslint": "^10.0.0",
     "globals": "^17.3.0",

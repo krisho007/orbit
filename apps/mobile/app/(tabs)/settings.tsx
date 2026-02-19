@@ -18,6 +18,7 @@ import {
   Trash2,
   Database,
   Brain,
+  GitFork,
 } from "lucide-react-native";
 import { getThemeColor, useThemeColors, useThemeMode } from "../../lib/theme";
 import { useGluestackUI } from "../../components/ui/gluestack-ui-provider";
@@ -288,6 +289,12 @@ export default function SettingsScreen() {
           onPress={() =>
             Alert.alert("Coming Soon", "Tag management will be available soon.")
           }
+        />
+        <SettingRow
+          icon={GitFork}
+          title="Relationship Types"
+          subtitle="Define how contacts relate to each other"
+          onPress={() => router.push("/relationship-types" as any)}
         />
         <SettingRow
           icon={Download}

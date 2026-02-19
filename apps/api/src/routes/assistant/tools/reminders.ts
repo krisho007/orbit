@@ -126,22 +126,21 @@ export async function createReminderByIds(
     dueAt: string;
     status?: string;
     conversationId?: string;
-    participantIds: string[];
+    participantIds?: string[];
   },
   assistantConversationId?: string
 ): Promise<ToolResult> {
   try {
-  const uniqueParticipantIds = [...new Set(payload.participantIds)];
-  if (uniqueParticipantIds.length === 0) {
-    return { type: "error", message: "At least one participant is required" };
-  }
+  const uniqueParticipantIds = [...new Set(payload.participantIds ?? [])];
 
-  const ownedContacts = await db
-    .select({ id: contacts.id })
-    .from(contacts)
-    .where(and(eq(contacts.userId, userId), inArray(contacts.id, uniqueParticipantIds)));
-  if (ownedContacts.length !== uniqueParticipantIds.length) {
-    return { type: "error", message: "Contact not found" };
+  if (uniqueParticipantIds.length > 0) {
+    const ownedContacts = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(and(eq(contacts.userId, userId), inArray(contacts.id, uniqueParticipantIds)));
+    if (ownedContacts.length !== uniqueParticipantIds.length) {
+      return { type: "error", message: "Contact not found" };
+    }
   }
 
   if (payload.conversationId) {
@@ -169,17 +168,21 @@ export async function createReminderByIds(
     return { type: "error", message: "Failed to create reminder" };
   }
 
-  await db.insert(reminderParticipants).values(
-    uniqueParticipantIds.map((contactId) => ({
-      reminderId: newReminder.id,
-      contactId,
-    }))
-  );
+  if (uniqueParticipantIds.length > 0) {
+    await db.insert(reminderParticipants).values(
+      uniqueParticipantIds.map((contactId) => ({
+        reminderId: newReminder.id,
+        contactId,
+      }))
+    );
+  }
 
-  const participantContacts = await db
-    .select({ displayName: contacts.displayName })
-    .from(contacts)
-    .where(inArray(contacts.id, uniqueParticipantIds));
+  const participantContacts = uniqueParticipantIds.length > 0
+    ? await db
+        .select({ displayName: contacts.displayName })
+        .from(contacts)
+        .where(inArray(contacts.id, uniqueParticipantIds))
+    : [];
 
   return {
     type: "reminder_created",
@@ -308,14 +311,14 @@ export function createReminderTools(userId: string, schemas: { optionalReminderS
     }),
 
     create_reminder_by_ids: tool({
-      description: "Create a reminder and link it to contact ids",
+      description: "Create a reminder, optionally linking it to contact ids",
       inputSchema: z.object({
         title: z.string().optional().describe("Reminder title"),
         notes: z.string().optional().describe("Reminder notes"),
         dueAt: z.string().describe("Due date/time in ISO format"),
         status: schemas.optionalReminderStatusSchema.describe("Reminder status"),
         conversationId: z.string().optional().describe("Linked conversation id"),
-        participantIds: z.array(z.string()).describe("Participant contact ids"),
+        participantIds: z.array(z.string()).optional().describe("Participant contact ids"),
       }),
       execute: async ({ title, notes, dueAt, status, conversationId, participantIds }) =>
         createReminderByIds(userId, { title, notes, dueAt, status, conversationId, participantIds }, assistantConversationId),

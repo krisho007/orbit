@@ -162,17 +162,6 @@ async function setupTestData(token: string): Promise<string[]> {
   return createdIds;
 }
 
-async function cleanupSetupData(token: string, ids: string[]): Promise<void> {
-  for (const id of ids) {
-    try {
-      await fetch(`${API_BASE}/api/contacts/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    } catch {}
-  }
-}
-
 // ── Auth ───────────────────────────────────────────────────────────
 
 async function authenticate(): Promise<{ token: string; userId: string; cleanup: () => Promise<void> }> {
@@ -838,57 +827,158 @@ const SCENARIOS: TestScenario[] = [
 
 // ── Entity Cleanup ─────────────────────────────────────────────────
 
-async function cleanupCreatedEntities(
+type CleanupStats = {
+  found: Record<string, number>;
+  deleted: Record<string, number>;
+  failed: Record<string, string[]>;
+};
+
+/** Paginate through all items for a given API list endpoint. */
+async function fetchAllIds(
   token: string,
-  entities: CreatedEntity[],
-  conversationIds: Set<string>
-): Promise<void> {
-  // Delete in reverse FK dependency order
-  const byKind = {
-    reminder: entities.filter((e) => e.kind === "reminder"),
-    event: entities.filter((e) => e.kind === "event"),
-    conversation: entities.filter((e) => e.kind === "conversation"),
-    contact: entities.filter((e) => e.kind === "contact"),
+  endpoint: string,
+  extraParams = ""
+): Promise<string[]> {
+  const ids: string[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < 20; page++) {
+    const params = new URLSearchParams({ limit: "50" });
+    if (cursor) params.set("cursor", cursor);
+    if (extraParams) {
+      for (const part of extraParams.split("&")) {
+        const [k, v] = part.split("=");
+        params.set(k, v);
+      }
+    }
+    const res = await fetch(`${API_BASE}/api/${endpoint}?${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) break;
+    const data = (await res.json()) as any;
+    const items: any[] =
+      data.contacts || data.conversations || data.events || data.reminders || data.conversations || [];
+    if (items.length === 0) break;
+    for (const item of items) ids.push(item.id);
+    cursor = data.nextCursor;
+    if (!cursor) break;
+  }
+  return ids;
+}
+
+/** Fetch all assistant conversation IDs for the test user. */
+async function fetchAllAssistantConversationIds(token: string): Promise<string[]> {
+  const ids: string[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < 20; page++) {
+    const params = new URLSearchParams({ limit: "50" });
+    if (cursor) params.set("cursor", cursor);
+    const res = await fetch(`${API_BASE}/api/assistant/conversations?${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) break;
+    const data = (await res.json()) as any;
+    const items: any[] = data.conversations || [];
+    if (items.length === 0) break;
+    for (const item of items) ids.push(item.id);
+    cursor = data.nextCursor;
+    if (!cursor) break;
+  }
+  return ids;
+}
+
+/**
+ * Comprehensive cleanup: discovers ALL entities for the test user via API,
+ * then deletes in FK-safe order. No reliance on tracked entity lists.
+ */
+async function cleanupAllTestData(token: string): Promise<CleanupStats> {
+  const stats: CleanupStats = {
+    found: {},
+    deleted: {},
+    failed: {},
   };
 
-  const deleteEntity = async (kind: string, id: string) => {
-    const endpoint = kind === "reminder" ? "reminders" : `${kind}s`;
+  const deleteEntity = async (kind: string, id: string, endpoint: string) => {
     try {
       const res = await fetch(`${API_BASE}/api/${endpoint}/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        console.log(`    Deleted ${kind} ${id}`);
+      if (res.ok || res.status === 404) {
+        stats.deleted[kind] = (stats.deleted[kind] || 0) + 1;
       } else {
-        console.warn(`    Failed to delete ${kind} ${id}: ${res.status}`);
+        (stats.failed[kind] ??= []).push(`${id} (${res.status})`);
       }
     } catch (err) {
-      console.warn(`    Error deleting ${kind} ${id}: ${err}`);
+      (stats.failed[kind] ??= []).push(`${id} (${err})`);
     }
   };
 
-  for (const e of byKind.reminder) await deleteEntity(e.kind, e.id);
-  for (const e of byKind.event) await deleteEntity(e.kind, e.id);
-  for (const e of byKind.conversation) await deleteEntity(e.kind, e.id);
-  for (const e of byKind.contact) await deleteEntity(e.kind, e.id);
+  // 1. Discover all entities for this user
+  console.log("    Discovering all entities...");
+  const [reminderIds, conversationIds, eventIds, contactIds, assistantConvIds] =
+    await Promise.all([
+      fetchAllIds(token, "reminders", "status=OPEN"),
+      fetchAllIds(token, "conversations"),
+      fetchAllIds(token, "events"),
+      fetchAllIds(token, "contacts"),
+      fetchAllAssistantConversationIds(token),
+    ]);
 
-  // Delete assistant conversations
-  for (const convId of conversationIds) {
-    try {
-      const res = await fetch(`${API_BASE}/api/assistant/conversations/${convId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        console.log(`    Deleted assistant conversation ${convId}`);
-      } else {
-        console.warn(`    Failed to delete assistant conversation ${convId}: ${res.status}`);
-      }
-    } catch (err) {
-      console.warn(`    Error deleting assistant conversation ${convId}: ${err}`);
-    }
+  // Also fetch done/canceled reminders
+  const doneReminderIds = await fetchAllIds(token, "reminders", "status=DONE");
+  const canceledReminderIds = await fetchAllIds(token, "reminders", "status=CANCELED");
+  const allReminderIds = [...new Set([...reminderIds, ...doneReminderIds, ...canceledReminderIds])];
+
+  stats.found = {
+    reminders: allReminderIds.length,
+    conversations: conversationIds.length,
+    events: eventIds.length,
+    contacts: contactIds.length,
+    assistantConversations: assistantConvIds.length,
+  };
+
+  const total = Object.values(stats.found).reduce((a, b) => a + b, 0);
+  console.log(
+    `    Found ${total} entities: ` +
+      Object.entries(stats.found)
+        .filter(([, v]) => v > 0)
+        .map(([k, v]) => `${v} ${k}`)
+        .join(", ")
+  );
+
+  if (total === 0) return stats;
+
+  // 2. Delete in FK-safe order: reminders → conversations → events → contacts → assistant conversations
+  for (const id of allReminderIds) await deleteEntity("reminders", id, "reminders");
+  for (const id of conversationIds) await deleteEntity("conversations", id, "conversations");
+  for (const id of eventIds) await deleteEntity("events", id, "events");
+  for (const id of contactIds) await deleteEntity("contacts", id, "contacts");
+  for (const id of assistantConvIds)
+    await deleteEntity("assistantConversations", id, "assistant/conversations");
+
+  // 3. Verify: re-fetch to check for orphans
+  console.log("    Verifying cleanup...");
+  const [remainingContacts, remainingConvs, remainingEvents, remainingReminders] =
+    await Promise.all([
+      fetchAllIds(token, "contacts"),
+      fetchAllIds(token, "conversations"),
+      fetchAllIds(token, "events"),
+      fetchAllIds(token, "reminders", "status=OPEN"),
+    ]);
+
+  const orphaned =
+    remainingContacts.length + remainingConvs.length + remainingEvents.length + remainingReminders.length;
+  if (orphaned > 0) {
+    console.warn(
+      `    ⚠️  ${orphaned} orphaned entities remain: ` +
+        `${remainingContacts.length} contacts, ${remainingConvs.length} conversations, ` +
+        `${remainingEvents.length} events, ${remainingReminders.length} reminders`
+    );
+  } else {
+    console.log("    ✓ All entities cleaned up successfully.");
   }
+
+  return stats;
 }
 
 // ── HTML Report ────────────────────────────────────────────────────
@@ -1210,15 +1300,13 @@ async function main() {
   const { token, userId, cleanup: cleanupUser } = await authenticate();
 
   const allResults: ScenarioResult[] = [];
-  const allConversationIds = new Set<string>();
-  let setupContactIds: string[] = [];
 
   try {
     // 2. Setup test data (contacts for disambiguation scenarios)
     const hasSetupScenarios = SCENARIOS.some((s) => s.requiresSetup);
     if (hasSetupScenarios) {
       console.log("\n📦 Setting up test data (disambiguation contacts)...");
-      setupContactIds = await setupTestData(token);
+      const setupContactIds = await setupTestData(token);
       console.log(`  Created ${setupContactIds.length} setup contacts.`);
     }
 
@@ -1229,21 +1317,6 @@ async function main() {
       process.stdout.write(`  [${scenario.id}] ${scenario.name}... `);
       const result = await runScenario(scenario, token);
       allResults.push(result);
-
-      // Collect conversation IDs for cleanup
-      for (const turn of result.turns) {
-        if (turn.role === "assistant") {
-          // The conversationId is on the response, but we track it in turns indirectly.
-          // We need to extract it from the scenario runner. Let's just get all assistant convs.
-        }
-      }
-
-      // Get conversationId from last assistant response (it was returned by the API)
-      const lastAssistant = [...result.turns].reverse().find(
-        (t) => t.role === "assistant"
-      );
-      // We actually need to re-extract conversationId. Let's store it differently.
-      // For now, we'll collect all entities and rely on the conversation cleanup below.
 
       if (result.passed) {
         console.log(`✅ (${(result.totalElapsed / 1000).toFixed(1)}s)`);
@@ -1270,32 +1343,17 @@ async function main() {
     await Bun.write(reportPath, reportHtml);
     console.log(`  Report written to: ${reportPath}`);
 
-    // 5. Cleanup created entities
-    console.log("\n🧹 Cleaning up test entities...");
-    const allEntities = allResults.flatMap((r) => r.createdEntities);
+    // 5. Cleanup ALL entities for the test user (comprehensive, not just tracked)
+    console.log("\n🧹 Cleaning up all test entities...");
+    const cleanupStats = await cleanupAllTestData(token);
 
-    // Collect all assistant conversation IDs from the full run
-    // We'll list all conversations for this user and delete them
-    try {
-      const convRes = await fetch(`${API_BASE}/api/assistant/conversations?limit=50`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (convRes.ok) {
-        const convData = (await convRes.json()) as any;
-        for (const conv of convData.conversations || []) {
-          allConversationIds.add(conv.id);
-        }
+    const failedKinds = Object.entries(cleanupStats.failed).filter(([, ids]) => ids.length > 0);
+    if (failedKinds.length > 0) {
+      console.warn("  ⚠️  Some deletions failed:");
+      for (const [kind, ids] of failedKinds) {
+        console.warn(`    ${kind}: ${ids.join(", ")}`);
       }
-    } catch {
-      // ignore
     }
-
-    await cleanupCreatedEntities(token, allEntities, allConversationIds);
-    if (setupContactIds.length > 0) {
-      console.log("  Cleaning up setup contacts...");
-      await cleanupSetupData(token, setupContactIds);
-    }
-    console.log("  Entity cleanup complete.");
 
     // 6. Return exit code
     if (failed > 0) {

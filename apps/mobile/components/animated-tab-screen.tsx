@@ -1,11 +1,11 @@
 import { useCallback, type ReactNode } from "react";
-import { Dimensions } from "react-native";
+import { View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  Easing,
+  withSpring,
 } from "react-native-reanimated";
 import { useThemeColor } from "../lib/theme";
 
@@ -17,7 +17,8 @@ const TAB_ORDER = [
   "reminders",
   "settings",
 ];
-const SLIDE_DISTANCE = Dimensions.get("window").width * 0.3;
+const SLIDE_HINT = 12;
+const SPRING_CONFIG = { damping: 20, stiffness: 300, mass: 0.8 };
 
 let lastActiveTabIndex = -1;
 
@@ -28,6 +29,7 @@ export function AnimatedTabScreen({
   children: ReactNode;
   tabName: string;
 }) {
+  const scale = useSharedValue(1);
   const translateX = useSharedValue(0);
   const opacity = useSharedValue(1);
   const currentIndex = TAB_ORDER.indexOf(tabName);
@@ -41,25 +43,28 @@ export function AnimatedTabScreen({
       }
 
       const direction = currentIndex > lastActiveTabIndex ? 1 : -1;
-      translateX.value = direction * SLIDE_DISTANCE;
-      opacity.value = 0.7;
 
-      translateX.value = withTiming(0, {
-        duration: 350,
-        easing: Easing.out(Easing.cubic),
-      });
-      opacity.value = withTiming(1, { duration: 300 });
+      scale.value = 0.97;
+      translateX.value = direction * SLIDE_HINT;
+      opacity.value = 0;
+
+      scale.value = withSpring(1, SPRING_CONFIG);
+      translateX.value = withSpring(0, SPRING_CONFIG);
+      opacity.value = withTiming(1, { duration: 200 });
 
       lastActiveTabIndex = currentIndex;
-    }, [currentIndex, translateX, opacity])
+    }, [currentIndex, scale, translateX, opacity])
   );
 
   const animatedStyle = useAnimatedStyle(() => ({
     flex: 1,
-    transform: [{ translateX: translateX.value }],
+    transform: [{ scale: scale.value }, { translateX: translateX.value }],
     opacity: opacity.value,
-    backgroundColor: bgColor,
   }));
 
-  return <Animated.View style={animatedStyle}>{children}</Animated.View>;
+  return (
+    <View style={{ flex: 1, backgroundColor: bgColor }}>
+      <Animated.View style={animatedStyle}>{children}</Animated.View>
+    </View>
+  );
 }

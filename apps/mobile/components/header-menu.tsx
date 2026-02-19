@@ -32,7 +32,13 @@ function MenuItem({
         }
       />
       <Text
-        className={`ml-3 text-base ${danger ? "text-error-600" : "text-typography-900"}`}
+        style={{
+          marginLeft: 12,
+          fontSize: 16,
+          color: danger
+            ? getThemeColor(colors, "error-600")
+            : getThemeColor(colors, "typography-900"),
+        }}
       >
         {label}
       </Text>

@@ -1,6 +1,6 @@
 import { Tabs } from "expo-router";
 import { View, Platform } from "react-native";
-import type { ComponentType } from "react";
+import { useEffect, type ComponentType } from "react";
 import {
   Users,
   MessageCircle,
@@ -8,6 +8,13 @@ import {
   Bell,
   Sparkles,
 } from "lucide-react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withSequence,
+} from "react-native-reanimated";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
 import { HeaderMenu } from "../../components/header-menu";
 
@@ -21,16 +28,69 @@ function TabIcon({ focused, icon: Icon }: TabIconProps) {
   const iconColor = focused
     ? getThemeColor(colors, "primary-600")
     : getThemeColor(colors, "typography-500");
+
+  const iconScale = useSharedValue(1);
+  const bgOpacity = useSharedValue(focused ? 1 : 0);
+  const indicatorScaleX = useSharedValue(focused ? 1 : 0);
+
+  useEffect(() => {
+    if (focused) {
+      iconScale.value = withSequence(
+        withSpring(1.18, { damping: 12, stiffness: 400 }),
+        withSpring(1, { damping: 14, stiffness: 300 })
+      );
+      bgOpacity.value = withTiming(1, { duration: 200 });
+      indicatorScaleX.value = withSpring(1, { damping: 18, stiffness: 280 });
+    } else {
+      iconScale.value = withSpring(1, { damping: 20, stiffness: 300 });
+      bgOpacity.value = withTiming(0, { duration: 200 });
+      indicatorScaleX.value = withSpring(0, { damping: 20, stiffness: 300 });
+    }
+  }, [focused, iconScale, bgOpacity, indicatorScaleX]);
+
+  const iconAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: iconScale.value }],
+  }));
+
+  const bgAnimStyle = useAnimatedStyle(() => ({
+    opacity: bgOpacity.value,
+  }));
+
+  const indicatorAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: indicatorScaleX.value }],
+  }));
+
   return (
-    <View className="items-center justify-center pt-2">
-      <View
-        className={`w-11 h-11 rounded-2xl items-center justify-center ${
-          focused ? "bg-primary-100" : "bg-transparent"
-        }`}
-      >
-        <Icon size={22} color={iconColor} />
+    <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 8 }}>
+      <View style={{ width: 44, height: 44, borderRadius: 16, alignItems: "center", justifyContent: "center" }}>
+        <Animated.View
+          style={[
+            {
+              position: "absolute",
+              width: 44,
+              height: 44,
+              borderRadius: 16,
+              backgroundColor: getThemeColor(colors, "primary-100"),
+            },
+            bgAnimStyle,
+          ]}
+        />
+        <Animated.View style={iconAnimStyle}>
+          <Icon size={22} color={iconColor} />
+        </Animated.View>
       </View>
-      {focused && <View className="mt-1 h-1 w-4 rounded-full bg-primary-600" />}
+      <Animated.View
+        style={[
+          {
+            marginTop: 4,
+            height: 4,
+            width: 16,
+            borderRadius: 9999,
+            backgroundColor: getThemeColor(colors, "primary-600"),
+          },
+          indicatorAnimStyle,
+        ]}
+      />
     </View>
   );
 }

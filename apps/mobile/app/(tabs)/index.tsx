@@ -224,59 +224,24 @@ function ContactRow({
       <Animated.View style={cardStyle}>
         <Pressable
           onPress={() => onOpenContact(item.id)}
-          className="relative overflow-hidden flex-row items-center px-4 py-4 bg-background-0 border border-border-100 rounded-2xl mx-4 mb-3 active:bg-background-50"
+          className="relative overflow-hidden flex-row items-center px-4 py-3 bg-background-0 border border-border-100 rounded-2xl mx-4 mb-2.5 active:bg-background-50"
         >
           {item.images?.[0]?.imageUrl ? (
             <Image
               source={{ uri: item.images[0].imageUrl }}
-              className="w-12 h-12 rounded-2xl mr-4"
+              className="w-11 h-11 rounded-2xl mr-3.5"
             />
           ) : (
-            <View className="w-12 h-12 rounded-2xl bg-primary-100 items-center justify-center mr-4">
+            <View className="w-11 h-11 rounded-2xl bg-primary-100 items-center justify-center mr-3.5">
               <Text className="text-primary-700 text-lg font-semibold">
                 {item.displayName.charAt(0).toUpperCase()}
               </Text>
             </View>
           )}
 
-          <View className="flex-1">
-            <Text className="text-typography-900 font-semibold text-base">
-              {item.displayName}
-            </Text>
-            {(item.company || item.jobTitle) && (
-              <Text className="text-typography-600 text-sm mt-0.5">
-                {[item.jobTitle, item.company].filter(Boolean).join(" at ")}
-              </Text>
-            )}
-            {item.primaryPhone && (
-              <Text className="text-typography-500 text-sm">{item.primaryPhone}</Text>
-            )}
-          </View>
-
-          {item.primaryPhone && (
-            <View className="flex-row items-center gap-5 ml-3">
-              <Pressable
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onOpenWhatsApp(item.primaryPhone!);
-                }}
-                hitSlop={8}
-                className="active:opacity-50"
-              >
-                <WhatsAppIcon size={22} color="#25D366" />
-              </Pressable>
-              <Pressable
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onOpenCall(item.primaryPhone!);
-                }}
-                hitSlop={8}
-                className="active:opacity-50"
-              >
-                <Phone size={22} color={getThemeColor(colors, "primary-600")} />
-              </Pressable>
-            </View>
-          )}
+          <Text className="flex-1 text-typography-900 font-semibold text-[17px]">
+            {item.displayName}
+          </Text>
 
           <Animated.View
             pointerEvents="none"

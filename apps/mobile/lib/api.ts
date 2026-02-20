@@ -117,9 +117,29 @@ class ApiClient {
       throw new Error(error.error || `HTTP error ${response.status}`);
     }
 
-    // If the response doesn't support streaming, fall back to JSON
+    // If ReadableStream not available (e.g., React Native Android),
+    // fall back to parsing the NDJSON body as text line-by-line
     if (!response.body) {
-      return response.json() as Promise<T>;
+      const text = await response.text();
+      const lines = text.split("\n").filter((l) => l.trim());
+      let fallbackResult: T | null = null;
+      for (const line of lines) {
+        try {
+          const parsed = JSON.parse(line.trim());
+          if (parsed.type === "status") {
+            onStatus(parsed.message);
+          } else if (parsed.type === "result") {
+            fallbackResult = parsed as T;
+          } else if (parsed.type === "error") {
+            throw new Error(parsed.error || "Stream error");
+          }
+        } catch (e) {
+          if (e instanceof Error && e.name === "SyntaxError") continue;
+          throw e;
+        }
+      }
+      if (!fallbackResult) throw new Error("No result received from response");
+      return fallbackResult;
     }
 
     const reader = response.body.getReader();
@@ -151,12 +171,28 @@ class ApiClient {
             throw new Error(parsed.error || "Stream error");
           }
         } catch (e) {
-          if (e instanceof SyntaxError) continue; // skip malformed lines
+          // Hermes (React Native) JSON.parse errors may not pass instanceof SyntaxError
+          if (e instanceof Error && e.name === "SyntaxError") continue;
           throw e;
         }
       }
 
       if (done) break;
+    }
+
+    // Process any remaining buffer content (final line without trailing \n)
+    const remaining = buffer.trim();
+    if (remaining) {
+      try {
+        const parsed = JSON.parse(remaining);
+        if (parsed.type === "result") {
+          result = parsed as T;
+        } else if (parsed.type === "error") {
+          throw new Error(parsed.error || "Stream error");
+        }
+      } catch {
+        // Ignore parse errors on trailing buffer
+      }
     }
 
     if (!result) {

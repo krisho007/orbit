@@ -209,10 +209,11 @@ export default function AssistantScreen() {
 
   const handleConsentAgree = useCallback(async () => {
     setShowConsentDialog(false);
+    setConsent(true);
     try {
       await userApi.updateConsent({ aiConsent: true, sttConsent: true });
-      setConsent(true);
     } catch (error) {
+      setConsent(false);
       Alert.alert("Error", "Failed to save consent. Please try again.");
     }
   }, []);

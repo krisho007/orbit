@@ -27,6 +27,19 @@ export function getModel() {
   return google(modelName);
 }
 
+export function getClassificationModel() {
+  const provider = getProvider();
+  const modelName =
+    process.env.AI_CLASSIFICATION_MODEL ||
+    process.env.AI_MODEL ||
+    DEFAULT_MODELS[provider];
+
+  if (provider === "groq") {
+    return groq(modelName);
+  }
+  return google(modelName);
+}
+
 export function getProviderApiKeyEnvGuard(): { configured: boolean; message: string } {
   const provider = getProvider();
 

@@ -1,5 +1,5 @@
 import { generateText } from "ai";
-import { getModel } from "./model";
+import { getClassificationModel } from "./model";
 import type { AssistantIntent, ChatMessage } from "./types";
 import { ASSISTANT_INTENTS, MUTATING_INTENTS } from "./constants";
 
@@ -85,26 +85,6 @@ export function parseIntentFromText(rawText: string): AssistantIntent {
   return "unknown";
 }
 
-export async function identifyIntent(
-  messages: ChatMessage[],
-  aiModel: string,
-  generate: typeof generateText
-): Promise<AssistantIntent> {
-  const result = await generate({
-    model: google(aiModel),
-    system: `Classify the user's current intent.
-Return ONLY valid JSON in this shape: {"intent":"<intent>"}.
-Allowed intents: ${ASSISTANT_INTENTS.join(", ")}.
-Pick "unknown" if none apply.`,
-    messages: messages.map((message) => ({
-      role: message.role,
-      content: message.content,
-    })),
-  });
-
-  return parseIntentFromText(result.text);
-}
-
 // ── Multi-intent support ────────────────────────────────────────────
 
 export function parseIntentsFromText(rawText: string): AssistantIntent[] {
@@ -148,7 +128,7 @@ export async function identifyIntents(
   generate: typeof generateText
 ): Promise<AssistantIntent[]> {
   const result = await generate({
-    model: getModel(),
+    model: getClassificationModel(),
     system: `Classify ALL of the user's intents from their message.
 A single message may contain multiple distinct actions (e.g. creating an event AND logging a conversation AND updating a contact).
 Return ONLY valid JSON in this shape: {"intents":["<intent1>","<intent2>",...]}.

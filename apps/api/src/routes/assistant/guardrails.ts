@@ -35,6 +35,30 @@ export function isExplicitUserConfirmation(text: string): boolean {
   return CONFIRMATION_TOKENS.has(normalized);
 }
 
+export const REJECTION_TOKENS = new Set([
+  "no",
+  "nope",
+  "no thanks",
+  "cancel",
+  "stop",
+  "i need changes",
+  "no i need changes",
+  "no, i need changes",
+  "changes needed",
+  "not yet",
+  "hold on",
+  "wait",
+  "let me change",
+  "make changes",
+]);
+
+export function isExplicitUserRejection(text: string): boolean {
+  const normalized = text.trim().toLowerCase().replace(/[.!?]+$/, "");
+  if (!normalized) return false;
+
+  return REJECTION_TOKENS.has(normalized);
+}
+
 export function parseIntentFromText(rawText: string): AssistantIntent {
   const cleaned = rawText.replace(/```json|```/gi, "").trim();
   if (!cleaned) return "unknown";

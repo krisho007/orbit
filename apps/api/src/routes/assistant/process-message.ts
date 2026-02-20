@@ -6,7 +6,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { db, assistantMessages } from "../../db";
 import { SCHEMA_ENUM_CONFIG, loadAssistantEnumConfig, enumValueSchema } from "./enums";
 import { identifyIntents } from "./guardrails";
-import { anyIntentRequiresConfirmation, isExplicitUserConfirmation } from "./guardrails";
+import { anyIntentRequiresConfirmation, isExplicitUserConfirmation, isExplicitUserRejection } from "./guardrails";
 import { ASSISTANT_INTENTS, MUTATING_TOOL_NAMES, DELETE_TOOL_NAMES, unionToolSets } from "./constants";
 import { getUserContext } from "./db-helpers";
 import { buildSystemPrompt } from "./system-prompt";
@@ -132,22 +132,23 @@ export async function processMessageLLM(
 
   const lastUserText = extractLastUserText(messages as unknown[]);
   const isConfirmation = isExplicitUserConfirmation(lastUserText);
+  const isRejection = isExplicitUserRejection(lastUserText);
 
   onStatus?.("Classifying intent...");
 
-  // On confirmation turns, use cached intents from the previous assistant message
+  // On confirmation/rejection turns, use cached intents from the previous assistant message
   // instead of re-classifying (LLM classification is non-deterministic and may drop intents).
   let cachedIntents: AssistantIntent[] | null = null;
-  if (isConfirmation && assistantConversationId) {
+  if ((isConfirmation || isRejection) && assistantConversationId) {
     cachedIntents = await loadCachedIntents(assistantConversationId);
     if (cachedIntents) {
-      console.log(`[assistant:llm] Using cached intents from previous turn: [${cachedIntents.join(", ")}]`);
+      console.log(`[assistant:llm] Using cached intents from previous turn (${isConfirmation ? "confirmed" : "rejected"}): [${cachedIntents.join(", ")}]`);
     }
   }
 
   // Fallback: classify from earlier messages if no cache hit
   const messagesForClassification =
-    isConfirmation && messages.length >= 3 ? messages.slice(0, -2) : messages;
+    (isConfirmation || isRejection) && messages.length >= 3 ? messages.slice(0, -2) : messages;
 
   // Run independent operations in parallel: enum config, intent classification, and user context
   const [enumConfig, inferredIntents, userContext] = await Promise.all([

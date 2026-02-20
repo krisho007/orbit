@@ -131,21 +131,35 @@ export async function processMessageLLM(
   const isConfirmation = isExplicitUserConfirmation(lastUserText);
   const isRejection = isExplicitUserRejection(lastUserText);
 
+  // Hard short-circuit: rejection needs no LLM call at all — just ask what to change
+  if (isRejection) {
+    let rejectionCachedIntents: AssistantIntent[] | null = null;
+    if (assistantConversationId) {
+      rejectionCachedIntents = await loadCachedIntents(assistantConversationId);
+    }
+    console.log(`[assistant:llm] Rejection detected — skipping LLM, cached intents: [${rejectionCachedIntents?.join(", ") ?? "none"}]`);
+    return {
+      text: "Sure, what would you like to change?",
+      ui: null,
+      cachedIntents: rejectionCachedIntents ?? undefined,
+    };
+  }
+
   onStatus?.("Classifying intent...");
 
-  // On confirmation/rejection turns, use cached intents from the previous assistant message
+  // On confirmation turns, use cached intents from the previous assistant message
   // instead of re-classifying (LLM classification is non-deterministic and may drop intents).
   let cachedIntents: AssistantIntent[] | null = null;
-  if ((isConfirmation || isRejection) && assistantConversationId) {
+  if (isConfirmation && assistantConversationId) {
     cachedIntents = await loadCachedIntents(assistantConversationId);
     if (cachedIntents) {
-      console.log(`[assistant:llm] Using cached intents from previous turn (${isConfirmation ? "confirmed" : "rejected"}): [${cachedIntents.join(", ")}]`);
+      console.log(`[assistant:llm] Using cached intents from previous turn: [${cachedIntents.join(", ")}]`);
     }
   }
 
   // Fallback: classify from earlier messages if no cache hit
   const messagesForClassification =
-    (isConfirmation || isRejection) && messages.length >= 3 ? messages.slice(0, -2) : messages;
+    isConfirmation && messages.length >= 3 ? messages.slice(0, -2) : messages;
 
   // Run independent operations in parallel: enum config, intent classification, and user context
   const [enumConfig, inferredIntents, userContext] = await Promise.all([

@@ -32,7 +32,6 @@ import {
   useAudioRecorderState,
 } from "expo-audio";
 import {
-  Sparkles,
   SendHorizonal,
   Mic,
   Phone,
@@ -69,6 +68,7 @@ import { getThemeColor, useThemeColors } from "../../lib/theme";
 import { useGluestackUI } from "../../components/ui/gluestack-ui-provider";
 import { AiConsentDialog } from "../../components/ai-consent-dialog";
 import { HeaderMenu } from "../../components/header-menu";
+import { HuskyLogo } from "../../components/HuskyLogo";
 
 type Message = ChatMessage & {
   id: string;
@@ -173,6 +173,7 @@ export default function AssistantScreen() {
   const isStoppingRecordingRef = useRef(false);
   const recordingPulseAnim = useRef(new Animated.Value(0)).current;
   const recordingBarAnim = useRef(new Animated.Value(0)).current;
+  const recordingFillAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     (async () => {
@@ -378,36 +379,47 @@ export default function AssistantScreen() {
       recordingPulseAnim.stopAnimation();
       recordingPulseAnim.setValue(0);
       recordingBarAnim.setValue(0);
+      recordingFillAnim.setValue(0);
       return;
     }
 
+    // Fade in the content
     Animated.timing(recordingBarAnim, {
       toValue: 1,
-      duration: 1200,
+      duration: 600,
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
 
+    // Slow water-like fill across the entire text box
+    Animated.timing(recordingFillAnim, {
+      toValue: 1,
+      duration: RECORDING_AUTO_STOP_MS,
+      easing: Easing.linear,
+      useNativeDriver: false,
+    }).start();
+
+    // Gentle pulse on the red dot
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(recordingPulseAnim, {
           toValue: 1,
-          duration: 900,
+          duration: 1200,
           easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(recordingPulseAnim, {
           toValue: 0,
-          duration: 900,
+          duration: 1200,
           easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ])
     );
 
     loop.start();
     return () => loop.stop();
-  }, [isRecording, recordingPulseAnim, recordingBarAnim]);
+  }, [isRecording, recordingPulseAnim, recordingBarAnim, recordingFillAnim]);
 
   useEffect(() => {
     if (!isRecording) return;
@@ -608,6 +620,19 @@ export default function AssistantScreen() {
     },
     [messages, nextMessageId, consent, conversationId]
   );
+
+  // Derive whether confirmation buttons are pending (last assistant message has actions)
+  const hasActiveConfirmation = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.isLoading) continue;
+      if (m.role === "assistant") return Boolean(m.actions?.length);
+      break; // if the last non-loading message is a user message, no pending confirmation
+    }
+    return false;
+  })();
+
+  const inputDisabled = isLoading || hasActiveConfirmation;
 
   const handleSuggestion = (suggestion: string) => {
     setInput(suggestion);
@@ -1080,7 +1105,7 @@ export default function AssistantScreen() {
     const showUi = !isUser && item.ui;
     const assistantAvatar = (
       <View className="w-8 h-8 rounded-xl bg-primary-100 items-center justify-center mr-2 mt-1">
-        <Sparkles size={14} color={getThemeColor(colors, "primary-600")} />
+        <HuskyLogo size={20} color={getThemeColor(colors, "primary-600")} />
       </View>
     );
 
@@ -1113,6 +1138,7 @@ export default function AssistantScreen() {
               }`}
             >
               <Text
+                selectable
                 className="text-base leading-6"
                 style={{
                   color: isUser
@@ -1163,10 +1189,8 @@ export default function AssistantScreen() {
   const EmptyState = () => (
     <View className="flex-1 justify-center px-5 pb-6">
       <View className="items-center mb-8">
-        <View className="w-14 h-14 bg-primary-600 rounded-2xl items-center justify-center mb-4">
-          <Sparkles size={22} color={getThemeColor(colors, "typography-0")} />
-        </View>
-        <Text className="text-typography-900 text-lg font-semibold">What can I help with?</Text>
+        <HuskyLogo size={56} color={getThemeColor(colors, "primary-600")} />
+        <Text className="text-typography-900 text-lg font-semibold mt-4">What can I help with?</Text>
         <Text className="text-typography-500 text-sm mt-1">
           Search, log, and plan — just ask.
         </Text>
@@ -1216,53 +1240,66 @@ export default function AssistantScreen() {
       >
         <View className="rounded-3xl border border-border-200 bg-background-50 px-3 py-3" style={{ overflow: "hidden" }}>
           {isRecording ? (
-            <Animated.View
-              className="flex-row items-center min-h-[52px] px-1"
-              style={{
-                opacity: recordingBarAnim,
-                transform: [{
-                  translateX: recordingBarAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [60, 0],
-                  }),
-                }],
-              }}
-            >
+            <View className="min-h-[52px]" style={{ position: "relative" }}>
+              {/* Water fill background */}
               <Animated.View
-                className="w-3.5 h-3.5 rounded-full bg-red-500 mr-3"
                 style={{
-                  opacity: recordingPulseAnim.interpolate({
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: recordingFillAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [1, 0.3],
+                    outputRange: ["0%", "100%"],
                   }),
-                  transform: [{
-                    scale: recordingPulseAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [1, 1.3],
-                    }),
-                  }],
+                  backgroundColor: getThemeColor(colors, "primary-100"),
+                  borderRadius: 20,
+                  opacity: 0.5,
                 }}
               />
-              <Text className="text-typography-700 text-base font-medium flex-1">Listening...</Text>
-              <Pressable
-                onPress={stopRecordingAndTranscribe}
-                className="bg-primary-600 rounded-2xl px-5 py-2.5 active:bg-primary-700"
+              {/* Content overlay */}
+              <Animated.View
+                className="flex-row items-center min-h-[52px] px-1"
+                style={{
+                  opacity: recordingBarAnim,
+                }}
               >
-                <Text className="text-typography-0 text-sm font-semibold">OK</Text>
-              </Pressable>
-            </Animated.View>
+                <Animated.View
+                  className="w-3.5 h-3.5 rounded-full bg-red-500 mr-3"
+                  style={{
+                    opacity: recordingPulseAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 0.3],
+                    }),
+                    transform: [{
+                      scale: recordingPulseAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 1.3],
+                      }),
+                    }],
+                  }}
+                />
+                <Text className="text-typography-700 text-base font-medium flex-1">Listening...</Text>
+                <Pressable
+                  onPress={stopRecordingAndTranscribe}
+                  className="bg-primary-600 rounded-2xl px-5 py-2.5 active:bg-primary-700"
+                >
+                  <Text className="text-typography-0 text-sm font-semibold">Done</Text>
+                </Pressable>
+              </Animated.View>
+            </View>
           ) : (
             <View className="flex-row items-end">
               <View className="flex-1 mr-2">
                 <TextInput
                   className="text-base text-typography-900 min-h-[52px] max-h-[160px] py-2 px-1"
-                  placeholder="Ask me anything..."
+                  placeholder={hasActiveConfirmation ? "Choose an option above..." : "Ask me anything..."}
                   placeholderTextColor={getThemeColor(colors, "typography-500")}
                   value={input}
                   onChangeText={setInput}
                   multiline
                   maxLength={1000}
-                  editable={!isLoading}
+                  editable={!inputDisabled}
                   textAlignVertical="top"
                   blurOnSubmit={false}
                   onKeyPress={(e) => {
@@ -1279,7 +1316,7 @@ export default function AssistantScreen() {
               </View>
               <Pressable
                 onPress={toggleRecording}
-                disabled={isLoading || isTranscribing}
+                disabled={inputDisabled || isTranscribing}
                 className="w-11 h-11 rounded-2xl items-center justify-center mr-1 bg-border-200 active:bg-border-300"
               >
                 {isTranscribing ? (
@@ -1290,9 +1327,9 @@ export default function AssistantScreen() {
               </Pressable>
               <Pressable
                 onPress={() => sendMessage(input)}
-                disabled={!input.trim() || isLoading}
+                disabled={!input.trim() || inputDisabled}
                 className={`w-11 h-11 rounded-2xl items-center justify-center ${
-                  input.trim() && !isLoading
+                  input.trim() && !inputDisabled
                     ? "bg-primary-600 active:bg-primary-700"
                     : "bg-border-200"
                 }`}
@@ -1337,7 +1374,7 @@ export default function AssistantScreen() {
           </View>
         ) : historyItems.length === 0 ? (
           <View className="flex-1 items-center justify-center px-8">
-            <History size={40} color={getThemeColor(colors, "typography-300")} />
+            <HuskyLogo size={48} color={getThemeColor(colors, "typography-300")} />
             <Text className="text-typography-500 text-base mt-4 text-center">
               No conversations yet. Start chatting to see your history here.
             </Text>

@@ -1,5 +1,5 @@
 import { generateText, InvalidToolInputError, NoSuchToolError } from "ai";
-import { google } from "@ai-sdk/google";
+import { getModel, getProviderApiKeyEnvGuard, getProvider } from "./model";
 import { stepCountIs } from "ai";
 import type { ChatMessage, ToolResult, ToolCallMeta, AssistantUi, AssistantAction, AssistantIntent, StatusCallback } from "./types";
 import { eq, and, desc } from "drizzle-orm";
@@ -113,15 +113,12 @@ export async function processMessageLLM(
   assistantConversationId?: string,
   onStatus?: StatusCallback
 ): Promise<{ text: string; ui: AssistantUi | null; actions?: AssistantAction[]; cachedIntents?: AssistantIntent[] }> {
-  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    return {
-      text:
-        "Assistant is not configured. Set GOOGLE_GENERATIVE_AI_API_KEY in apps/api/.env to enable LLM features.",
-      ui: null,
-    };
+  const apiKeyGuard = getProviderApiKeyEnvGuard();
+  if (!apiKeyGuard.configured) {
+    return { text: apiKeyGuard.message, ui: null };
   }
 
-  const aiModel = process.env.AI_MODEL || "gemini-flash-lite-latest";
+  const provider = getProvider();
   const usingMockGenerate = generate !== generateText;
   const defaultEnumConfig = {
     conversationMediums: [...SCHEMA_ENUM_CONFIG.conversationMediums],
@@ -155,7 +152,7 @@ export async function processMessageLLM(
     usingMockGenerate ? Promise.resolve(defaultEnumConfig) : loadAssistantEnumConfig(),
     cachedIntents
       ? Promise.resolve(cachedIntents)
-      : identifyIntents(messagesForClassification, aiModel, generate),
+      : identifyIntents(messagesForClassification, generate),
     usingMockGenerate ? Promise.resolve(defaultContext) : getUserContext(userId),
   ]);
 
@@ -211,7 +208,7 @@ export async function processMessageLLM(
 
   console.log(`[assistant:llm] Starting LLM processing with ${modelMessages.length} message(s)`);
   console.log(`[assistant:llm] User context: ${userContext.userName || "(no name)"}, primaryContact: ${userContext.primaryContactId || "(not set)"}`);
-  console.log(`[assistant:llm] Model: ${aiModel}`);
+  console.log(`[assistant:llm] Provider: ${provider}, Model: ${process.env.AI_MODEL || "(default)"}`);
   console.log(`[assistant:llm] Intents: [${inferredIntents.join(", ")}], confirmationRequired=${confirmationRequired}`);
   const toolNames = Object.keys(toolsForRun);
   console.log(`[assistant:llm] Tools scoped: ${toolNames.length} tools — [${toolNames.join(", ")}]`);
@@ -224,7 +221,7 @@ export async function processMessageLLM(
   let stepIndex = 0;
 
   const result = await generate({
-    model: google(aiModel),
+    model: getModel(),
     system: buildSystemPrompt(userContext, enumConfig, inferredIntents, confirmationRequired),
     messages: modelMessages,
     tools: toolsForRun,

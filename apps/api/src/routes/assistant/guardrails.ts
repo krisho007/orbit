@@ -1,5 +1,5 @@
 import { generateText } from "ai";
-import { google } from "@ai-sdk/google";
+import { getModel } from "./model";
 import type { AssistantIntent, ChatMessage } from "./types";
 import { ASSISTANT_INTENTS, MUTATING_INTENTS } from "./constants";
 
@@ -145,11 +145,10 @@ export function parseIntentsFromText(rawText: string): AssistantIntent[] {
 
 export async function identifyIntents(
   messages: ChatMessage[],
-  aiModel: string,
   generate: typeof generateText
 ): Promise<AssistantIntent[]> {
   const result = await generate({
-    model: google(aiModel),
+    model: getModel(),
     system: `Classify ALL of the user's intents from their message.
 A single message may contain multiple distinct actions (e.g. creating an event AND logging a conversation AND updating a contact).
 Return ONLY valid JSON in this shape: {"intents":["<intent1>","<intent2>",...]}.

@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.1",
+    "@ai-sdk/groq": "^3.0.24",
     "@supabase/supabase-js": "^2.91.1",
     "ai": "^6.0.3",
     "drizzle-orm": "^0.45.1",

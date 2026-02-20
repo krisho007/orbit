@@ -2,8 +2,9 @@ import { View, Text, Pressable, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../lib/auth";
 import { useState } from "react";
-import { Users, MessageCircle, CalendarDays, Sparkles } from "lucide-react-native";
+import { Users, MessageCircle, CalendarDays } from "lucide-react-native";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
+import { HuskyLogo } from "../../components/HuskyLogo";
 
 const PRIVACY_POLICY_URL = "https://www.myorbit360.com/privacy";
 const TERMS_URL = "https://www.myorbit360.com/terms";
@@ -34,10 +35,10 @@ export default function SignIn() {
 
       <View className="flex-1 justify-center items-center px-8">
         <View className="mb-10 items-center">
-          <View className="w-20 h-20 bg-primary-600 rounded-3xl items-center justify-center mb-6 shadow-lg">
-            <Sparkles size={28} color={getThemeColor(colors, "typography-0")} />
-          </View>
-          <Text className="text-4xl font-bold text-typography-900 mb-2">Orbit</Text>
+          <HuskyLogo size={120} color={getThemeColor(colors, "primary-700")} />
+          <Text className="text-4xl font-bold text-typography-900 mt-4 mb-2">
+            Orbit
+          </Text>
           <Text className="text-lg text-typography-600 text-center">
             Your personal CRM for real relationships
           </Text>

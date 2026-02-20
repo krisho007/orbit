@@ -2,8 +2,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const GOOGLE_IMPORT_ONBOARDING_KEY_PREFIX = "@orbit/onboarding/google-import";
 const APP_ONBOARDING_KEY_PREFIX = "@orbit/onboarding/app";
-const ASSISTANT_COACHMARK_KEY_PREFIX = "@orbit/onboarding/assistant-coachmark";
-
 export const onboardingVersion = "v2";
 
 function keyForUser(userId: string): string {
@@ -12,10 +10,6 @@ function keyForUser(userId: string): string {
 
 function appOnboardingKeyForUser(userId: string, version: string): string {
   return `${APP_ONBOARDING_KEY_PREFIX}:${version}:${userId}`;
-}
-
-function assistantCoachmarkKeyForUser(userId: string): string {
-  return `${ASSISTANT_COACHMARK_KEY_PREFIX}:${userId}`;
 }
 
 export async function isGoogleImportOnboardingComplete(userId: string): Promise<boolean> {
@@ -49,15 +43,6 @@ export async function markAppOnboardingComplete(
   ]);
 }
 
-export async function isAssistantCoachmarkSeen(userId: string): Promise<boolean> {
-  const value = await AsyncStorage.getItem(assistantCoachmarkKeyForUser(userId));
-  return value === "1";
-}
-
-export async function markAssistantCoachmarkSeen(userId: string): Promise<void> {
-  await AsyncStorage.setItem(assistantCoachmarkKeyForUser(userId), "1");
-}
-
 export async function resetOnboardingForTesting(
   userId: string,
   version: string = onboardingVersion
@@ -65,6 +50,5 @@ export async function resetOnboardingForTesting(
   await Promise.all([
     AsyncStorage.removeItem(appOnboardingKeyForUser(userId, version)),
     AsyncStorage.removeItem(keyForUser(userId)),
-    AsyncStorage.removeItem(assistantCoachmarkKeyForUser(userId)),
   ]);
 }

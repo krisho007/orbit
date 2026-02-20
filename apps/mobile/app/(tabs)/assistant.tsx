@@ -65,7 +65,6 @@ import {
   AssistantConversationSummary,
 } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
-import { isAssistantCoachmarkSeen, markAssistantCoachmarkSeen } from "../../lib/onboarding";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
 import { useGluestackUI } from "../../components/ui/gluestack-ui-provider";
 import { AiConsentDialog } from "../../components/ai-consent-dialog";
@@ -159,7 +158,6 @@ export default function AssistantScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [statusText, setStatusText] = useState("");
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const [showCoachmark, setShowCoachmark] = useState(false);
   const [consent, setConsent] = useState<boolean | null>(null);
   const [showConsentDialog, setShowConsentDialog] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -240,51 +238,6 @@ export default function AssistantScreen() {
     },
     []
   );
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    const loadCoachmarkState = async () => {
-      if (!user?.id) {
-        if (!isCancelled) {
-          setShowCoachmark(false);
-        }
-        return;
-      }
-
-      try {
-        const seen = await isAssistantCoachmarkSeen(user.id);
-        if (!isCancelled) {
-          setShowCoachmark(!seen);
-        }
-      } catch (error) {
-        console.error("Failed to load coachmark state:", error);
-      }
-    };
-
-    loadCoachmarkState();
-    return () => {
-      isCancelled = true;
-    };
-  }, [user?.id]);
-
-  const dismissCoachmark = useCallback(async () => {
-    if (!showCoachmark) {
-      return;
-    }
-
-    setShowCoachmark(false);
-
-    if (!user?.id) {
-      return;
-    }
-
-    try {
-      await markAssistantCoachmarkSeen(user.id);
-    } catch (error) {
-      console.error("Failed to mark coachmark as seen:", error);
-    }
-  }, [showCoachmark, user?.id]);
 
   const resetChat = useCallback(() => {
     setMessages([]);
@@ -402,19 +355,13 @@ export default function AssistantScreen() {
   }, [audioRecorder, clearRecordingTimeout, stopRecordingAndTranscribe, consent]);
 
   const toggleRecording = useCallback(() => {
-    if (showCoachmark) {
-      dismissCoachmark();
-    }
-
     if (isRecording) {
       stopRecordingAndTranscribe();
     } else {
       startRecording();
     }
   }, [
-    dismissCoachmark,
     isRecording,
-    showCoachmark,
     startRecording,
     stopRecordingAndTranscribe,
   ]);
@@ -1267,24 +1214,6 @@ export default function AssistantScreen() {
         className="border-t border-border-200 px-4 pt-3 bg-background-0"
         style={{ paddingBottom: Math.max(insets.bottom, 12) }}
       >
-        {showCoachmark && (
-          <View className="mb-3 rounded-2xl border border-primary-200 bg-primary-50 px-4 py-3">
-            <View className="flex-row items-start justify-between">
-              <View className="flex-1 mr-3">
-                <Text className="text-primary-800 text-sm font-semibold">Quick start</Text>
-                <Text className="text-primary-700 text-sm mt-1">
-                  Try: "I had a call with Alex today" and tap the mic.
-                </Text>
-              </View>
-              <Pressable
-                onPress={dismissCoachmark}
-                className="px-2 py-1 rounded-lg bg-primary-100 active:bg-primary-200"
-              >
-                <Text className="text-primary-700 text-xs font-medium">Got it</Text>
-              </Pressable>
-            </View>
-          </View>
-        )}
         <View className="rounded-3xl border border-border-200 bg-background-50 px-3 py-3" style={{ overflow: "hidden" }}>
           {isRecording ? (
             <Animated.View

@@ -1,13 +1,13 @@
 import { Tabs } from "expo-router";
-import { View, Platform } from "react-native";
+import { View, Text, Platform } from "react-native";
 import { useEffect, type ComponentType } from "react";
 import {
   Users,
   MessageCircle,
   CalendarDays,
   Bell,
-  Sparkles,
 } from "lucide-react-native";
+import { HuskyLogo } from "../../components/HuskyLogo";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -128,8 +128,17 @@ export default function TabsLayout() {
         name="assistant"
         options={{
           title: "Orbit",
+          headerLeft: () => (
+            <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 16 }}>
+              <HuskyLogo size={28} color={getThemeColor(colors, "primary-700")} />
+              <Text style={{ fontSize: 20, fontWeight: "700", color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
+                Orbit
+              </Text>
+            </View>
+          ),
+          headerTitle: () => null,
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={Sparkles} />
+            <TabIcon focused={focused} icon={HuskyLogo} />
           ),
         }}
       />

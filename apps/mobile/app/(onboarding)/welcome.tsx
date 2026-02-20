@@ -9,11 +9,11 @@ import {
   Phone,
   Search,
   Send,
-  Sparkles,
 } from "lucide-react-native";
 import { useAuth } from "../../lib/auth";
 import { markAppOnboardingComplete, onboardingVersion } from "../../lib/onboarding";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
+import { HuskyLogo } from "../../components/HuskyLogo";
 import { useOnboarding } from "../_layout";
 
 type OnboardingStep = {
@@ -122,9 +122,7 @@ export default function WelcomeScreen() {
       {/* Header + Title */}
       <View className="px-6 pt-6 pb-2">
         <View className="flex-row items-center justify-between mb-4">
-          <View className="w-11 h-11 rounded-2xl bg-primary-600 items-center justify-center">
-            <Sparkles size={20} color={typo0} />
-          </View>
+          <HuskyLogo size={32} color={primary600} />
           <Text className="text-typography-500 text-sm font-medium">{progress}</Text>
         </View>
 
@@ -334,7 +332,7 @@ function AssistantPreview({
         {/* Assistant message */}
         <View className="flex-row items-start mb-3">
           <View className="w-8 h-8 rounded-full bg-primary-100 items-center justify-center mr-2 mt-0.5">
-            <Sparkles size={14} color={primary600} />
+            <HuskyLogo size={18} color={primary600} />
           </View>
           <View style={{ maxWidth: "78%" }}>
             <View className="bg-background-50 border border-border-200 rounded-2xl rounded-bl-md px-4 py-3 mb-2">

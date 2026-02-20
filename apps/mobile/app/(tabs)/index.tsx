@@ -40,6 +40,7 @@ import { useAuth } from "../../lib/auth";
 import { getThemeColor, useThemeColors, type ThemeColors } from "../../lib/theme";
 import { useContacts } from "../../hooks/use-contacts";
 import { useEffect } from "react";
+import { HuskyLogo } from "../../components/HuskyLogo";
 
 function WhatsAppIcon({ size = 20, color = "#25D366" }: { size?: number; color?: string }) {
   return (
@@ -365,10 +366,8 @@ export default function ContactsScreen() {
         <ActivityIndicator size="large" color={getThemeColor(colors, "primary-600")} />
       ) : (
         <>
-          <View className="w-16 h-16 rounded-3xl bg-primary-100 items-center justify-center mb-4">
-            <Users size={28} color={getThemeColor(colors, "primary-600")} />
-          </View>
-          <Text className="text-typography-900 text-lg font-semibold mb-2">
+          <HuskyLogo size={48} color={getThemeColor(colors, "typography-300")} />
+          <Text className="text-typography-900 text-lg font-semibold mb-2 mt-4">
             {search ? "No contacts found" : "No contacts yet"}
           </Text>
           <Text className="text-typography-500 text-center px-8">

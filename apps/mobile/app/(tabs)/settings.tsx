@@ -22,6 +22,7 @@ import {
 } from "lucide-react-native";
 import { getThemeColor, useThemeColors, useThemeMode } from "../../lib/theme";
 import { useGluestackUI } from "../../components/ui/gluestack-ui-provider";
+import { HuskyLogo } from "../../components/HuskyLogo";
 import { resetOnboardingForTesting } from "../../lib/onboarding";
 import { useOnboarding } from "../_layout";
 import { userApi } from "../../lib/api";
@@ -406,7 +407,9 @@ export default function SettingsScreen() {
       </View>
 
       <View className="items-center pb-8">
-        <Text className="text-typography-400 text-sm">Orbit v1.0.0</Text>
+        <HuskyLogo size={40} color={getThemeColor(colors, "typography-300")} />
+        <Text className="text-typography-900 text-base font-bold mt-2">Orbit</Text>
+        <Text className="text-typography-400 text-sm mt-0.5">v1.0.0</Text>
       </View>
     </ScrollView>
     </AnimatedTabScreen>

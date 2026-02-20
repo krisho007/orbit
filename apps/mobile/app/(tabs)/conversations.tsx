@@ -27,6 +27,7 @@ import { Conversation } from "../../lib/api";
 import { format } from "date-fns";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
 import { useConversations } from "../../hooks/use-conversations";
+import { HuskyLogo } from "../../components/HuskyLogo";
 
 const MEDIUM_META: Record<
   string,
@@ -173,10 +174,8 @@ export default function ConversationsScreen() {
         <ActivityIndicator size="large" color={getThemeColor(colors, "primary-600")} />
       ) : (
         <>
-          <View className="w-16 h-16 rounded-3xl bg-primary-100 items-center justify-center mb-4">
-            <MessageCircle size={28} color={getThemeColor(colors, "primary-600")} />
-          </View>
-          <Text className="text-typography-900 text-lg font-semibold mb-2">
+          <HuskyLogo size={48} color={getThemeColor(colors, "typography-300")} />
+          <Text className="text-typography-900 text-lg font-semibold mb-2 mt-4">
             {search ? "No conversations found" : "No conversations yet"}
           </Text>
           <Text className="text-typography-500 text-center px-8">

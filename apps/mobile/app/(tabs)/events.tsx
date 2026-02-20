@@ -30,6 +30,7 @@ import { Event } from "../../lib/api";
 import { format, isPast } from "date-fns";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
 import { useEvents } from "../../hooks/use-events";
+import { HuskyLogo } from "../../components/HuskyLogo";
 
 const EVENT_META: Record<
   string,
@@ -192,10 +193,8 @@ export default function EventsScreen() {
         <ActivityIndicator size="large" color={getThemeColor(colors, "primary-600")} />
       ) : (
         <>
-          <View className="w-16 h-16 rounded-3xl bg-primary-100 items-center justify-center mb-4">
-            <CalendarIcon color={getThemeColor(colors, "primary-600")} />
-          </View>
-          <Text className="text-typography-900 text-lg font-semibold mb-2">
+          <HuskyLogo size={48} color={getThemeColor(colors, "typography-300")} />
+          <Text className="text-typography-900 text-lg font-semibold mb-2 mt-4">
             {search ? "No events found" : "No events yet"}
           </Text>
           <Text className="text-typography-500 text-center px-8">

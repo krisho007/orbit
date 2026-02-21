@@ -78,9 +78,10 @@ app.onError((err, c) => {
   return c.json({ error: "Internal server error" }, 500);
 });
 
-// Landing page
+// Landing page (skip if OAuth callback with ?code= so the SPA can handle it)
 const landingHtml = await Bun.file(import.meta.dir + "/landing.html").text();
-app.get("/", (c) => {
+app.get("/", (c, next) => {
+  if (c.req.query("code")) return next();
   return c.html(landingHtml);
 });
 

@@ -399,6 +399,8 @@ export const assistantMessages = pgTable(
     modelName: text("modelName"),
     inputTokens: integer("inputTokens"),
     outputTokens: integer("outputTokens"),
+    thumbsUp: boolean("thumbsUp").default(false).notNull(),
+    thumbsDown: boolean("thumbsDown").default(false).notNull(),
     createdAt: timestamp("createdAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

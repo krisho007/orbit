@@ -48,6 +48,8 @@ import {
   History,
   X,
   Trash2,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react-native";
 import {
   assistantApi,
@@ -73,6 +75,8 @@ import { HuskyLogo } from "../../components/HuskyLogo";
 type Message = ChatMessage & {
   id: string;
   isLoading?: boolean;
+  thumbsUp?: boolean;
+  thumbsDown?: boolean;
 };
 
 type AssistantDraftState = {
@@ -467,6 +471,8 @@ export default function AssistantScreen() {
         role: m.role,
         content: m.content,
         ui: m.ui ?? undefined,
+        thumbsUp: m.thumbsUp,
+        thumbsDown: m.thumbsDown,
       }));
       setMessages(loadedMessages);
       setInput("");
@@ -1100,6 +1106,31 @@ export default function AssistantScreen() {
     return null;
   };
 
+  const handleFeedback = useCallback(
+    (messageId: string, type: "up" | "down") => {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== messageId) return m;
+          if (type === "up") {
+            const newUp = !m.thumbsUp;
+            return { ...m, thumbsUp: newUp, thumbsDown: newUp ? false : m.thumbsDown };
+          }
+          const newDown = !m.thumbsDown;
+          return { ...m, thumbsDown: newDown, thumbsUp: newDown ? false : m.thumbsUp };
+        })
+      );
+      // Fire-and-forget API call — only for persisted messages (server-assigned UUIDs)
+      const msg = messages.find((m) => m.id === messageId);
+      if (!msg) return;
+      const isUp = type === "up";
+      const feedback = isUp
+        ? { thumbsUp: !msg.thumbsUp, thumbsDown: !msg.thumbsUp ? false : msg.thumbsDown }
+        : { thumbsDown: !msg.thumbsDown, thumbsUp: !msg.thumbsDown ? false : msg.thumbsUp };
+      assistantApi.feedbackMessage(messageId, feedback).catch(() => {});
+    },
+    [messages]
+  );
+
   const renderMessage = ({ item }: { item: Message }) => {
     const isUser = item.role === "user";
     const hasContent = item.content && item.content.trim().length > 0;
@@ -1150,6 +1181,38 @@ export default function AssistantScreen() {
                 {item.content}
               </Text>
             </View>
+          </View>
+        )}
+        {!isUser && hasContent && !item.isLoading && (
+          <View className="flex-row items-center ml-14 mt-1 px-4">
+            <Pressable
+              onPress={() => handleFeedback(item.id, "up")}
+              className="w-7 h-7 rounded-lg items-center justify-center active:bg-background-100 mr-0.5"
+            >
+              <ThumbsUp
+                size={13}
+                color={
+                  item.thumbsUp
+                    ? getThemeColor(colors, "primary-600")
+                    : getThemeColor(colors, "typography-400")
+                }
+                fill={item.thumbsUp ? getThemeColor(colors, "primary-600") : "none"}
+              />
+            </Pressable>
+            <Pressable
+              onPress={() => handleFeedback(item.id, "down")}
+              className="w-7 h-7 rounded-lg items-center justify-center active:bg-background-100"
+            >
+              <ThumbsDown
+                size={13}
+                color={
+                  item.thumbsDown
+                    ? getThemeColor(colors, "error-600")
+                    : getThemeColor(colors, "typography-400")
+                }
+                fill={item.thumbsDown ? getThemeColor(colors, "error-600") : "none"}
+              />
+            </Pressable>
           </View>
         )}
         {showUi && (

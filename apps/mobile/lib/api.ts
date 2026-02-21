@@ -524,6 +524,8 @@ export type AssistantConversationDetail = {
     role: "user" | "assistant";
     content: string;
     ui: AssistantUi | null;
+    thumbsUp?: boolean;
+    thumbsDown?: boolean;
     createdAt: string;
   }>;
 };
@@ -553,6 +555,9 @@ export const assistantApi = {
       `/api/assistant/conversations/${id}`,
       { title }
     ),
+
+  feedbackMessage: (messageId: string, feedback: { thumbsUp?: boolean; thumbsDown?: boolean }) =>
+    api.patch<{ success: boolean }>(`/api/assistant/messages/${messageId}/feedback`, feedback),
 };
 
 export const speechApi = {

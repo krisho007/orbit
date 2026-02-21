@@ -374,6 +374,8 @@ app.get("/conversations/:id", async (c) => {
         role: m.role,
         content: m.content,
         ui,
+        thumbsUp: m.thumbsUp,
+        thumbsDown: m.thumbsDown,
         createdAt: m.createdAt.toISOString(),
       };
     }),
@@ -415,6 +417,58 @@ app.patch("/conversations/:id", async (c) => {
     title: updated.title,
     updatedAt: updated.updatedAt.toISOString(),
   });
+});
+
+// PATCH /api/assistant/messages/:id/feedback - Update thumbs up/down on a message
+app.patch("/messages/:id/feedback", async (c) => {
+  const userId = c.get("userId");
+  const id = c.req.param("id");
+  const body = await c.req.json();
+
+  const { thumbsUp, thumbsDown } = body;
+  if (typeof thumbsUp !== "boolean" && typeof thumbsDown !== "boolean") {
+    return c.json({ error: "thumbsUp or thumbsDown (boolean) required" }, 400);
+  }
+
+  // Verify the message belongs to this user via its conversation
+  const [msg] = await db
+    .select({
+      id: assistantMessages.id,
+      convId: assistantMessages.assistantConversationId,
+    })
+    .from(assistantMessages)
+    .where(eq(assistantMessages.id, id))
+    .limit(1);
+
+  if (!msg) {
+    return c.json({ error: "Message not found" }, 404);
+  }
+
+  const [conv] = await db
+    .select({ id: assistantConversations.id })
+    .from(assistantConversations)
+    .where(
+      and(
+        eq(assistantConversations.id, msg.convId),
+        eq(assistantConversations.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (!conv) {
+    return c.json({ error: "Message not found" }, 404);
+  }
+
+  const updates: Record<string, boolean> = {};
+  if (typeof thumbsUp === "boolean") updates.thumbsUp = thumbsUp;
+  if (typeof thumbsDown === "boolean") updates.thumbsDown = thumbsDown;
+
+  await db
+    .update(assistantMessages)
+    .set(updates)
+    .where(eq(assistantMessages.id, id));
+
+  return c.json({ success: true, ...updates });
 });
 
 // DELETE /api/assistant/conversations/:id - Delete conversation and its messages

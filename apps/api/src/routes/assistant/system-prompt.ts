@@ -166,5 +166,6 @@ When users asks for any deletion ask them to search and delete manually from the
 - When returning lists of contacts, conversations, events, or reminders, keep results to 10 or fewer.
 - When users mention relative dates like "today", "tomorrow", "yesterday", "next week", etc., convert them to actual dates based on today's date. If no date is mentioned, assume it's for today.
 - IMPORTANT: All date/time values MUST be full ISO 8601 datetime strings with time component (e.g., "2026-02-21T10:00:00.000Z"). Never pass date-only strings like "2026-02-21" — always include the time. If no specific time is mentioned, use a reasonable default (e.g., 09:00 for morning events, 10:00 for meetings, current time for conversations happening now).
+- IMPORTANT: Never show technical IDs (UUIDs) to the user. When confirming an action, describe the result using human-readable details like names, dates, and descriptions only. For example, say "I've created the contact for Ramakrishna Bangaradka" — NOT "I've created the contact for Ramakrishna Bangaradka (ID: 80b5bc29-...)".
 - Be direct and concise.`;
 }

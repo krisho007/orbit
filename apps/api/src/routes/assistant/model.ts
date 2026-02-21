@@ -17,9 +17,14 @@ export function getProvider(): AIProvider {
   return "google";
 }
 
+export function getModelName(): string {
+  const provider = getProvider();
+  return process.env.AI_MODEL || DEFAULT_MODELS[provider];
+}
+
 export function getModel() {
   const provider = getProvider();
-  const modelName = process.env.AI_MODEL || DEFAULT_MODELS[provider];
+  const modelName = getModelName();
 
   if (provider === "groq") {
     return groq(modelName);

@@ -1,5 +1,5 @@
 import { generateText, InvalidToolInputError, NoSuchToolError } from "ai";
-import { getModel, getProviderApiKeyEnvGuard, getProvider } from "./model";
+import { getModel, getModelName, getProviderApiKeyEnvGuard, getProvider } from "./model";
 import { stepCountIs } from "ai";
 import type { ChatMessage, ToolResult, ToolCallMeta, AssistantUi, AssistantAction, AssistantIntent, StatusCallback } from "./types";
 import { eq, and, desc } from "drizzle-orm";
@@ -112,7 +112,7 @@ export async function processMessageLLM(
   generate: typeof generateText = generateText,
   assistantConversationId?: string,
   onStatus?: StatusCallback
-): Promise<{ text: string; ui: AssistantUi | null; actions?: AssistantAction[]; cachedIntents?: AssistantIntent[] }> {
+): Promise<{ text: string; ui: AssistantUi | null; actions?: AssistantAction[]; cachedIntents?: AssistantIntent[]; modelName?: string; inputTokens?: number; outputTokens?: number }> {
   const apiKeyGuard = getProviderApiKeyEnvGuard();
   if (!apiKeyGuard.configured) {
     return { text: apiKeyGuard.message, ui: null };
@@ -436,7 +436,12 @@ export async function processMessageLLM(
       ]
     : undefined;
 
-  console.log(`[assistant:llm] Final text (${text.length} chars), UI: ${effectiveUi ? effectiveUi.kind : "none"}, actions: ${actions ? actions.length : "none"}`);
+  const modelName = getModelName();
+  const inputTokens = result.usage?.inputTokens;
+  const outputTokens = result.usage?.outputTokens;
 
-  return { text, ui: effectiveUi, actions, cachedIntents: inferredIntents };
+  console.log(`[assistant:llm] Final text (${text.length} chars), UI: ${effectiveUi ? effectiveUi.kind : "none"}, actions: ${actions ? actions.length : "none"}`);
+  console.log(`[assistant:llm] Usage — model: ${modelName}, input: ${inputTokens ?? "n/a"}, output: ${outputTokens ?? "n/a"}`);
+
+  return { text, ui: effectiveUi, actions, cachedIntents: inferredIntents, modelName, inputTokens, outputTokens };
 }

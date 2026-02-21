@@ -154,6 +154,9 @@ app.post("/", async (c) => {
               role: "assistant",
               content: response.text,
               ui: streamUiForStorage,
+              modelName: response.modelName,
+              inputTokens: response.inputTokens,
+              outputTokens: response.outputTokens,
             });
 
             const elapsed = Date.now() - startTime;
@@ -234,6 +237,9 @@ app.post("/", async (c) => {
       role: "assistant",
       content: response.text,
       ui: uiForStorage,
+      modelName: response.modelName,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     });
 
     const elapsed = Date.now() - startTime;

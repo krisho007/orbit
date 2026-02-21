@@ -50,6 +50,27 @@
       "when": 1771350800000,
       "tag": "0006_fix_updated_at_defaults",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1771400000000,
+      "tag": "0007_timestamps_to_timestamptz",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1771450000000,
+      "tag": "0008_add_journal_event_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1771500000000,
+      "tag": "0009_add_assistant_message_token_tracking",
+      "breakpoints": true
     }
   ]
 }

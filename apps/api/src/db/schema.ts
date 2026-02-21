@@ -396,6 +396,9 @@ export const assistantMessages = pgTable(
     role: assistantMessageRoleEnum("role").notNull(),
     content: text("content").notNull(),
     ui: text("ui"),
+    modelName: text("modelName"),
+    inputTokens: integer("inputTokens"),
+    outputTokens: integer("outputTokens"),
     createdAt: timestamp("createdAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

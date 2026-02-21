@@ -75,6 +75,10 @@ app.get("/", (c) => {
   return c.html(landingHtml);
 });
 
+// Privacy policy page
+const privacyHtml = await Bun.file(import.meta.dir + "/privacy.html").text();
+app.get("/privacy", (c) => c.html(privacyHtml));
+
 // Serve Expo Web static files (after API routes)
 // This serves the web UI for all non-API routes
 app.use("*", serveStatic({ root: "./public" }));

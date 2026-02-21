@@ -12,6 +12,7 @@ import {
   events,
 } from "../db";
 import { authMiddleware } from "../middleware/auth";
+import { formatValidationErrors, clampLimit } from "../utils/validation";
 import {
   generateEmbedding,
   generateQueryEmbedding,
@@ -196,7 +197,7 @@ app.get("/by-contacts", async (c) => {
   const cursor = c.req.query("cursor");
   const search = c.req.query("search") || "";
   const medium = c.req.query("medium");
-  const limit = parseInt(c.req.query("limit") || String(PAGE_SIZE));
+  const limit = clampLimit(c.req.query("limit"), PAGE_SIZE);
 
   const contactIds = [
     ...new Set(
@@ -328,7 +329,7 @@ app.get("/", async (c) => {
   const search = c.req.query("search") || "";
   const medium = c.req.query("medium");
   const semantic = c.req.query("semantic") === "true";
-  const limit = parseInt(c.req.query("limit") || String(PAGE_SIZE));
+  const limit = clampLimit(c.req.query("limit"), PAGE_SIZE);
 
   try {
     // Semantic search path
@@ -554,7 +555,7 @@ app.post("/", async (c) => {
 
   const validation = createConversationSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.issues }, 400);
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
   const data = validation.data;
@@ -624,7 +625,7 @@ app.put("/:id", async (c) => {
 
   const validation = updateConversationSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.issues }, 400);
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
   const data = validation.data;

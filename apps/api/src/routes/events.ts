@@ -11,6 +11,7 @@ import {
   conversationParticipants,
 } from "../db";
 import { authMiddleware } from "../middleware/auth";
+import { formatValidationErrors, clampLimit } from "../utils/validation";
 
 const app = new Hono();
 
@@ -60,7 +61,7 @@ app.get("/:id/conversations", async (c) => {
   const cursor = c.req.query("cursor");
   const search = c.req.query("search") || "";
   const medium = c.req.query("medium");
-  const limit = parseInt(c.req.query("limit") || String(PAGE_SIZE));
+  const limit = clampLimit(c.req.query("limit"), PAGE_SIZE);
 
   try {
     const [event] = await db
@@ -184,7 +185,7 @@ app.get("/", async (c) => {
   const cursor = c.req.query("cursor");
   const search = c.req.query("search") || "";
   const eventType = c.req.query("eventType");
-  const limit = parseInt(c.req.query("limit") || String(PAGE_SIZE));
+  const limit = clampLimit(c.req.query("limit"), PAGE_SIZE);
 
   try {
     // Build base query conditions
@@ -346,7 +347,7 @@ app.post("/", async (c) => {
 
   const validation = createEventSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.issues }, 400);
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
   const data = validation.data;
@@ -394,7 +395,7 @@ app.put("/:id", async (c) => {
 
   const validation = updateEventSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.issues }, 400);
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
   const data = validation.data;

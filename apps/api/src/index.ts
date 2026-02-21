@@ -20,10 +20,19 @@ const app = new Hono();
 
 // Middleware
 app.use("*", logger());
+
+const ALLOWED_ORIGINS = (
+  process.env.CORS_ALLOWED_ORIGINS ||
+  "http://localhost:8081,http://localhost:3001,http://localhost:19006,https://orbit-app.fly.dev,https://www.myorbit360.com,https://myorbit360.com"
+).split(",");
+
 app.use(
   "*",
   cors({
-    origin: "*", // Configure for production
+    origin: (origin) => {
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) return origin;
+      return null;
+    },
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     exposeHeaders: ["Content-Length"],

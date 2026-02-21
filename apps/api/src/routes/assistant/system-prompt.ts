@@ -1,5 +1,6 @@
 import type { AssistantIntent, AssistantEnumConfig, UserContext } from "./types";
 import { formatToday } from "./types";
+import { sanitizeForPrompt } from "./sanitize";
 
 export function getIntentGuidance(intent: AssistantIntent): string {
   switch (intent) {
@@ -48,20 +49,24 @@ export function buildSystemPrompt(
 ): string {
   const today = formatToday(new Date());
 
+  const safeUserName = sanitizeForPrompt(userContext.userName || userContext.userEmail);
+  const safeEmail = sanitizeForPrompt(userContext.userEmail, 500);
+  const safeContactName = sanitizeForPrompt(userContext.primaryContactName);
+
   let userSection = "";
   if (userContext.primaryContactId && userContext.primaryContactName) {
     userSection = `
 ## Current User
-The logged-in user is "${userContext.userName || userContext.userEmail}" (email: ${userContext.userEmail}).
-Their contact record in the CRM is: "${userContext.primaryContactName}" (ID: ${userContext.primaryContactId}).
+<user_data>The logged-in user is "${safeUserName}" (email: ${safeEmail}).
+Their contact record in the CRM is: "${safeContactName}" (ID: ${userContext.primaryContactId}).</user_data>
 When the user says "I", "me", "my", "mine", they are referring to this contact.
 For example, "Abhinav is my son" means: create a relationship from the user's contact to Abhinav with type "Son".`;
   } else {
     userSection = `
 ## Current User
-The logged-in user is "${userContext.userName || userContext.userEmail}" (email: ${userContext.userEmail}).
+<user_data>The logged-in user is "${safeUserName}" (email: ${safeEmail}).</user_data>
 IMPORTANT: The user has NOT yet linked their contact record. If the user refers to themselves ("I", "me", "my") in the context of contacts or relationships, you MUST:
-1. Search for contacts matching their name "${userContext.userName || ""}" using query_contacts or search_contacts_fuzzy.
+1. Search for contacts matching their name "${safeUserName}" using query_contacts or search_contacts_fuzzy.
 2. Present the top matches (up to 5) and ask them to confirm which one is them, OR offer to create a new contact for them.
 3. Once they confirm, use the set_my_contact tool to link their contact, so future requests will work seamlessly.
 Do NOT ask for raw IDs — always resolve names to contacts automatically.`;

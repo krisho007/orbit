@@ -9,6 +9,7 @@ import {
   reminders,
 } from "../db";
 import { authMiddleware } from "../middleware/auth";
+import { formatValidationErrors, clampLimit } from "../utils/validation";
 
 const app = new Hono();
 
@@ -132,7 +133,7 @@ app.get("/", async (c) => {
   const dueBefore = c.req.query("dueBefore");
   const dueAfter = c.req.query("dueAfter");
   const contactId = c.req.query("contactId");
-  const limit = parseInt(c.req.query("limit") || String(PAGE_SIZE));
+  const limit = clampLimit(c.req.query("limit"), PAGE_SIZE);
 
   if (status && !reminderStatuses.includes(status as any)) {
     return c.json({ error: "Invalid status" }, 400);
@@ -267,7 +268,7 @@ app.post("/", async (c) => {
 
   const validation = createReminderSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.issues }, 400);
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
   const data = validation.data;
@@ -350,7 +351,7 @@ app.put("/:id", async (c) => {
 
   const validation = updateReminderSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.issues }, 400);
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
   const data = validation.data;

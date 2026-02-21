@@ -169,7 +169,7 @@ export async function updateContactById(
   const [updatedContact] = await db
     .update(contacts)
     .set(updateData)
-    .where(eq(contacts.id, contactId))
+    .where(and(eq(contacts.id, contactId), eq(contacts.userId, userId)))
     .returning({ id: contacts.id, displayName: contacts.displayName });
 
   if (!updatedContact) {
@@ -217,7 +217,7 @@ export async function getContactDetails(
   const [fullContact] = await db
     .select()
     .from(contacts)
-    .where(eq(contacts.id, resolvedId));
+    .where(and(eq(contacts.id, resolvedId), eq(contacts.userId, userId)));
 
   if (!fullContact) {
     return {
@@ -235,18 +235,18 @@ export async function getContactDetails(
     .innerJoin(tags, eq(contactTags.tagId, tags.id))
     .where(eq(contactTags.contactId, resolvedId));
 
-  // Get relationships
+  // Get relationships (with userId filter on joined contacts for defense-in-depth)
   const relationshipsFrom = await db
     .select()
     .from(relationships)
-    .innerJoin(contacts, eq(relationships.toContactId, contacts.id))
+    .innerJoin(contacts, and(eq(relationships.toContactId, contacts.id), eq(contacts.userId, userId)))
     .innerJoin(relationshipTypes, eq(relationships.typeId, relationshipTypes.id))
     .where(eq(relationships.fromContactId, resolvedId));
 
   const relationshipsTo = await db
     .select()
     .from(relationships)
-    .innerJoin(contacts, eq(relationships.fromContactId, contacts.id))
+    .innerJoin(contacts, and(eq(relationships.fromContactId, contacts.id), eq(contacts.userId, userId)))
     .innerJoin(relationshipTypes, eq(relationships.typeId, relationshipTypes.id))
     .where(eq(relationships.toContactId, resolvedId));
 

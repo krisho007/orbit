@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { eq, and, desc, asc, lt } from "drizzle-orm";
 import { authMiddleware } from "../../middleware/auth";
+import { formatValidationErrors } from "../../utils/validation";
 import type { ChatMessage } from "./types";
 import { chatSchema } from "./types";
 import { processMessageLLM } from "./process-message";
@@ -26,8 +27,8 @@ async function validateAndSetup(c: any) {
 
   const validation = chatSchema.safeParse(body);
   if (!validation.success) {
-    console.warn("[assistant] Invalid request body:", JSON.stringify(validation.error.issues));
-    return { error: c.json({ error: validation.error.issues }, 400) };
+    console.warn("[assistant] Invalid request body");
+    return { error: c.json({ error: formatValidationErrors(validation.error) }, 400) };
   }
 
   const { messages, conversationId } = validation.data;
@@ -466,7 +467,12 @@ app.patch("/messages/:id/feedback", async (c) => {
   await db
     .update(assistantMessages)
     .set(updates)
-    .where(eq(assistantMessages.id, id));
+    .where(
+      and(
+        eq(assistantMessages.id, id),
+        eq(assistantMessages.assistantConversationId, conv.id)
+      )
+    );
 
   return c.json({ success: true, ...updates });
 });

@@ -21,6 +21,7 @@ import {
   relationshipTypes,
 } from "../db";
 import { authMiddleware } from "../middleware/auth";
+import { formatValidationErrors } from "../utils/validation";
 
 const app = new Hono();
 
@@ -83,7 +84,7 @@ app.put("/me/contact", async (c) => {
 
   const validation = schema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.issues }, 400);
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
   const { contactId } = validation.data;
@@ -155,7 +156,7 @@ app.put("/me/consent", async (c) => {
 
   const validation = consentSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.issues }, 400);
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
   const { aiConsent, sttConsent } = validation.data;

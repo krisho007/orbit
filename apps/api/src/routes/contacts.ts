@@ -18,6 +18,7 @@ import {
   eventParticipants,
 } from "../db";
 import { authMiddleware } from "../middleware/auth";
+import { formatValidationErrors, clampLimit } from "../utils/validation";
 
 const app = new Hono();
 
@@ -278,7 +279,7 @@ app.get("/", async (c) => {
   const userId = c.get("userId");
   const cursor = c.req.query("cursor");
   const search = c.req.query("search") || "";
-  const limit = parseInt(c.req.query("limit") || String(PAGE_SIZE));
+  const limit = clampLimit(c.req.query("limit"), PAGE_SIZE);
 
   console.log("[Contacts] Fetching for userId:", userId);
 
@@ -672,7 +673,7 @@ app.post("/google/fetch", async (c) => {
   const body = await c.req.json();
   const validation = fetchGoogleContactsSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.issues }, 400);
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
   const { accessToken, includePhotos } = validation.data;
@@ -787,7 +788,7 @@ app.post("/google/import/batch", async (c) => {
 
   const validation = importGoogleContactsBatchSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.issues }, 400);
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
   const { contacts: incomingContacts, overrideExisting } = validation.data;
@@ -1058,7 +1059,7 @@ app.get("/:id/conversations", async (c) => {
   const cursor = c.req.query("cursor");
   const search = c.req.query("search") || "";
   const medium = c.req.query("medium");
-  const limit = parseInt(c.req.query("limit") || String(PAGE_SIZE));
+  const limit = clampLimit(c.req.query("limit"), PAGE_SIZE);
 
   try {
     const [contact] = await db
@@ -1169,7 +1170,7 @@ app.get("/:id/events", async (c) => {
   const cursor = c.req.query("cursor");
   const search = c.req.query("search") || "";
   const eventType = c.req.query("eventType");
-  const limit = parseInt(c.req.query("limit") || String(PAGE_SIZE));
+  const limit = clampLimit(c.req.query("limit"), PAGE_SIZE);
 
   try {
     const [contact] = await db
@@ -1334,7 +1335,7 @@ app.post("/", async (c) => {
 
   const validation = createContactSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.issues }, 400);
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
   const data = validation.data;
@@ -1385,7 +1386,7 @@ app.put("/:id", async (c) => {
 
   const validation = updateContactSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.issues }, 400);
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
   const data = validation.data;
@@ -1475,7 +1476,7 @@ app.post("/:id/images", async (c) => {
   const validation = addImageSchema.safeParse(body);
 
   if (!validation.success) {
-    return c.json({ error: validation.error.issues }, 400);
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
   try {
@@ -1516,7 +1517,7 @@ app.post("/:id/images/upload", async (c) => {
   const validation = uploadImageSchema.safeParse(body);
 
   if (!validation.success) {
-    return c.json({ error: validation.error.issues }, 400);
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
   try {
@@ -1656,7 +1657,7 @@ app.delete("/:id/images/:imageId", async (c) => {
 app.get("/search/fuzzy", async (c) => {
   const userId = c.get("userId");
   const name = c.req.query("name") || "";
-  const limit = parseInt(c.req.query("limit") || "10");
+  const limit = clampLimit(c.req.query("limit"), 10);
 
   if (!name) {
     return c.json({ contacts: [] });

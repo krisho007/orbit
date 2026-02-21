@@ -4,6 +4,7 @@ import { z } from "zod";
 import { eq, and, asc, sql, inArray } from "drizzle-orm";
 import { db, tags, contactTags } from "../db";
 import { authMiddleware } from "../middleware/auth";
+import { formatValidationErrors } from "../utils/validation";
 
 const app = new Hono();
 
@@ -96,7 +97,7 @@ app.post("/", async (c) => {
 
   const validation = createTagSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.issues }, 400);
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
   const data = validation.data;
@@ -136,7 +137,7 @@ app.put("/:id", async (c) => {
 
   const validation = updateTagSchema.safeParse(body);
   if (!validation.success) {
-    return c.json({ error: validation.error.issues }, 400);
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
   const data = validation.data;

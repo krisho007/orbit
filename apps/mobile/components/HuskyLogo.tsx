@@ -14,7 +14,7 @@ const ICON_PATH =
 export function HuskyLogo({ size = 100, color = "#115E59" }: Props) {
   // Original viewBox: 400x400 (the logo path is within ~200x260 centered at ~200,200)
   return (
-    <Svg width={size} height={size} viewBox="80 60 260 280">
+    <Svg width={size} height={size} viewBox="62 62 276 276">
       <Path d={ICON_PATH} fill={color} />
     </Svg>
   );

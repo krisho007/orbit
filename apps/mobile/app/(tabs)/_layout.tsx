@@ -21,9 +21,10 @@ import { HeaderMenu } from "../../components/header-menu";
 type TabIconProps = {
   focused: boolean;
   icon: ComponentType<{ size?: number; color?: string }>;
+  iconSize?: number;
 };
 
-function TabIcon({ focused, icon: Icon }: TabIconProps) {
+function TabIcon({ focused, icon: Icon, iconSize = 22 }: TabIconProps) {
   const colors = useThemeColors();
   const iconColor = focused
     ? getThemeColor(colors, "primary-600")
@@ -76,7 +77,7 @@ function TabIcon({ focused, icon: Icon }: TabIconProps) {
           ]}
         />
         <Animated.View style={iconAnimStyle}>
-          <Icon size={22} color={iconColor} />
+          <Icon size={iconSize} color={iconColor} />
         </Animated.View>
       </View>
       <Animated.View
@@ -138,7 +139,7 @@ export default function TabsLayout() {
           ),
           headerTitle: () => null,
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={HuskyLogo} />
+            <TabIcon focused={focused} icon={HuskyLogo} iconSize={24} />
           ),
         }}
       />

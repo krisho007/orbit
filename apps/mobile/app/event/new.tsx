@@ -16,43 +16,46 @@ import { format } from "date-fns";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import {
   Contact,
-  ConversationMedium,
+  EventType,
   contactsApi,
 } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
-import { useCreateConversation } from "../../hooks/use-conversations";
+import { useCreateEvent } from "../../hooks/use-events";
 
-const MEDIUM_OPTIONS: { value: ConversationMedium; label: string }[] = [
-  { value: "PHONE_CALL", label: "Phone Call" },
-  { value: "WHATSAPP", label: "WhatsApp" },
-  { value: "EMAIL", label: "Email" },
-  { value: "CHANCE_ENCOUNTER", label: "Chance Encounter" },
-  { value: "ONLINE_MEETING", label: "Online Meeting" },
-  { value: "IN_PERSON_MEETING", label: "In-Person Meeting" },
+const EVENT_TYPE_OPTIONS: { value: EventType; label: string }[] = [
+  { value: "MEETING", label: "Meeting" },
+  { value: "CALL", label: "Call" },
+  { value: "BIRTHDAY", label: "Birthday" },
+  { value: "ANNIVERSARY", label: "Anniversary" },
+  { value: "CONFERENCE", label: "Conference" },
+  { value: "SOCIAL", label: "Social" },
+  { value: "FAMILY_EVENT", label: "Family Event" },
   { value: "OTHER", label: "Other" },
 ];
 
-export default function NewConversationScreen() {
+export default function NewEventScreen() {
   const router = useRouter();
   const { contactId } = useLocalSearchParams<{ contactId?: string }>();
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
-  const createConversation = useCreateConversation();
+  const createEvent = useCreateEvent();
   const [contactSearch, setContactSearch] = useState("");
   const [isSearchingContacts, setIsSearchingContacts] = useState(false);
   const [contactResults, setContactResults] = useState<Contact[]>([]);
   const [selectedParticipants, setSelectedParticipants] = useState<Contact[]>([]);
 
-  const [happenedAt, setHappenedAt] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [followUpAt, setFollowUpAt] = useState<Date | null>(null);
-  const [showFollowUpDatePicker, setShowFollowUpDatePicker] = useState(false);
-  const [showFollowUpTimePicker, setShowFollowUpTimePicker] = useState(false);
+  const [startAt, setStartAt] = useState(new Date(Date.now() + 60 * 60 * 1000));
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [endAt, setEndAt] = useState<Date | null>(null);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
   const [formData, setFormData] = useState({
-    content: "",
-    medium: "OTHER" as ConversationMedium,
+    title: "",
+    description: "",
+    eventType: "OTHER" as EventType,
+    location: "",
   });
 
   useEffect(() => {
@@ -91,43 +94,50 @@ export default function NewConversationScreen() {
     setContactResults([]);
   };
 
-  const removeParticipant = (id: string) => {
-    setSelectedParticipants((prev) => prev.filter((p) => p.id !== id));
+  const removeParticipant = (contactId: string) => {
+    setSelectedParticipants((prev) => prev.filter((p) => p.id !== contactId));
   };
 
-  const onDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
-    if (Platform.OS === "android") setShowDatePicker(false);
-    if (selected) setHappenedAt(selected);
+  const onStartDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setShowStartDatePicker(false);
+    if (selected) setStartAt(selected);
   };
 
-  const onTimeChange = (_event: DateTimePickerEvent, selected?: Date) => {
-    if (Platform.OS === "android") setShowTimePicker(false);
-    if (selected) setHappenedAt(selected);
+  const onStartTimeChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setShowStartTimePicker(false);
+    if (selected) setStartAt(selected);
   };
 
-  const onFollowUpDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
-    if (Platform.OS === "android") setShowFollowUpDatePicker(false);
-    if (selected) setFollowUpAt(selected);
+  const onEndDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setShowEndDatePicker(false);
+    if (selected) setEndAt(selected);
   };
 
-  const onFollowUpTimeChange = (_event: DateTimePickerEvent, selected?: Date) => {
-    if (Platform.OS === "android") setShowFollowUpTimePicker(false);
-    if (selected) setFollowUpAt(selected);
+  const onEndTimeChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setShowEndTimePicker(false);
+    if (selected) setEndAt(selected);
   };
 
   const handleSubmit = async () => {
+    if (!formData.title.trim()) {
+      Alert.alert("Error", "Title is required");
+      return;
+    }
+
     try {
-      const created = await createConversation.mutateAsync({
-        content: formData.content.trim() || undefined,
-        medium: formData.medium,
-        happenedAt: happenedAt.toISOString(),
-        followUpAt: followUpAt?.toISOString() || undefined,
-        participantIds: selectedParticipants.map((p) => p.id),
+      const created = await createEvent.mutateAsync({
+        title: formData.title.trim(),
+        description: formData.description.trim() || undefined,
+        eventType: formData.eventType,
+        startAt: startAt.toISOString(),
+        endAt: endAt?.toISOString() || undefined,
+        location: formData.location.trim() || undefined,
+        participantIds: selectedParticipants.length > 0 ? selectedParticipants.map((p) => p.id) : undefined,
       });
-      router.replace(`/conversation/${created.id}`);
+      router.replace(`/event/${created.id}`);
     } catch (error) {
-      console.error("Failed to create conversation:", error);
-      Alert.alert("Error", "Failed to create conversation");
+      console.error("Failed to create event:", error);
+      Alert.alert("Error", "Failed to create event");
     }
   };
 
@@ -137,14 +147,14 @@ export default function NewConversationScreen() {
         <Pressable onPress={() => router.back()} className="p-2">
           <Text className="text-primary-600 text-base">Cancel</Text>
         </Pressable>
-        <Text className="text-lg font-semibold text-typography-900">New Conversation</Text>
-        <Pressable onPress={handleSubmit} disabled={createConversation.isPending} className="p-2">
+        <Text className="text-lg font-semibold text-typography-900">New Event</Text>
+        <Pressable onPress={handleSubmit} disabled={createEvent.isPending} className="p-2">
           <Text
             className={`text-base ${
-              createConversation.isPending ? "text-typography-400" : "text-primary-600"
+              createEvent.isPending ? "text-typography-400" : "text-primary-600"
             }`}
           >
-            {createConversation.isPending ? "Saving..." : "Save"}
+            {createEvent.isPending ? "Saving..." : "Save"}
           </Text>
         </Pressable>
       </View>
@@ -155,14 +165,25 @@ export default function NewConversationScreen() {
       >
       <ScrollView className="flex-1 px-4 py-6" keyboardShouldPersistTaps="handled">
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Medium *</Text>
+          <Text className="text-typography-700 text-sm font-medium mb-2">Title *</Text>
+          <TextInput
+            className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
+            placeholder="Event title"
+            placeholderTextColor={placeholderColor}
+            value={formData.title}
+            onChangeText={(text) => setFormData({ ...formData, title: text })}
+          />
+        </View>
+
+        <View className="mb-4">
+          <Text className="text-typography-700 text-sm font-medium mb-2">Type</Text>
           <View className="flex-row flex-wrap">
-            {MEDIUM_OPTIONS.map((option) => {
-              const isActive = formData.medium === option.value;
+            {EVENT_TYPE_OPTIONS.map((option) => {
+              const isActive = formData.eventType === option.value;
               return (
                 <Pressable
                   key={option.value}
-                  onPress={() => setFormData({ ...formData, medium: option.value })}
+                  onPress={() => setFormData({ ...formData, eventType: option.value })}
                   className={`px-3 py-1.5 rounded-full mr-2 mb-2 border ${
                     isActive
                       ? "bg-primary-100 border-primary-300"
@@ -183,107 +204,118 @@ export default function NewConversationScreen() {
         </View>
 
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Date *</Text>
+          <Text className="text-typography-700 text-sm font-medium mb-2">Start *</Text>
           <View className="flex-row">
             <Pressable
-              onPress={() => setShowDatePicker(true)}
+              onPress={() => setShowStartDatePicker(true)}
               className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
             >
               <Text className="text-typography-900 text-base">
-                {format(happenedAt, "MMM d, yyyy")}
+                {format(startAt, "MMM d, yyyy")}
               </Text>
             </Pressable>
             <Pressable
-              onPress={() => setShowTimePicker(true)}
+              onPress={() => setShowStartTimePicker(true)}
               className="px-4 py-3 bg-background-50 rounded-lg border border-border-200"
             >
               <Text className="text-typography-900 text-base">
-                {format(happenedAt, "HH:mm")}
+                {format(startAt, "HH:mm")}
               </Text>
             </Pressable>
           </View>
-          {showDatePicker && (
+          {showStartDatePicker && (
             <DateTimePicker
-              value={happenedAt}
+              value={startAt}
               mode="date"
               display={Platform.OS === "ios" ? "inline" : "default"}
-              onChange={onDateChange}
+              onChange={onStartDateChange}
             />
           )}
-          {showTimePicker && (
+          {showStartTimePicker && (
             <DateTimePicker
-              value={happenedAt}
+              value={startAt}
               mode="time"
               display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={onTimeChange}
+              onChange={onStartTimeChange}
             />
           )}
         </View>
 
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Follow-up Date</Text>
-          {followUpAt ? (
+          <Text className="text-typography-700 text-sm font-medium mb-2">End</Text>
+          {endAt ? (
             <View className="flex-row items-center">
               <Pressable
-                onPress={() => setShowFollowUpDatePicker(true)}
+                onPress={() => setShowEndDatePicker(true)}
                 className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
               >
                 <Text className="text-typography-900 text-base">
-                  {format(followUpAt, "MMM d, yyyy")}
+                  {format(endAt, "MMM d, yyyy")}
                 </Text>
               </Pressable>
               <Pressable
-                onPress={() => setShowFollowUpTimePicker(true)}
+                onPress={() => setShowEndTimePicker(true)}
                 className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 mr-2"
               >
                 <Text className="text-typography-900 text-base">
-                  {format(followUpAt, "HH:mm")}
+                  {format(endAt, "HH:mm")}
                 </Text>
               </Pressable>
-              <Pressable onPress={() => setFollowUpAt(null)} className="p-2">
+              <Pressable onPress={() => setEndAt(null)} className="p-2">
                 <Text className="text-error-600 text-sm font-medium">Clear</Text>
               </Pressable>
             </View>
           ) : (
             <Pressable
               onPress={() => {
-                setFollowUpAt(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
-                setShowFollowUpDatePicker(true);
+                setEndAt(new Date(startAt.getTime() + 60 * 60 * 1000));
+                setShowEndDatePicker(true);
               }}
               className="px-4 py-3 bg-background-50 rounded-lg border border-border-200"
             >
-              <Text className="text-typography-500 text-base">Set follow-up date (optional)</Text>
+              <Text className="text-typography-500 text-base">Set end time (optional)</Text>
             </Pressable>
           )}
-          {showFollowUpDatePicker && followUpAt && (
+          {showEndDatePicker && endAt && (
             <DateTimePicker
-              value={followUpAt}
+              value={endAt}
               mode="date"
               display={Platform.OS === "ios" ? "inline" : "default"}
-              onChange={onFollowUpDateChange}
+              onChange={onEndDateChange}
             />
           )}
-          {showFollowUpTimePicker && followUpAt && (
+          {showEndTimePicker && endAt && (
             <DateTimePicker
-              value={followUpAt}
+              value={endAt}
               mode="time"
               display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={onFollowUpTimeChange}
+              onChange={onEndTimeChange}
             />
           )}
+        </View>
+
+        <View className="mb-4">
+          <Text className="text-typography-700 text-sm font-medium mb-2">Location</Text>
+          <TextInput
+            className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
+            placeholder="Event location"
+            placeholderTextColor={placeholderColor}
+            value={formData.location}
+            onChangeText={(text) => setFormData({ ...formData, location: text })}
+          />
         </View>
 
         <View className="mb-4">
           <Text className="text-typography-700 text-sm font-medium mb-2">Notes</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
-            style={{ minHeight: 160 }}
-            placeholder="Conversation notes..."
+            style={{ minHeight: 120 }}
+            placeholder="Event notes..."
             placeholderTextColor={placeholderColor}
-            value={formData.content}
-            onChangeText={(text) => setFormData({ ...formData, content: text })}
+            value={formData.description}
+            onChangeText={(text) => setFormData({ ...formData, description: text })}
             multiline
-            numberOfLines={10}
+            numberOfLines={6}
             textAlignVertical="top"
           />
         </View>

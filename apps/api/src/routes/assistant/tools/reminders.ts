@@ -315,7 +315,7 @@ export function createReminderTools(userId: string, schemas: { optionalReminderS
       inputSchema: z.object({
         title: z.string().optional().describe("Reminder title"),
         notes: z.string().optional().describe("Reminder notes"),
-        dueAt: z.string().describe("Due date/time in ISO format"),
+        dueAt: z.string().describe("Due date/time as full ISO 8601 datetime, e.g. 2026-02-21T09:00:00.000Z"),
         status: schemas.optionalReminderStatusSchema.describe("Reminder status"),
         conversationId: z.string().optional().describe("Linked conversation id"),
         participantIds: z.array(z.string()).optional().describe("Participant contact ids"),
@@ -330,7 +330,7 @@ export function createReminderTools(userId: string, schemas: { optionalReminderS
         reminderId: z.string().describe("Reminder id"),
         title: z.string().optional().describe("Reminder title"),
         notes: z.string().optional().describe("Reminder notes"),
-        dueAt: z.string().optional().describe("Due date/time in ISO format"),
+        dueAt: z.string().optional().describe("Due date/time as full ISO 8601 datetime, e.g. 2026-02-21T09:00:00.000Z"),
         status: schemas.optionalReminderStatusSchema.describe("Reminder status"),
         conversationId: z.string().optional().describe("Linked conversation id"),
         participantIds: z.array(z.string()).optional().describe("Participant contact ids"),

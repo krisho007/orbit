@@ -154,11 +154,13 @@ export const createContactAllowedFields = new Set([
 
 // ── Date formatting ──────────────────────────────────────────────────
 export function formatToday(date: Date): string {
-  return date.toLocaleDateString("en-US", {
+  const datePart = date.toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
     timeZone: "UTC",
   });
+  const iso = date.toISOString();
+  return `${datePart} (ISO: ${iso})`;
 }

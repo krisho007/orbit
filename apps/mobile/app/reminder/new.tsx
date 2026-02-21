@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -166,7 +167,11 @@ export default function NewReminderScreen() {
         </Pressable>
       </View>
 
-      <ScrollView className="flex-1 px-4 py-6">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        className="flex-1"
+      >
+      <ScrollView className="flex-1 px-4 py-6" keyboardShouldPersistTaps="handled">
         <View className="mb-4">
           <Text className="text-typography-700 text-sm font-medium mb-2">Title *</Text>
           <TextInput
@@ -411,6 +416,7 @@ export default function NewReminderScreen() {
           )}
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

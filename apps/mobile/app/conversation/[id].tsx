@@ -170,14 +170,9 @@ export default function ConversationDetailScreen() {
           <Text className="text-2xl font-bold text-typography-900 mb-1">
             {medium.label}
           </Text>
-          <Text className="text-typography-500 text-base mb-1">
+          <Text className="text-typography-500 text-base">
             {happenedAtLabel}
           </Text>
-          {participants.length > 0 && (
-            <Text className="text-typography-600 text-sm text-center px-4 mt-1">
-              {participants.join(", ")}
-            </Text>
-          )}
         </View>
 
         {/* Consolidated Details Card */}
@@ -206,7 +201,7 @@ export default function ConversationDetailScreen() {
                     <StickyNote size={16} color={getThemeColor(colors, "typography-400")} />
                     <View className="ml-3 flex-1">
                       <Text className="text-typography-400 text-xs">Notes</Text>
-                      <Text className="text-typography-900 text-base" numberOfLines={3}>
+                      <Text className="text-typography-900 text-base">
                         {conversation.content}
                       </Text>
                     </View>

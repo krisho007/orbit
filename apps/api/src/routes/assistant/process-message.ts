@@ -398,6 +398,7 @@ export async function processMessageLLM(
       typeof toolResult.output === "object" &&
       toolResult.output.type === "contact_created"
   );
+  let contactCreationFailed = false;
   if (createContactCalls.length > 0 && !contactCreated) {
     // Only override text if no other mutations succeeded (e.g. event/conversation created).
     // In multi-intent flows, other actions may have completed; keep the LLM's summary.
@@ -412,6 +413,7 @@ export async function processMessageLLM(
     if (!hasOtherSuccessfulMutations) {
       const lastUserText = messages[messages.length - 1]?.content || "";
       text = buildCreateContactFailureText(lastUserText, createContactCalls, toolResults);
+      contactCreationFailed = true;
     }
   }
 
@@ -422,8 +424,10 @@ export async function processMessageLLM(
     /\b(going to|will|plan to|about to|shall I|would you like me to|want me to|should I|ready to)\b/i.test(result.text) &&
     /\b(go ahead|confirm|proceed|changes|create|log|add|set up|schedule|save)\b/i.test(result.text);
 
+  // Don't show confirmation buttons when the response is a failure/error message
+  // asking the user for more information (e.g. contact creation failed).
   const shouldShowConfirmationButtons =
-    confirmationRequired && (hasConfirmationProposal || textIndicatesPlan);
+    confirmationRequired && !contactCreationFailed && (hasConfirmationProposal || textIndicatesPlan);
 
   const actions: AssistantAction[] | undefined = shouldShowConfirmationButtons
     ? [

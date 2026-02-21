@@ -295,6 +295,9 @@ app.get("/", async (c) => {
           COALESCE(word_similarity(${search}, ${contacts.company}), 0)
         )
       `;
+      // For search, cursor is a numeric offset (stringified) since results
+      // are ordered by similarity score which isn't suitable for keyset pagination.
+      const offset = cursor ? parseInt(cursor, 10) || 0 : 0;
       contactsList = await db
         .select({
           id: contacts.id,
@@ -328,6 +331,7 @@ app.get("/", async (c) => {
           )
         )
         .orderBy(desc(similarityExpr))
+        .offset(offset)
         .limit(limit + 1);
     } else {
       // Regular paginated list
@@ -356,10 +360,16 @@ app.get("/", async (c) => {
     // Check if there are more results
     let nextCursor: string | null = null;
     const results = contactsList;
-    
+
     if (results.length > limit) {
       const nextItem = results.pop();
-      nextCursor = nextItem?.id || null;
+      if (search) {
+        // For search, cursor is a numeric offset since results are ranked by similarity
+        const currentOffset = cursor ? parseInt(cursor, 10) || 0 : 0;
+        nextCursor = String(currentOffset + limit);
+      } else {
+        nextCursor = nextItem?.id || null;
+      }
     }
 
     // Get tags and images for each contact

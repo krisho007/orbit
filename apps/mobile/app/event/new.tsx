@@ -30,6 +30,7 @@ const EVENT_TYPE_OPTIONS: { value: EventType; label: string }[] = [
   { value: "CONFERENCE", label: "Conference" },
   { value: "SOCIAL", label: "Social" },
   { value: "FAMILY_EVENT", label: "Family Event" },
+  { value: "JOURNAL", label: "Journal" },
   { value: "OTHER", label: "Other" },
 ];
 

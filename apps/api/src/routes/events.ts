@@ -37,6 +37,7 @@ const eventTypes = [
   "CONFERENCE",
   "SOCIAL",
   "FAMILY_EVENT",
+  "JOURNAL",
   "OTHER",
 ] as const;
 

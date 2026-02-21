@@ -761,6 +761,7 @@ export type EventType =
   | "CONFERENCE"
   | "SOCIAL"
   | "FAMILY_EVENT"
+  | "JOURNAL"
   | "OTHER";
 
 export type Event = {

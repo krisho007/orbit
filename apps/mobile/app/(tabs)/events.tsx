@@ -19,6 +19,7 @@ import {
   Mic,
   PartyPopper,
   Users,
+  BookOpen,
   Bookmark,
   CalendarDays,
   MapPin,
@@ -43,6 +44,7 @@ const EVENT_META: Record<
   CONFERENCE: { label: "Conference", icon: Mic },
   SOCIAL: { label: "Social", icon: PartyPopper },
   FAMILY_EVENT: { label: "Family Event", icon: Users },
+  JOURNAL: { label: "Journal", icon: BookOpen },
   OTHER: { label: "Other", icon: Bookmark },
 };
 

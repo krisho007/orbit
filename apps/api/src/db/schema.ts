@@ -39,6 +39,7 @@ export const eventTypeEnum = pgEnum("EventType", [
   "CONFERENCE",
   "SOCIAL",
   "FAMILY_EVENT",
+  "JOURNAL",
   "OTHER",
 ]);
 

@@ -62,17 +62,18 @@ describe("processMessageLLM", () => {
       }
 
       expect(response.ui.cards).toHaveLength(1);
-      expect(response.ui.cards[0].kind).toBe("contact");
-      if (response.ui.cards[0].kind !== "contact") {
+      const card = response.ui.cards[0]!;
+      expect(card.kind).toBe("contact");
+      if (card.kind !== "contact") {
         throw new Error("Expected contact card");
       }
 
-      expect(response.ui.cards[0].contact.displayName).toBe("John Doe");
-      expect(response.ui.cards[0].contact.primaryPhone).toBe("+1 555 123 4567");
-      expect(response.ui.cards[0].contact.primaryEmail).toBe("john@example.com");
-      expect(response.ui.cards[0].contact.company).toBe("Acme Corp");
-      expect(response.ui.cards[0].contact.jobTitle).toBe("Engineer");
-      expect(response.ui.cards[0].contact.location).toBe("San Francisco");
+      expect(card.contact.displayName).toBe("John Doe");
+      expect(card.contact.primaryPhone).toBe("+1 555 123 4567");
+      expect(card.contact.primaryEmail).toBe("john@example.com");
+      expect(card.contact.company).toBe("Acme Corp");
+      expect(card.contact.jobTitle).toBe("Engineer");
+      expect(card.contact.location).toBe("San Francisco");
     });
 
     it("creates a contact with minimal fields (name only)", async () => {
@@ -101,16 +102,17 @@ describe("processMessageLLM", () => {
       }
 
       expect(response.ui.cards).toHaveLength(1);
-      if (response.ui.cards[0].kind !== "contact") {
+      const card = response.ui.cards[0]!;
+      if (card.kind !== "contact") {
         throw new Error("Expected contact card");
       }
 
-      expect(response.ui.cards[0].contact.displayName).toBe("Jane");
-      expect(response.ui.cards[0].contact.primaryPhone).toBeNull();
-      expect(response.ui.cards[0].contact.primaryEmail).toBeNull();
-      expect(response.ui.cards[0].contact.company).toBeNull();
-      expect(response.ui.cards[0].contact.jobTitle).toBeNull();
-      expect(response.ui.cards[0].contact.location).toBeNull();
+      expect(card.contact.displayName).toBe("Jane");
+      expect(card.contact.primaryPhone).toBeNull();
+      expect(card.contact.primaryEmail).toBeNull();
+      expect(card.contact.company).toBeNull();
+      expect(card.contact.jobTitle).toBeNull();
+      expect(card.contact.location).toBeNull();
     });
 
     it("searches contacts and returns a contacts list", async () => {
@@ -159,8 +161,8 @@ describe("processMessageLLM", () => {
 
       expect(response.ui.count).toBe(2);
       expect(response.ui.contacts).toHaveLength(2);
-      expect(response.ui.contacts[0].displayName).toBe("Alice Smith");
-      expect(response.ui.contacts[1].displayName).toBe("Bob Johnson");
+      expect(response.ui.contacts[0]!.displayName).toBe("Alice Smith");
+      expect(response.ui.contacts[1]!.displayName).toBe("Bob Johnson");
     });
 
     it("returns empty contacts list when no matches found", async () => {
@@ -263,15 +265,16 @@ describe("processMessageLLM", () => {
       }
 
       expect(response.ui.cards).toHaveLength(1);
-      expect(response.ui.cards[0].kind).toBe("conversation");
-      if (response.ui.cards[0].kind !== "conversation") {
+      const card = response.ui.cards[0]!;
+      expect(card.kind).toBe("conversation");
+      if (card.kind !== "conversation") {
         throw new Error("Expected conversation card");
       }
 
-      expect(response.ui.cards[0].conversation.medium).toBe("PHONE_CALL");
-      expect(response.ui.cards[0].conversation.happenedAt).toBe("2026-02-09T10:00:00.000Z");
-      expect(response.ui.cards[0].conversation.content).toBe("Discussed project timeline");
-      expect(response.ui.cards[0].conversation.participants).toEqual(["Alice", "Bob"]);
+      expect(card.conversation.medium).toBe("PHONE_CALL");
+      expect(card.conversation.happenedAt).toBe("2026-02-09T10:00:00.000Z");
+      expect(card.conversation.content).toBe("Discussed project timeline");
+      expect(card.conversation.participants).toEqual(["Alice", "Bob"]);
     });
 
     it("searches conversations and returns a conversations list", async () => {
@@ -316,8 +319,8 @@ describe("processMessageLLM", () => {
 
       expect(response.ui.count).toBe(2);
       expect(response.ui.conversations).toHaveLength(2);
-      expect(response.ui.conversations[0].medium).toBe("EMAIL");
-      expect(response.ui.conversations[1].medium).toBe("WHATSAPP");
+      expect(response.ui.conversations[0]!.medium).toBe("EMAIL");
+      expect(response.ui.conversations[1]!.medium).toBe("WHATSAPP");
     });
 
     it("creates a conversation with followUp and returns card", async () => {
@@ -349,11 +352,12 @@ describe("processMessageLLM", () => {
       }
 
       expect(response.ui.cards).toHaveLength(1);
-      if (response.ui.cards[0].kind !== "conversation") {
+      const card = response.ui.cards[0]!;
+      if (card.kind !== "conversation") {
         throw new Error("Expected conversation card");
       }
 
-      expect(response.ui.cards[0].conversation.content).toBe("Discussed Q1 goals");
+      expect(card.conversation.content).toBe("Discussed Q1 goals");
     });
 
     it("returns empty conversations list when no matches found", async () => {
@@ -421,15 +425,16 @@ describe("processMessageLLM", () => {
       }
 
       expect(response.ui.cards).toHaveLength(1);
-      expect(response.ui.cards[0].kind).toBe("event");
-      if (response.ui.cards[0].kind !== "event") {
+      const card = response.ui.cards[0]!;
+      expect(card.kind).toBe("event");
+      if (card.kind !== "event") {
         throw new Error("Expected event card");
       }
 
-      expect(response.ui.cards[0].event.title).toBe("Team Meeting");
-      expect(response.ui.cards[0].event.startAt).toBe("2026-02-15T10:00:00.000Z");
-      expect(response.ui.cards[0].event.location).toBe("Conference Room A");
-      expect(response.ui.cards[0].event.participants).toEqual(["Alice", "Bob", "Charlie"]);
+      expect(card.event.title).toBe("Team Meeting");
+      expect(card.event.startAt).toBe("2026-02-15T10:00:00.000Z");
+      expect(card.event.location).toBe("Conference Room A");
+      expect(card.event.participants).toEqual(["Alice", "Bob", "Charlie"]);
     });
 
     it("searches events and returns an events list", async () => {
@@ -474,8 +479,8 @@ describe("processMessageLLM", () => {
 
       expect(response.ui.count).toBe(2);
       expect(response.ui.events).toHaveLength(2);
-      expect(response.ui.events[0].title).toBe("Birthday Party");
-      expect(response.ui.events[1].title).toBe("Conference");
+      expect(response.ui.events[0]!.title).toBe("Birthday Party");
+      expect(response.ui.events[1]!.title).toBe("Conference");
     });
 
     it("returns empty events list when no matches found", async () => {
@@ -543,15 +548,16 @@ describe("processMessageLLM", () => {
       }
 
       expect(response.ui.cards).toHaveLength(1);
-      expect(response.ui.cards[0].kind).toBe("reminder");
-      if (response.ui.cards[0].kind !== "reminder") {
+      const card = response.ui.cards[0]!;
+      expect(card.kind).toBe("reminder");
+      if (card.kind !== "reminder") {
         throw new Error("Expected reminder card");
       }
 
-      expect(response.ui.cards[0].reminder.title).toBe("Follow up with Alice");
-      expect(response.ui.cards[0].reminder.dueAt).toBe("2026-02-12T10:00:00.000Z");
-      expect(response.ui.cards[0].reminder.status).toBe("OPEN");
-      expect(response.ui.cards[0].reminder.participants).toEqual(["Alice"]);
+      expect(card.reminder.title).toBe("Follow up with Alice");
+      expect(card.reminder.dueAt).toBe("2026-02-12T10:00:00.000Z");
+      expect(card.reminder.status).toBe("OPEN");
+      expect(card.reminder.participants).toEqual(["Alice"]);
     });
 
     it("searches reminders and returns a reminders list", async () => {
@@ -596,8 +602,8 @@ describe("processMessageLLM", () => {
 
       expect(response.ui.count).toBe(2);
       expect(response.ui.reminders).toHaveLength(2);
-      expect(response.ui.reminders[0].title).toBe("Call Bob");
-      expect(response.ui.reminders[1].status).toBe("DONE");
+      expect(response.ui.reminders[0]!.title).toBe("Call Bob");
+      expect(response.ui.reminders[1]!.status).toBe("DONE");
     });
 
     it("gets a single reminder and returns reminder details", async () => {
@@ -632,8 +638,8 @@ describe("processMessageLLM", () => {
 
       expect(response.ui.count).toBe(1);
       expect(response.ui.reminders).toHaveLength(1);
-      expect(response.ui.reminders[0].title).toBe("Review document");
-      expect(response.ui.reminders[0].participants).toEqual(["Charlie"]);
+      expect(response.ui.reminders[0]!.title).toBe("Review document");
+      expect(response.ui.reminders[0]!.participants).toEqual(["Charlie"]);
     });
 
     it("returns empty reminders list when no matches found", async () => {
@@ -802,7 +808,7 @@ describe("processMessageLLM", () => {
       }
 
       expect(response.ui.contacts).toHaveLength(1);
-      expect(response.ui.contacts[0].displayName).toBe("John Doe");
+      expect(response.ui.contacts[0]!.displayName).toBe("John Doe");
       // The UI shows the card, which is the important part for delete safety
       expect(response.text).toBeTruthy();
     });
@@ -933,7 +939,7 @@ describe("processMessageLLM", () => {
       }
 
       expect(response.ui.events).toHaveLength(1);
-      expect(response.ui.events[0].title).toBe("Team Meeting");
+      expect(response.ui.events[0]!.title).toBe("Team Meeting");
       // The UI shows the card, which is the important part for delete safety
       expect(response.text).toBeTruthy();
     });
@@ -1191,8 +1197,8 @@ describe("processMessageLLM", () => {
       }
 
       expect(response.ui.options).toHaveLength(2);
-      expect(response.ui.options[0].entityKind).toBe("contact");
-      expect(response.ui.options[0].selectMessage).toContain("contact ID");
+      expect(response.ui.options[0]!.entityKind).toBe("contact");
+      expect(response.ui.options[0]!.selectMessage).toContain("contact ID");
     });
 
     it("returns selection UI for ambiguous relationship type context", async () => {
@@ -1224,8 +1230,8 @@ describe("processMessageLLM", () => {
       }
 
       expect(response.ui.options).toHaveLength(2);
-      expect(response.ui.options[0].entityKind).toBe("relationship_type");
-      expect(response.ui.options[0].selectMessage).toContain("relationship type ID");
+      expect(response.ui.options[0]!.entityKind).toBe("relationship_type");
+      expect(response.ui.options[0]!.selectMessage).toContain("relationship type ID");
     });
   });
 

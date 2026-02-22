@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   BackHandler,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { format, isSameDay } from "date-fns";
 import {
   Briefcase,
@@ -32,8 +32,11 @@ import {
   Pencil,
   Trash2,
   CalendarDays,
+  Plus,
+  Link2,
+  Check,
 } from "lucide-react-native";
-import { eventsApi, Event, Conversation } from "../../lib/api";
+import { eventsApi, conversationsApi, Event, Conversation } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
 
 const EVENT_META: Record<
@@ -103,6 +106,10 @@ export default function EventDetailScreen() {
   );
   const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showLinkable, setShowLinkable] = useState(false);
+  const [linkableConversations, setLinkableConversations] = useState<Conversation[]>([]);
+  const [isLoadingLinkable, setIsLoadingLinkable] = useState(false);
+  const [linkingId, setLinkingId] = useState<string | null>(null);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -116,9 +123,20 @@ export default function EventDetailScreen() {
     loadEvent();
   }, [id]);
 
+  const hasMounted = useRef(false);
   useEffect(() => {
     loadEventConversations();
+    hasMounted.current = true;
   }, [id]);
+
+  // Refresh conversations when returning from creating a new one
+  useFocusEffect(
+    useCallback(() => {
+      if (hasMounted.current) {
+        loadEventConversations();
+      }
+    }, [id])
+  );
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -177,6 +195,41 @@ export default function EventDetailScreen() {
       setNextConversationCursor(null);
     } finally {
       setIsLoadingMoreConversations(false);
+    }
+  };
+
+  const loadLinkableConversations = async () => {
+    try {
+      setIsLoadingLinkable(true);
+      const data = await eventsApi.listLinkableConversations(id);
+      setLinkableConversations(data.conversations);
+    } catch (error) {
+      console.error("Failed to load linkable conversations:", error);
+      setLinkableConversations([]);
+    } finally {
+      setIsLoadingLinkable(false);
+    }
+  };
+
+  const handleToggleLinkable = () => {
+    if (!showLinkable) {
+      loadLinkableConversations();
+    }
+    setShowLinkable(!showLinkable);
+  };
+
+  const handleLinkConversation = async (conversationId: string) => {
+    try {
+      setLinkingId(conversationId);
+      await conversationsApi.update(conversationId, { eventId: id });
+      // Remove from linkable list and refresh linked list
+      setLinkableConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      await loadEventConversations();
+    } catch (error) {
+      console.error("Failed to link conversation:", error);
+      Alert.alert("Error", "Failed to link conversation");
+    } finally {
+      setLinkingId(null);
     }
   };
 
@@ -289,7 +342,7 @@ export default function EventDetailScreen() {
                     <FileText size={16} color={getThemeColor(colors, "typography-400")} />
                     <View className="ml-3 flex-1">
                       <Text className="text-typography-400 text-xs">Description</Text>
-                      <Text className="text-typography-900 text-base" numberOfLines={3}>
+                      <Text className="text-typography-900 text-base">
                         {event.description}
                       </Text>
                     </View>
@@ -298,16 +351,24 @@ export default function EventDetailScreen() {
               }
 
               if (hasParticipants) {
-                const participantNames = event.participants!
-                  .map((p) => p.contact.displayName)
-                  .filter(Boolean)
-                  .join(", ");
                 rows.push(
                   <View key="participants" className="flex-row items-start px-4 py-3">
                     <Users size={16} color={getThemeColor(colors, "typography-400")} />
                     <View className="ml-3 flex-1">
-                      <Text className="text-typography-400 text-xs">Participants</Text>
-                      <Text className="text-typography-900 text-base">{participantNames}</Text>
+                      <Text className="text-typography-400 text-xs mb-1">Participants</Text>
+                      <View className="flex-row flex-wrap">
+                        {event.participants!.map((p) => (
+                          <Pressable
+                            key={p.contact.id}
+                            onPress={() => router.push(`/contact/${p.contact.id}`)}
+                            className="px-3 py-1 rounded-full mr-2 mb-1 bg-primary-50 border border-primary-200 active:bg-primary-100"
+                          >
+                            <Text className="text-primary-700 text-sm font-medium">
+                              {p.contact.displayName}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
                     </View>
                   </View>
                 );
@@ -325,11 +386,117 @@ export default function EventDetailScreen() {
 
         {/* Linked Conversations */}
         <View className="px-4 mt-6">
-          <View className="mb-3">
+          <View className="flex-row items-center justify-between mb-3">
             <Text className="text-typography-900 text-base font-semibold">
               Linked Conversations
             </Text>
+            <View className="flex-row items-center">
+              <Pressable
+                onPress={handleToggleLinkable}
+                className={`flex-row items-center px-3 py-1.5 rounded-lg mr-2 ${
+                  showLinkable
+                    ? "bg-primary-600"
+                    : "bg-background-50 border border-border-200"
+                } active:opacity-80`}
+              >
+                <Link2 size={14} color={showLinkable ? "#fff" : getThemeColor(colors, "primary-600")} />
+                <Text className={`text-sm font-medium ml-1 ${showLinkable ? "text-white" : "text-primary-600"}`}>
+                  Link
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push(`/conversation/new?eventId=${id}`)}
+                className="flex-row items-center px-3 py-1.5 rounded-lg bg-primary-100 active:bg-primary-200"
+              >
+                <Plus size={14} color={getThemeColor(colors, "primary-600")} />
+                <Text className="text-primary-600 text-sm font-medium ml-1">Add</Text>
+              </Pressable>
+            </View>
           </View>
+
+          {/* Linkable Conversations Panel */}
+          {showLinkable && (
+            <View className="mb-4 rounded-xl border border-primary-200 bg-primary-50 overflow-hidden">
+              <View className="px-4 py-2.5 border-b border-primary-200">
+                <Text className="text-typography-700 text-xs font-medium">
+                  Unlinked conversations from {event ? format(new Date(event.startAt), "MMM d, yyyy") : "this date"}
+                </Text>
+              </View>
+              {isLoadingLinkable ? (
+                <View className="py-6 items-center">
+                  <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
+                </View>
+              ) : linkableConversations.length === 0 ? (
+                <View className="py-4 px-4">
+                  <Text className="text-typography-400 text-sm text-center">
+                    No unlinked conversations on this date
+                  </Text>
+                </View>
+              ) : (
+                linkableConversations.map((conversation, index) => {
+                  const medium =
+                    CONVERSATION_MEDIUM_META[conversation.medium] ||
+                    CONVERSATION_MEDIUM_META.OTHER;
+                  const MediumIcon = medium.icon;
+                  const convoTime = new Date(conversation.happenedAt);
+                  const timeLabel = Number.isNaN(convoTime.getTime())
+                    ? ""
+                    : format(convoTime, "h:mm a");
+                  const participants =
+                    conversation.participants
+                      ?.map((p) => p.contact.displayName)
+                      .filter(Boolean)
+                      .join(", ") || "";
+                  const isLinking = linkingId === conversation.id;
+
+                  return (
+                    <View key={conversation.id}>
+                      {index > 0 && <View className="border-t border-primary-200" />}
+                      <View className="flex-row items-center px-4 py-3">
+                        <View className="w-8 h-8 rounded-lg bg-white items-center justify-center mr-3">
+                          <MediumIcon size={14} color={getThemeColor(colors, "primary-600")} />
+                        </View>
+                        <View className="flex-1 mr-2">
+                          <View className="flex-row items-center">
+                            <Text className="text-typography-900 text-sm font-medium" numberOfLines={1}>
+                              {medium.label}
+                            </Text>
+                            {timeLabel ? (
+                              <Text className="text-typography-400 text-xs ml-2">{timeLabel}</Text>
+                            ) : null}
+                          </View>
+                          {participants ? (
+                            <Text className="text-typography-500 text-xs" numberOfLines={1}>
+                              {participants}
+                            </Text>
+                          ) : null}
+                          {conversation.content ? (
+                            <Text className="text-typography-600 text-xs mt-0.5" numberOfLines={1}>
+                              {conversation.content}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Pressable
+                          onPress={() => handleLinkConversation(conversation.id)}
+                          disabled={isLinking}
+                          className="px-3 py-1.5 rounded-lg bg-primary-600 active:bg-primary-700"
+                        >
+                          {isLinking ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : (
+                            <View className="flex-row items-center">
+                              <Check size={12} color="#fff" />
+                              <Text className="text-white text-xs font-medium ml-1">Link</Text>
+                            </View>
+                          )}
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          )}
 
           {isLoadingConversations ? (
             <View className="py-8 items-center">

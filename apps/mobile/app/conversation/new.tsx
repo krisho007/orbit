@@ -34,7 +34,7 @@ const MEDIUM_OPTIONS: { value: ConversationMedium; label: string }[] = [
 
 export default function NewConversationScreen() {
   const router = useRouter();
-  const { contactId } = useLocalSearchParams<{ contactId?: string }>();
+  const { contactId, eventId } = useLocalSearchParams<{ contactId?: string; eventId?: string }>();
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
   const createConversation = useCreateConversation();
@@ -122,6 +122,7 @@ export default function NewConversationScreen() {
         medium: formData.medium,
         happenedAt: happenedAt.toISOString(),
         followUpAt: followUpAt?.toISOString() || undefined,
+        eventId: eventId || undefined,
         participantIds: selectedParticipants.map((p) => p.id),
       });
       router.replace(`/conversation/${created.id}`);

@@ -157,7 +157,7 @@ export async function createReminderByIds(
       title: payload.title?.trim() || "Follow up",
       notes: payload.notes || null,
       dueAt: new Date(payload.dueAt),
-      status: payload.status || "OPEN",
+      status: (payload.status as "OPEN" | "DONE" | "CANCELED") || "OPEN",
       conversationId: payload.conversationId || null,
       isAutoFromConversation: false,
       assistantConversationId: assistantConversationId || null,

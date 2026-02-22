@@ -651,7 +651,7 @@ export async function searchContactsFuzzy(
       type: "contacts_found",
       count: rows.length,
       contacts: rows,
-      bestMatchSimilarity: rows.length > 0 ? Number(rows[0].similarity) : 0,
+      bestMatchSimilarity: rows.length > 0 ? Number(rows[0]!.similarity) : 0,
       exactMatchFound: rows.some(
         (r) => r.displayName.toLowerCase().trim() === name.toLowerCase().trim()
       ),
@@ -957,7 +957,7 @@ export async function listContactEvents(
 // ── Tool definitions ─────────────────────────────────────────────────
 
 export type EnumSchemas = {
-  mediumSchema: ReturnType<typeof z.string>["refine"] extends (...args: any[]) => infer R ? R : any;
+  mediumSchema: any;
   optionalMediumSchema: any;
   eventTypeSchema: any;
   optionalEventTypeSchema: any;

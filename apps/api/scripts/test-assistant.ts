@@ -403,10 +403,10 @@ async function runScenario(scenario: TestScenario, token: string): Promise<Scena
           response.ui.options?.length
         ) {
           const option = response.ui.options[0];
-          chatHistory.push({ role: "user", content: option.selectMessage });
+          chatHistory.push({ role: "user", content: option!.selectMessage });
           turns.push({
             role: "user",
-            content: option.selectMessage,
+            content: option!.selectMessage,
             source: "auto-select",
             timestamp: Date.now(),
           });
@@ -448,10 +448,10 @@ async function runScenario(scenario: TestScenario, token: string): Promise<Scena
           response.content?.includes("?")
         ) {
           const reply = scenario.disambiguationReplies[disambiguationReplyIndex++];
-          chatHistory.push({ role: "user", content: reply });
+          chatHistory.push({ role: "user", content: reply! });
           turns.push({
             role: "user",
-            content: reply,
+            content: reply!,
             source: "auto-disambiguate",
             timestamp: Date.now(),
           });
@@ -847,7 +847,7 @@ async function fetchAllIds(
     if (extraParams) {
       for (const part of extraParams.split("&")) {
         const [k, v] = part.split("=");
-        params.set(k, v);
+        params.set(k!, v!);
       }
     }
     const res = await fetch(`${API_BASE}/api/${endpoint}?${params}`, {

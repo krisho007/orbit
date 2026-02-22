@@ -202,7 +202,7 @@ app.post("/types/seed", async (c) => {
         .insert(relationshipTypes)
         .values({ userId, name, isSymmetric, isSystem: true })
         .returning({ id: relationshipTypes.id });
-      return t.id;
+      return t!.id;
     };
 
     // Helper to link reverse types

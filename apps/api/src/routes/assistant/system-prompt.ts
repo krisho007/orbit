@@ -106,7 +106,7 @@ ${userSection}
 
 ## Current Task
 ${intents.length === 1
-    ? `Your tools have been scoped to this intent: **${intents[0]}**.\n${getIntentGuidance(intents[0])}`
+    ? `Your tools have been scoped to this intent: **${intents[0]!}**.\n${getIntentGuidance(intents[0]!)}`
     : `The user's message contains multiple intents: **${intents.join(", ")}**.
 Your tools have been scoped to handle ALL of these intents. Execute them in a logical order:
 ${intents.map((intent, i) => `${i + 1}. ${getIntentGuidance(intent)}`).join("\n")}

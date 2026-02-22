@@ -146,6 +146,71 @@ app.get("/:id/conversations", async (c) => {
   }
 });
 
+// GET /api/events/:id/linkable-conversations - Find unlinked conversations on the same date
+app.get("/:id/linkable-conversations", async (c) => {
+  const userId = c.get("userId");
+  const eventId = c.req.param("id");
+
+  try {
+    const [event] = await db
+      .select({ id: events.id, startAt: events.startAt })
+      .from(events)
+      .where(and(eq(events.id, eventId), eq(events.userId, userId)));
+
+    if (!event) {
+      return c.json({ error: "Event not found" }, 404);
+    }
+
+    // Find conversations on the same calendar date that are not linked to any event
+    const eventDate = new Date(event.startAt);
+    const dayStart = new Date(eventDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(eventDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const conversationsList = await db
+      .select()
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.userId, userId),
+          sql`${conversations.eventId} IS NULL`,
+          sql`${conversations.happenedAt} >= ${dayStart}`,
+          sql`${conversations.happenedAt} <= ${dayEnd}`
+        )
+      )
+      .orderBy(desc(conversations.happenedAt));
+
+    const conversationIds = conversationsList.map((conv) => conv.id);
+
+    const participantsData =
+      conversationIds.length > 0
+        ? await db
+            .select()
+            .from(conversationParticipants)
+            .innerJoin(contacts, eq(conversationParticipants.contactId, contacts.id))
+            .where(inArray(conversationParticipants.conversationId, conversationIds))
+        : [];
+
+    const enrichedConversations = conversationsList.map((conv) => ({
+      ...conv,
+      participants: participantsData
+        .filter((p: any) => p.conversation_participants.conversationId === conv.id)
+        .map((p: any) => ({
+          ...p.conversation_participants,
+          contact: p.contacts,
+        })),
+    }));
+
+    return c.json({
+      conversations: enrichedConversations,
+    });
+  } catch (error) {
+    console.error("Error fetching linkable conversations:", error);
+    return c.json({ error: "Failed to fetch linkable conversations" }, 500);
+  }
+});
+
 // GET /api/events/:id/contacts - List contacts for an event
 app.get("/:id/contacts", async (c) => {
   const userId = c.get("userId");

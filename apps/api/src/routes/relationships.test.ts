@@ -234,7 +234,7 @@ describe("Relationship Types CRUD", () => {
       .values({ userId: TEST_USER_ID, name: "OldName", isSymmetric: false, isSystem: false })
       .returning();
 
-    const res = await req(`/types/${created.id}`, {
+    const res = await req(`/types/${created!.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: "NewName" }),
@@ -251,7 +251,7 @@ describe("Relationship Types CRUD", () => {
       .values({ userId: TEST_USER_ID, name: "SysType", isSymmetric: false, isSystem: true })
       .returning();
 
-    const res = await req(`/types/${created.id}`, {
+    const res = await req(`/types/${created!.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: "Hacked" }),
@@ -265,10 +265,10 @@ describe("Relationship Types CRUD", () => {
       .values({ userId: TEST_USER_ID, name: "ToDelete", isSymmetric: false, isSystem: false })
       .returning();
 
-    const res = await req(`/types/${created.id}`, { method: "DELETE" });
+    const res = await req(`/types/${created!.id}`, { method: "DELETE" });
     expect(res.status).toBe(200);
 
-    const remaining = await db.select().from(relationshipTypes).where(eq(relationshipTypes.id, created.id));
+    const remaining = await db.select().from(relationshipTypes).where(eq(relationshipTypes.id, created!.id));
     expect(remaining.length).toBe(0);
   });
 
@@ -278,7 +278,7 @@ describe("Relationship Types CRUD", () => {
       .values({ userId: TEST_USER_ID, name: "SysNoDelete", isSymmetric: false, isSystem: true })
       .returning();
 
-    const res = await req(`/types/${created.id}`, { method: "DELETE" });
+    const res = await req(`/types/${created!.id}`, { method: "DELETE" });
     expect(res.status).toBe(400);
   });
 });
@@ -293,20 +293,23 @@ describe("Relationships CRUD", () => {
   let relType: { id: string };
 
   beforeEach(async () => {
-    [contactA] = await db
+    const [a] = await db
       .insert(contacts)
       .values({ userId: TEST_USER_ID, displayName: "Alice Test" })
       .returning({ id: contacts.id });
+    contactA = a!;
 
-    [contactB] = await db
+    const [b] = await db
       .insert(contacts)
       .values({ userId: TEST_USER_ID, displayName: "Bob Test" })
       .returning({ id: contacts.id });
+    contactB = b!;
 
-    [relType] = await db
+    const [rt] = await db
       .insert(relationshipTypes)
       .values({ userId: TEST_USER_ID, name: "TestRelType-" + Date.now(), isSymmetric: false, isSystem: false })
       .returning({ id: relationshipTypes.id });
+    relType = rt!;
   });
 
   afterEach(async () => {
@@ -397,7 +400,7 @@ describe("Relationships CRUD", () => {
       })
       .returning();
 
-    const res = await req(`/${created.id}`, {
+    const res = await req(`/${created!.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ notes: "Updated notes" }),
@@ -419,10 +422,10 @@ describe("Relationships CRUD", () => {
       })
       .returning();
 
-    const res = await req(`/${created.id}`, { method: "DELETE" });
+    const res = await req(`/${created!.id}`, { method: "DELETE" });
     expect(res.status).toBe(200);
 
-    const remaining = await db.select().from(relationships).where(eq(relationships.id, created.id));
+    const remaining = await db.select().from(relationships).where(eq(relationships.id, created!.id));
     expect(remaining.length).toBe(0);
   });
 

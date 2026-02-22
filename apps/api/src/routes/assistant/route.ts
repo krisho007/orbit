@@ -69,7 +69,7 @@ async function validateAndSetup(c: any) {
         .insert(assistantConversations)
         .values({ userId, title })
         .returning();
-      return newConv.id;
+      return newConv!.id;
     }
   };
 
@@ -329,7 +329,7 @@ app.get("/conversations", async (c) => {
 
   return c.json({
     conversations: conversationsWithPreview,
-    nextCursor: hasMore ? items[items.length - 1].id : null,
+    nextCursor: hasMore ? items[items.length - 1]!.id : null,
   });
 });
 
@@ -412,6 +412,10 @@ app.patch("/conversations/:id", async (c) => {
     })
     .where(eq(assistantConversations.id, id))
     .returning();
+
+  if (!updated) {
+    return c.json({ error: "Conversation not found" }, 404);
+  }
 
   return c.json({
     id: updated.id,

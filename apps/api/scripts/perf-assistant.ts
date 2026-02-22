@@ -262,7 +262,9 @@ async function main() {
   const results: BenchmarkResult[] = [];
 
   for (let i = 0; i < PROMPTS.length; i++) {
-    const { label, category, prompt } = PROMPTS[i];
+    const entry = PROMPTS[i];
+    if (!entry) continue;
+    const { label, category, prompt } = entry;
     const num = `${i + 1}`.padStart(2, " ");
     process.stdout.write(`  [${num}/10] ${label.padEnd(32)} `);
 
@@ -339,7 +341,7 @@ async function main() {
     const avg = times.reduce((a, b) => a + b, 0) / times.length;
     const min = Math.min(...times);
     const max = Math.max(...times);
-    const p50 = times.sort((a, b) => a - b)[Math.floor(times.length / 2)];
+    const p50 = times.sort((a, b) => a - b)[Math.floor(times.length / 2)]!;
     const total = times.reduce((a, b) => a + b, 0);
 
     console.log(`\n  📊 Statistics (${times.length} successful calls):`);

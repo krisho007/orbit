@@ -8,7 +8,7 @@
  */
 
 import { db } from "../src/db";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   users,
   contacts,
@@ -87,11 +87,10 @@ async function main() {
   const existingContacts = await db
     .select({ id: contacts.id })
     .from(contacts)
-    .where(eq(contacts.userId, userId))
-    .where(inArray(contacts.displayName, seedContactNames));
+    .where(and(eq(contacts.userId, userId), inArray(contacts.displayName, seedContactNames)));
 
   if (existingContacts.length > 0) {
-    const existingIds = existingContacts.map((c) => c.id);
+    const existingIds = existingContacts.map((c: { id: string }) => c.id);
 
     // Delete junction rows referencing these contacts
     await db.delete(contactTags).where(inArray(contactTags.contactId, existingIds));
@@ -178,8 +177,7 @@ async function main() {
       const [existing] = await db
         .select()
         .from(tags)
-        .where(eq(tags.userId, userId))
-        .where(eq(tags.name, t.name))
+        .where(and(eq(tags.userId, userId), eq(tags.name, t.name)))
         .limit(1);
       if (existing) insertedTags[t.name] = existing.id;
     }
@@ -296,7 +294,7 @@ async function main() {
         notes: c.notes || null,
       })
       .returning();
-    contactIds[c.displayName] = row.id;
+    contactIds[c.displayName] = row!.id;
 
     // Add tags
     for (const tagName of c.tags) {
@@ -304,7 +302,7 @@ async function main() {
       if (tagId) {
         await db
           .insert(contactTags)
-          .values({ contactId: row.id, tagId })
+          .values({ contactId: row!.id, tagId })
           .onConflictDoNothing();
       }
     }
@@ -375,13 +373,13 @@ async function main() {
         happenedAt: c.happenedAt,
       })
       .returning();
-    convIds[c.contact] = row.id;
+    convIds[c.contact] = row!.id;
 
     await db
       .insert(conversationParticipants)
       .values({
-        conversationId: row.id,
-        contactId: contactIds[c.contact],
+        conversationId: row!.id,
+        contactId: contactIds[c.contact]!,
       })
       .onConflictDoNothing();
   }
@@ -480,8 +478,8 @@ async function main() {
       await db
         .insert(eventParticipants)
         .values({
-          eventId: row.id,
-          contactId: contactIds[pName],
+          eventId: row!.id,
+          contactId: contactIds[pName]!,
         })
         .onConflictDoNothing();
     }
@@ -550,8 +548,8 @@ async function main() {
       await db
         .insert(reminderParticipants)
         .values({
-          reminderId: row.id,
-          contactId: contactIds[pName],
+          reminderId: row!.id,
+          contactId: contactIds[pName]!,
         })
         .onConflictDoNothing();
     }
@@ -592,23 +590,23 @@ async function main() {
       medium: "CHANCE_ENCOUNTER",
       content: "Met Dr. Anand Krishnamurthy at the AI Research Summit. He's the Director of AI Research at DeepMind in London. Had a fascinating discussion about generative AI transforming healthcare diagnostics. He mentioned potential collaboration opportunities.",
       happenedAt: new Date(), // today
-      assistantConversationId: asstConv.id,
+      assistantConversationId: asstConv!.id,
     })
     .returning();
 
   await db
     .insert(conversationParticipants)
     .values({
-      conversationId: drAnandConv.id,
-      contactId: drAnand.id,
+      conversationId: drAnandConv!.id,
+      contactId: drAnand!.id,
     })
     .onConflictDoNothing();
 
   // Link the contact back to the assistant conversation
   await db
     .update(contacts)
-    .set({ assistantConversationId: asstConv.id })
-    .where(eq(contacts.id, drAnand.id));
+    .set({ assistantConversationId: asstConv!.id })
+    .where(eq(contacts.id, drAnand!.id));
 
   // Create the 4 assistant messages
   const now = new Date();
@@ -640,7 +638,7 @@ async function main() {
       {
         kind: "contact",
         contact: {
-          id: drAnand.id,
+          id: drAnand!.id,
           displayName: "Dr. Anand Krishnamurthy",
           primaryPhone: null,
           primaryEmail: "a.krishnamurthy@deepmind.com",
@@ -652,7 +650,7 @@ async function main() {
       {
         kind: "conversation",
         conversation: {
-          id: drAnandConv.id,
+          id: drAnandConv!.id,
           medium: "CHANCE_ENCOUNTER",
           happenedAt: new Date().toISOString(),
           content: "Met at AI Research Summit. Discussed generative AI transforming healthcare diagnostics. Mentioned potential collaboration opportunities.",
@@ -665,7 +663,7 @@ async function main() {
   // Message 1: User request
   await db.execute(sql`
     INSERT INTO assistant_messages (id, "assistantConversationId", role, content, ui, "createdAt")
-    VALUES (${crypto.randomUUID()}, ${asstConv.id}, 'user',
+    VALUES (${crypto.randomUUID()}, ${asstConv!.id}, 'user',
       ${"I just met Dr. Anand Krishnamurthy at the AI Research Summit today. He's the Director of AI Research at DeepMind in London. We had a fascinating discussion about generative AI transforming healthcare diagnostics. He mentioned potential collaboration opportunities. Can you log this?"},
       NULL, ${msg1Time})
   `);
@@ -673,7 +671,7 @@ async function main() {
   // Message 2: Assistant confirmation
   await db.execute(sql`
     INSERT INTO assistant_messages (id, "assistantConversationId", role, content, ui, "modelName", "inputTokens", "outputTokens", "createdAt")
-    VALUES (${crypto.randomUUID()}, ${asstConv.id}, 'assistant',
+    VALUES (${crypto.randomUUID()}, ${asstConv!.id}, 'assistant',
       ${"I'll create a new contact and log your conversation. Here's what I'll save:\n\n**Contact:** Dr. Anand Krishnamurthy\n**Title:** Director of AI Research @ DeepMind\n**Location:** London\n**Met at:** AI Research Summit (today)\n**Discussion:** Generative AI in healthcare diagnostics, potential collaboration\n\nShall I go ahead?"},
       ${confirmationUi}, 'gemini-2.0-flash', 245, 89, ${msg2Time})
   `);
@@ -681,13 +679,13 @@ async function main() {
   // Message 3: User confirmation
   await db.execute(sql`
     INSERT INTO assistant_messages (id, "assistantConversationId", role, content, ui, "createdAt")
-    VALUES (${crypto.randomUUID()}, ${asstConv.id}, 'user', 'Go ahead', NULL, ${msg3Time})
+    VALUES (${crypto.randomUUID()}, ${asstConv!.id}, 'user', 'Go ahead', NULL, ${msg3Time})
   `);
 
   // Message 4: Assistant done with created cards
   await db.execute(sql`
     INSERT INTO assistant_messages (id, "assistantConversationId", role, content, ui, "modelName", "inputTokens", "outputTokens", "createdAt")
-    VALUES (${crypto.randomUUID()}, ${asstConv.id}, 'assistant',
+    VALUES (${crypto.randomUUID()}, ${asstConv!.id}, 'assistant',
       ${"Done! I've created the contact and logged your conversation."},
       ${createdUi}, 'gemini-2.0-flash', 312, 67, ${msg4Time})
   `);

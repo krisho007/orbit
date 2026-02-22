@@ -337,6 +337,11 @@ export const eventsApi = {
       nextCursor: string | null;
     }>(`/api/events/${id}/conversations`, params),
 
+  listLinkableConversations: (id: string) =>
+    api.get<{
+      conversations: Conversation[];
+    }>(`/api/events/${id}/linkable-conversations`),
+
   create: (data: CreateEventData) => api.post<Event>("/api/events", data),
 
   update: (id: string, data: Partial<CreateEventData>) =>

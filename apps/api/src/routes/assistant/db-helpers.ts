@@ -50,8 +50,9 @@ export async function findBestContactMatch(userId: string, name: string) {
     .limit(1);
 
   if (rows.length > 0) {
-    console.log(`[assistant:tool] findBestContactMatch — found: "${rows[0].displayName}" (similarity match)`);
-    return rows[0] as { id: string; displayName: string };
+    const best = rows[0]!;
+    console.log(`[assistant:tool] findBestContactMatch — found: "${best.displayName}" (similarity match)`);
+    return best as { id: string; displayName: string };
   }
 
   console.log(`[assistant:tool] findBestContactMatch — no match found for "${name}"`);

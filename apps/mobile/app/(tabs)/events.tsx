@@ -152,22 +152,20 @@ export default function EventsScreen() {
             <Text className="text-xs text-typography-400">
               {format(eventDate, "EEE")}
             </Text>
+            <Text className="text-xs text-typography-500 mt-1">
+              {format(eventDate, "h:mm a")}
+            </Text>
           </View>
 
           <View className="flex-1 border-l-2 border-primary-200 pl-3">
-            <View className="flex-row items-center mb-1">
-              <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mr-2">
-                <EventIcon size={14} color={getThemeColor(colors, "primary-600")} />
+            <View className="flex-row items-start mb-1">
+              <View className="w-7 h-7 rounded-lg bg-primary-100 items-center justify-center mr-2 mt-0.5">
+                <EventIcon size={12} color={getThemeColor(colors, "primary-600")} />
               </View>
-              <Text className="text-typography-900 font-body-semibold flex-1" numberOfLines={1}>
+              <Text className="text-typography-900 font-body-semibold flex-1">
                 {item.title}
               </Text>
             </View>
-
-            <Text className="text-typography-600 text-sm mb-1">
-              {format(eventDate, "h:mm a")}
-              {item.endAt && ` - ${format(new Date(item.endAt), "h:mm a")}`}
-            </Text>
 
             {item.location && (
               <View className="flex-row items-center">

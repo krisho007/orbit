@@ -32,7 +32,7 @@ export function AiConsentDialog({
         >
           <Text
             style={{ color: getThemeColor(colors, "typography-900") }}
-            className="text-lg font-semibold mb-3"
+            className="text-lg font-body-semibold mb-3"
           >
             {CONSENT_CONFIG.title}
           </Text>
@@ -65,7 +65,7 @@ export function AiConsentDialog({
             >
               <Text
                 style={{ color: getThemeColor(colors, "typography-600") }}
-                className="text-sm font-medium"
+                className="text-sm font-body-medium"
               >
                 Not Now
               </Text>
@@ -77,7 +77,7 @@ export function AiConsentDialog({
             >
               <Text
                 style={{ color: getThemeColor(colors, "typography-0") }}
-                className="text-sm font-semibold"
+                className="text-sm font-body-semibold"
               >
                 {CONSENT_CONFIG.agreeLabel}
               </Text>

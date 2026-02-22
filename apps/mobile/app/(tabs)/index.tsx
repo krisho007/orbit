@@ -133,7 +133,7 @@ function SwipeAction({
       className={`mx-4 mb-3 rounded-xl flex-1 px-6 justify-center ${align === "left" ? "items-start" : "items-end"}`}
     >
       {icon}
-      <Text className="text-xs font-semibold mt-1" style={{ color: textColor }}>
+      <Text className="text-xs font-body-semibold mt-1" style={{ color: textColor }}>
         {label}
       </Text>
     </Animated.View>
@@ -234,13 +234,13 @@ function ContactRow({
             />
           ) : (
             <View className="w-11 h-11 rounded-xl bg-primary-100 items-center justify-center mr-3.5">
-              <Text className="text-primary-700 text-lg font-semibold">
+              <Text className="text-primary-700 text-lg font-body-semibold">
                 {item.displayName.charAt(0).toUpperCase()}
               </Text>
             </View>
           )}
 
-          <Text className="flex-1 text-typography-900 font-semibold text-[17px]">
+          <Text className="flex-1 text-typography-900 font-body-semibold text-[17px]">
             {item.displayName}
           </Text>
 
@@ -367,7 +367,7 @@ export default function ContactsScreen() {
       ) : (
         <>
           <HuskyLogo size={48} color={getThemeColor(colors, "typography-300")} />
-          <Text className="text-typography-900 text-lg font-semibold mb-2 mt-4">
+          <Text className="text-typography-900 text-lg font-body-semibold mb-2 mt-4">
             {search ? "No contacts found" : "No contacts yet"}
           </Text>
           <Text className="text-typography-500 text-center px-8">

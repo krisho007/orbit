@@ -192,7 +192,7 @@ export default function EditReminderScreen() {
         <Pressable onPress={() => router.back()} className="p-2">
           <Text className="text-primary-600 text-base">Cancel</Text>
         </Pressable>
-        <Text className="text-lg font-semibold text-typography-900">Edit Reminder</Text>
+        <Text className="text-lg font-body-semibold text-typography-900">Edit Reminder</Text>
         <Pressable onPress={handleSubmit} disabled={updateReminder.isPending} className="p-2">
           <Text
             className={`text-base ${
@@ -206,7 +206,7 @@ export default function EditReminderScreen() {
 
       <ScrollView className="flex-1 px-4 py-6">
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Title *</Text>
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">Title *</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="Reminder title"
@@ -217,7 +217,7 @@ export default function EditReminderScreen() {
         </View>
 
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Due At *</Text>
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">Due At *</Text>
           <View className="flex-row">
             <Pressable
               onPress={() => setShowDueDatePicker(true)}
@@ -255,7 +255,7 @@ export default function EditReminderScreen() {
         </View>
 
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Status</Text>
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">Status</Text>
           <View className="flex-row flex-wrap">
             {STATUS_OPTIONS.map((status) => {
               const isActive = formData.status === status;
@@ -270,7 +270,7 @@ export default function EditReminderScreen() {
                   }`}
                 >
                   <Text
-                    className={`text-sm font-medium ${
+                    className={`text-sm font-body-medium ${
                       isActive ? "text-primary-700" : "text-typography-700"
                     }`}
                   >
@@ -283,7 +283,7 @@ export default function EditReminderScreen() {
         </View>
 
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Recurrence</Text>
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">Recurrence</Text>
           <View className="flex-row flex-wrap">
             {RECURRENCE_OPTIONS.map((option) => {
               const isActive = formData.recurrence === option.value;
@@ -298,7 +298,7 @@ export default function EditReminderScreen() {
                   }`}
                 >
                   <Text
-                    className={`text-sm font-medium ${
+                    className={`text-sm font-body-medium ${
                       isActive ? "text-primary-700" : "text-typography-700"
                     }`}
                   >
@@ -313,7 +313,7 @@ export default function EditReminderScreen() {
         {formData.recurrence !== "NONE" && (
           <>
             <View className="mb-4">
-              <Text className="text-typography-700 text-sm font-medium mb-2">Repeat Every *</Text>
+              <Text className="text-typography-700 text-sm font-body-medium mb-2">Repeat Every *</Text>
               <TextInput
                 className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
                 placeholder="1"
@@ -328,7 +328,7 @@ export default function EditReminderScreen() {
             </View>
 
             <View className="mb-4">
-              <Text className="text-typography-700 text-sm font-medium mb-2">Repeat Until</Text>
+              <Text className="text-typography-700 text-sm font-body-medium mb-2">Repeat Until</Text>
               {recurrenceEndsAt ? (
                 <View className="flex-row items-center">
                   <Pressable
@@ -348,7 +348,7 @@ export default function EditReminderScreen() {
                     </Text>
                   </Pressable>
                   <Pressable onPress={() => setRecurrenceEndsAt(null)} className="p-2">
-                    <Text className="text-error-600 text-sm font-medium">Clear</Text>
+                    <Text className="text-error-600 text-sm font-body-medium">Clear</Text>
                   </Pressable>
                 </View>
               ) : (
@@ -383,7 +383,7 @@ export default function EditReminderScreen() {
         )}
 
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Notes</Text>
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">Notes</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             style={{ minHeight: 160 }}
@@ -398,7 +398,7 @@ export default function EditReminderScreen() {
         </View>
 
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">
             Link Contacts (Optional)
           </Text>
           {selectedParticipants.length > 0 && (
@@ -409,10 +409,10 @@ export default function EditReminderScreen() {
                   onPress={() => removeParticipant(contact.id)}
                   className="flex-row items-center px-3 py-1.5 rounded-full mr-2 mb-2 bg-primary-100 border border-primary-300"
                 >
-                  <Text className="text-sm font-medium text-primary-700">
+                  <Text className="text-sm font-body-medium text-primary-700">
                     {contact.displayName}
                   </Text>
-                  <Text className="text-primary-700 ml-1.5 text-xs font-bold">✕</Text>
+                  <Text className="text-primary-700 ml-1.5 text-xs font-body-bold">✕</Text>
                 </Pressable>
               ))}
             </View>
@@ -451,7 +451,7 @@ export default function EditReminderScreen() {
 
         {reminder?.conversation && (
           <View className="mb-4">
-            <Text className="text-typography-700 text-sm font-medium mb-2">Linked Conversation</Text>
+            <Text className="text-typography-700 text-sm font-body-medium mb-2">Linked Conversation</Text>
             <Text className="text-typography-500 text-sm">
               This reminder is linked to a conversation and can still be edited manually.
             </Text>

@@ -14,6 +14,21 @@ import {
 } from "../components/ui/gluestack-ui-provider";
 import { getThemeColor, ThemeModeProvider, useThemeColors, useThemeMode } from "../lib/theme";
 import { isAppOnboardingComplete, onboardingVersion } from "../lib/onboarding";
+import { useFonts } from "expo-font";
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from "@expo-google-fonts/inter";
+import {
+  Lora_400Regular,
+  Lora_600SemiBold,
+  Lora_700Bold,
+} from "@expo-google-fonts/lora";
+import * as SplashScreen from "expo-splash-screen";
+
+SplashScreen.preventAutoHideAsync();
 
 type OnboardingContextValue = {
   requireOnboarding: () => void;
@@ -188,6 +203,26 @@ function AppShell() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Lora_400Regular,
+    Lora_600SemiBold,
+    Lora_700Bold,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>

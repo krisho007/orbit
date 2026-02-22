@@ -290,7 +290,7 @@ export default function EventDetailScreen() {
         <Pressable onPress={handleBack} className="p-2">
           <ChevronLeft size={22} color={getThemeColor(colors, "primary-600")} />
         </Pressable>
-        <Text className="text-lg font-semibold text-typography-900">Event</Text>
+        <Text className="text-lg font-body-semibold text-typography-900">Event</Text>
         <View className="flex-row items-center">
           <Pressable onPress={handleDelete} className="p-2 mr-1">
             <Trash2 size={20} color={getThemeColor(colors, "error-500")} />
@@ -307,7 +307,7 @@ export default function EventDetailScreen() {
           <View className="w-16 h-16 rounded-2xl bg-primary-100 items-center justify-center mb-4">
             <CalendarDays size={28} color={getThemeColor(colors, "primary-600")} />
           </View>
-          <Text className="text-2xl font-bold text-typography-900 mb-1 text-center px-4">
+          <Text className="text-2xl font-heading-bold text-typography-900 mb-1 text-center px-4">
             {event.title}
           </Text>
           <Text className="text-typography-500 text-base text-center px-4 mb-1">
@@ -363,7 +363,7 @@ export default function EventDetailScreen() {
                             onPress={() => router.push(`/contact/${p.contact.id}`)}
                             className="px-3 py-1 rounded-full mr-2 mb-1 bg-primary-50 border border-primary-200 active:bg-primary-100"
                           >
-                            <Text className="text-primary-700 text-sm font-medium">
+                            <Text className="text-primary-700 text-sm font-body-medium">
                               {p.contact.displayName}
                             </Text>
                           </Pressable>
@@ -387,7 +387,7 @@ export default function EventDetailScreen() {
         {/* Linked Conversations */}
         <View className="px-4 mt-6">
           <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-typography-900 text-base font-semibold">
+            <Text className="text-typography-900 text-base font-body-semibold">
               Linked Conversations
             </Text>
             <View className="flex-row items-center">
@@ -400,7 +400,7 @@ export default function EventDetailScreen() {
                 } active:opacity-80`}
               >
                 <Link2 size={14} color={showLinkable ? "#fff" : getThemeColor(colors, "primary-600")} />
-                <Text className={`text-sm font-medium ml-1 ${showLinkable ? "text-white" : "text-primary-600"}`}>
+                <Text className={`text-sm font-body-medium ml-1 ${showLinkable ? "text-white" : "text-primary-600"}`}>
                   Link
                 </Text>
               </Pressable>
@@ -409,7 +409,7 @@ export default function EventDetailScreen() {
                 className="flex-row items-center px-3 py-1.5 rounded-lg bg-primary-100 active:bg-primary-200"
               >
                 <Plus size={14} color={getThemeColor(colors, "primary-600")} />
-                <Text className="text-primary-600 text-sm font-medium ml-1">Add</Text>
+                <Text className="text-primary-600 text-sm font-body-medium ml-1">Add</Text>
               </Pressable>
             </View>
           </View>
@@ -418,7 +418,7 @@ export default function EventDetailScreen() {
           {showLinkable && (
             <View className="mb-4 rounded-xl border border-primary-200 bg-primary-50 overflow-hidden">
               <View className="px-4 py-2.5 border-b border-primary-200">
-                <Text className="text-typography-700 text-xs font-medium">
+                <Text className="text-typography-700 text-xs font-body-medium">
                   Unlinked conversations from {event ? format(new Date(event.startAt), "MMM d, yyyy") : "this date"}
                 </Text>
               </View>
@@ -458,7 +458,7 @@ export default function EventDetailScreen() {
                         </View>
                         <View className="flex-1 mr-2">
                           <View className="flex-row items-center">
-                            <Text className="text-typography-900 text-sm font-medium" numberOfLines={1}>
+                            <Text className="text-typography-900 text-sm font-body-medium" numberOfLines={1}>
                               {medium.label}
                             </Text>
                             {timeLabel ? (
@@ -486,7 +486,7 @@ export default function EventDetailScreen() {
                           ) : (
                             <View className="flex-row items-center">
                               <Check size={12} color="#fff" />
-                              <Text className="text-white text-xs font-medium ml-1">Link</Text>
+                              <Text className="text-white text-xs font-body-medium ml-1">Link</Text>
                             </View>
                           )}
                         </Pressable>
@@ -537,7 +537,7 @@ export default function EventDetailScreen() {
 
                       <View className="flex-1">
                         <View className="flex-row items-center justify-between mb-1">
-                          <Text className="text-typography-900 text-sm font-semibold">
+                          <Text className="text-typography-900 text-sm font-body-semibold">
                             {medium.label}
                           </Text>
                           <Text className="text-typography-400 text-xs ml-2">{convoLabel}</Text>
@@ -574,7 +574,7 @@ export default function EventDetailScreen() {
                       color={getThemeColor(colors, "primary-600")}
                     />
                   ) : (
-                    <Text className="text-primary-600 text-center text-sm font-medium">
+                    <Text className="text-primary-600 text-center text-sm font-body-medium">
                       Load more conversations
                     </Text>
                   )}

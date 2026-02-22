@@ -103,7 +103,7 @@ export default function NewContactScreen() {
         <Pressable onPress={() => router.back()} className="p-2">
           <Text className="text-primary-600 text-base">Cancel</Text>
         </Pressable>
-        <Text className="text-lg font-semibold text-typography-900">New Contact</Text>
+        <Text className="text-lg font-body-semibold text-typography-900">New Contact</Text>
         <Pressable
           onPress={handleSubmit}
           disabled={createContact.isPending}
@@ -126,7 +126,7 @@ export default function NewContactScreen() {
             <Image source={{ uri: selectedImage.uri }} className="w-24 h-24 rounded-full mb-3" />
           ) : (
             <View className="w-24 h-24 rounded-full bg-primary-100 items-center justify-center mb-3">
-              <Text className="text-primary-700 text-4xl font-semibold">
+              <Text className="text-primary-700 text-4xl font-body-semibold">
                 {(formData.displayName.trim().charAt(0) || "?").toUpperCase()}
               </Text>
             </View>
@@ -136,7 +136,7 @@ export default function NewContactScreen() {
               onPress={pickImage}
               className="px-4 py-2 bg-primary-600 rounded-lg"
             >
-              <Text className="text-white font-medium">
+              <Text className="text-white font-body-medium">
                 {selectedImage ? "Change Photo" : "Choose Photo"}
               </Text>
             </Pressable>
@@ -145,7 +145,7 @@ export default function NewContactScreen() {
                 onPress={clearImage}
                 className="px-4 py-2 bg-background-100 rounded-lg ml-2 border border-border-200"
               >
-                <Text className="text-typography-700 font-medium">Remove</Text>
+                <Text className="text-typography-700 font-body-medium">Remove</Text>
               </Pressable>
             )}
           </View>
@@ -153,7 +153,7 @@ export default function NewContactScreen() {
 
         {/* Name */}
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Name *</Text>
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">Name *</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="John Doe"
@@ -166,7 +166,7 @@ export default function NewContactScreen() {
 
         {/* Company */}
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Company</Text>
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">Company</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="Acme Inc"
@@ -179,7 +179,7 @@ export default function NewContactScreen() {
 
         {/* Job Title */}
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Job Title</Text>
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">Job Title</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="Software Engineer"
@@ -192,7 +192,7 @@ export default function NewContactScreen() {
 
         {/* Phone */}
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Phone</Text>
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">Phone</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="+1 (555) 123-4567"
@@ -205,7 +205,7 @@ export default function NewContactScreen() {
 
         {/* Email */}
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Email</Text>
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">Email</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="john@example.com"
@@ -219,7 +219,7 @@ export default function NewContactScreen() {
 
         {/* Notes */}
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Notes</Text>
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">Notes</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             placeholder="Add notes..."

@@ -185,7 +185,7 @@ export default function ContactDetailScreen() {
         <Pressable onPress={handleBack} className="p-2">
           <ChevronLeft size={22} color={getThemeColor(colors, "primary-600")} />
         </Pressable>
-        <Text className="text-lg font-semibold text-typography-900">Contact</Text>
+        <Text className="text-lg font-body-semibold text-typography-900">Contact</Text>
         <View className="flex-row items-center">
           <Pressable onPress={handleDelete} className="p-2 mr-1">
             <Trash2 size={20} color={getThemeColor(colors, "error-500")} />
@@ -206,12 +206,12 @@ export default function ContactDetailScreen() {
             />
           ) : (
             <View className="w-24 h-24 rounded-full bg-primary-100 items-center justify-center mb-4">
-              <Text className="text-primary-700 text-4xl font-semibold">
+              <Text className="text-primary-700 text-4xl font-body-semibold">
                 {contact.displayName.charAt(0).toUpperCase()}
               </Text>
             </View>
           )}
-          <Text className="text-2xl font-bold text-typography-900 mb-1">
+          <Text className="text-2xl font-heading-bold text-typography-900 mb-1">
             {contact.displayName}
           </Text>
           {(contact.company || contact.jobTitle) && (
@@ -231,7 +231,7 @@ export default function ContactDetailScreen() {
                 >
                   <Text
                     style={{ color: tag.color }}
-                    className="text-sm font-medium"
+                    className="text-sm font-body-medium"
                   >
                     {tag.name}
                   </Text>
@@ -364,7 +364,7 @@ export default function ContactDetailScreen() {
         {/* Conversations */}
         <View className="px-4 mt-6">
           <View className="mb-3 flex-row items-center justify-between">
-            <Text className="text-typography-900 text-base font-semibold">Conversations</Text>
+            <Text className="text-typography-900 text-base font-body-semibold">Conversations</Text>
             <Pressable
               onPress={() => router.push(`/conversation/new?contactId=${id}`)}
               className="p-1 active:opacity-50"
@@ -400,7 +400,7 @@ export default function ContactDetailScreen() {
                       </View>
                       <View className="flex-1">
                         <View className="flex-row items-center justify-between mb-1">
-                          <Text className="text-typography-900 text-sm font-semibold">
+                          <Text className="text-typography-900 text-sm font-body-semibold">
                             {medium.label}
                           </Text>
                           <Text className="text-typography-400 text-xs ml-2">
@@ -429,7 +429,7 @@ export default function ContactDetailScreen() {
                   {isLoadingMoreConversations ? (
                     <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
                   ) : (
-                    <Text className="text-primary-600 text-center text-sm font-medium">
+                    <Text className="text-primary-600 text-center text-sm font-body-medium">
                       Load more conversations
                     </Text>
                   )}
@@ -442,7 +442,7 @@ export default function ContactDetailScreen() {
         {/* Reminders */}
         <View className="px-4 mt-6">
           <View className="mb-3 flex-row items-center justify-between">
-            <Text className="text-typography-900 text-base font-semibold">Reminders</Text>
+            <Text className="text-typography-900 text-base font-body-semibold">Reminders</Text>
             <Pressable
               onPress={() => router.push(`/reminder/new?contactId=${id}`)}
               className="p-1 active:opacity-50"
@@ -493,7 +493,7 @@ export default function ContactDetailScreen() {
                       </View>
                       <View className="flex-1">
                         <View className="flex-row items-center justify-between mb-1">
-                          <Text className="text-typography-900 text-sm font-semibold flex-1" numberOfLines={1}>
+                          <Text className="text-typography-900 text-sm font-body-semibold flex-1" numberOfLines={1}>
                             {reminder.title}
                           </Text>
                           <Text className="text-typography-400 text-xs ml-2">{dueLabel}</Text>
@@ -520,7 +520,7 @@ export default function ContactDetailScreen() {
                   {isLoadingMoreReminders ? (
                     <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
                   ) : (
-                    <Text className="text-primary-600 text-center text-sm font-medium">
+                    <Text className="text-primary-600 text-center text-sm font-body-medium">
                       Load more reminders
                     </Text>
                   )}
@@ -534,7 +534,7 @@ export default function ContactDetailScreen() {
         <View className="px-4 mt-6">
           <View className="mb-3 flex-row items-center justify-between">
             <View className="flex-row items-center">
-              <Text className="text-typography-900 text-base font-semibold">Relationships</Text>
+              <Text className="text-typography-900 text-base font-body-semibold">Relationships</Text>
               {relationships.length > 0 && (
                 <Pressable
                   onPress={() => setShowFullscreenGraph(true)}
@@ -603,7 +603,7 @@ export default function ContactDetailScreen() {
                         <GitFork size={18} color={getThemeColor(colors, "primary-600")} />
                       </View>
                       <View className="flex-1">
-                        <Text className="text-typography-900 text-sm font-semibold">{typeName}</Text>
+                        <Text className="text-typography-900 text-sm font-body-semibold">{typeName}</Text>
                         <Text className="text-typography-600 text-sm">{otherName}</Text>
                       </View>
                     </View>

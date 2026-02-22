@@ -73,7 +73,7 @@ export default function IncomingCallScreen() {
 
         {state === "not-found" && (
           <>
-            <Text className="text-typography-900 text-lg font-semibold text-center">
+            <Text className="text-typography-900 text-lg font-body-semibold text-center">
               Caller not found
             </Text>
             <Text className="text-typography-600 text-center mt-2">
@@ -85,14 +85,14 @@ export default function IncomingCallScreen() {
               className="mt-6 px-5 py-3 rounded-xl bg-primary-600"
               onPress={() => router.replace("/(tabs)/index" as any)}
             >
-              <Text className="text-typography-0 font-medium">Open Contacts</Text>
+              <Text className="text-typography-0 font-body-medium">Open Contacts</Text>
             </Pressable>
           </>
         )}
 
         {state === "error" && (
           <>
-            <Text className="text-typography-900 text-lg font-semibold text-center">
+            <Text className="text-typography-900 text-lg font-body-semibold text-center">
               Could not open caller profile
             </Text>
             <Text className="text-typography-600 text-center mt-2">
@@ -102,7 +102,7 @@ export default function IncomingCallScreen() {
               className="mt-6 px-5 py-3 rounded-xl bg-primary-600"
               onPress={() => router.replace("/(tabs)/index" as any)}
             >
-              <Text className="text-typography-0 font-medium">Open Contacts</Text>
+              <Text className="text-typography-0 font-body-medium">Open Contacts</Text>
             </Pressable>
           </>
         )}

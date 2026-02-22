@@ -236,7 +236,7 @@ export default function SettingsScreen() {
       <View className="bg-background-0 p-4 border-b border-border-100">
         <View className="flex-row items-center justify-between">
           <View>
-            <Text className="text-typography-900 text-base font-semibold">
+            <Text className="text-typography-900 text-base font-body-semibold">
               Dark Mode
             </Text>
             <Text className="text-typography-500 text-sm">
@@ -261,18 +261,18 @@ export default function SettingsScreen() {
       </View>
       <View className="bg-background-0 p-6 items-center border-b border-border-100">
         <View className="w-20 h-20 rounded-3xl bg-primary-100 items-center justify-center mb-4">
-          <Text className="text-primary-700 text-3xl font-bold">
+          <Text className="text-primary-700 text-3xl font-body-bold">
             {user?.email?.charAt(0).toUpperCase() || "U"}
           </Text>
         </View>
-        <Text className="text-typography-900 text-xl font-semibold">
+        <Text className="text-typography-900 text-xl font-body-semibold">
           {user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}
         </Text>
         <Text className="text-typography-500">{user?.email}</Text>
       </View>
 
       <View className="mt-6">
-        <Text className="text-typography-500 text-sm font-medium px-4 pb-2 uppercase">
+        <Text className="text-typography-500 text-sm font-body-medium px-4 pb-2 uppercase">
           Account
         </Text>
         <SettingRow
@@ -311,7 +311,7 @@ export default function SettingsScreen() {
       </View>
 
       <View className="mt-6">
-        <Text className="text-typography-500 text-sm font-medium px-4 pb-2 uppercase">
+        <Text className="text-typography-500 text-sm font-body-medium px-4 pb-2 uppercase">
           App
         </Text>
         <SettingRow
@@ -337,7 +337,7 @@ export default function SettingsScreen() {
       </View>
 
       <View className="mt-6">
-        <Text className="text-typography-500 text-sm font-medium px-4 pb-2 uppercase">
+        <Text className="text-typography-500 text-sm font-body-medium px-4 pb-2 uppercase">
           Data & Privacy
         </Text>
         <SettingRow
@@ -396,7 +396,7 @@ export default function SettingsScreen() {
       </View>
 
       <View className="mt-6">
-        <Text className="text-typography-500 text-sm font-medium px-4 pb-2 uppercase">
+        <Text className="text-typography-500 text-sm font-body-medium px-4 pb-2 uppercase">
           Support
         </Text>
         <SettingRow icon={HelpCircle} title="Help & Support" onPress={() => {}} />
@@ -408,7 +408,7 @@ export default function SettingsScreen() {
 
       <View className="items-center pb-8">
         <HuskyLogo size={40} color={getThemeColor(colors, "typography-300")} />
-        <Text className="text-typography-900 text-base font-bold mt-2">Orbit</Text>
+        <Text className="text-typography-900 text-base font-heading-bold mt-2">Orbit</Text>
         <Text className="text-typography-400 text-sm mt-0.5">v1.0.0</Text>
       </View>
     </ScrollView>

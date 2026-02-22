@@ -123,10 +123,10 @@ export default function WelcomeScreen() {
       <View className="px-6 pt-6 pb-2">
         <View className="flex-row items-center justify-between mb-4">
           <HuskyLogo size={32} color={primary600} />
-          <Text className="text-typography-500 text-sm font-medium">{progress}</Text>
+          <Text className="text-typography-500 text-sm font-body-medium">{progress}</Text>
         </View>
 
-        <Text className="text-typography-900 text-2xl font-bold mb-1">
+        <Text className="text-typography-900 text-2xl font-heading-bold mb-1">
           {currentStep.title}
         </Text>
         <Text className="text-typography-600 text-sm leading-5">
@@ -188,7 +188,7 @@ export default function WelcomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Import from Google"
             >
-              <Text className="text-typography-0 text-base font-semibold">Import from Google</Text>
+              <Text className="text-typography-0 text-base font-body-semibold">Import from Google</Text>
             </Pressable>
             <Pressable
               onPress={handlePrimary}
@@ -198,7 +198,7 @@ export default function WelcomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Next"
             >
-              <Text className="text-typography-700 text-base font-semibold">Next</Text>
+              <Text className="text-typography-700 text-base font-body-semibold">Next</Text>
             </Pressable>
             <Pressable
               onPress={completeOnboarding}
@@ -208,7 +208,7 @@ export default function WelcomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Skip import, show me around"
             >
-              <Text className="text-typography-500 text-sm font-medium">Skip import, show me around</Text>
+              <Text className="text-typography-500 text-sm font-body-medium">Skip import, show me around</Text>
             </Pressable>
           </>
         ) : (
@@ -222,7 +222,7 @@ export default function WelcomeScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Back"
               >
-                <Text className="text-typography-700 text-base font-semibold">Back</Text>
+                <Text className="text-typography-700 text-base font-body-semibold">Back</Text>
               </Pressable>
               <Pressable
                 onPress={handlePrimary}
@@ -235,7 +235,7 @@ export default function WelcomeScreen() {
                 {isFinishing ? (
                   <ActivityIndicator size="small" color={typo0} />
                 ) : (
-                  <Text className="text-typography-0 text-base font-semibold">{primaryLabel}</Text>
+                  <Text className="text-typography-0 text-base font-body-semibold">{primaryLabel}</Text>
                 )}
               </Pressable>
             </View>
@@ -249,7 +249,7 @@ export default function WelcomeScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Skip for now"
               >
-                <Text className="text-typography-500 text-sm font-medium">Skip for now</Text>
+                <Text className="text-typography-500 text-sm font-body-medium">Skip for now</Text>
               </Pressable>
             )}
           </>
@@ -290,10 +290,10 @@ function ContactsPreview({ primary600 }: { primary600: string }) {
             className="flex-row items-center py-3.5 border-b border-border-100"
           >
             <View className="w-11 h-11 rounded-2xl bg-primary-100 items-center justify-center mr-3">
-              <Text className="text-primary-700 font-semibold text-sm">{c.initials}</Text>
+              <Text className="text-primary-700 font-body-semibold text-sm">{c.initials}</Text>
             </View>
             <View className="flex-1">
-              <Text className="text-typography-900 font-semibold text-[15px]">{c.name}</Text>
+              <Text className="text-typography-900 font-body-semibold text-[15px]">{c.name}</Text>
               <Text className="text-typography-500 text-xs mt-0.5">{c.detail}</Text>
             </View>
           </View>
@@ -348,7 +348,7 @@ function AssistantPreview({
                   <Phone size={14} color={primary600} />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-typography-900 font-semibold text-sm">Parinder Kumar</Text>
+                  <Text className="text-typography-900 font-body-semibold text-sm">Parinder Kumar</Text>
                   <Text className="text-typography-500 text-xs mt-0.5">Phone Call · {today}</Text>
                 </View>
               </View>
@@ -432,7 +432,7 @@ function RemindersPreview({
           {/* Date column */}
           <View className="w-14 items-center mr-3">
             <Text className="text-typography-500 text-[10px] uppercase">{r.month}</Text>
-            <Text className="text-typography-900 text-xl font-bold">{r.day}</Text>
+            <Text className="text-typography-900 text-xl font-body-bold">{r.day}</Text>
             <Text className="text-typography-400 text-[10px]">{r.dow}</Text>
           </View>
 
@@ -442,7 +442,7 @@ function RemindersPreview({
               <View className="w-7 h-7 rounded-xl bg-primary-100 items-center justify-center mr-2">
                 <Bell size={12} color={primary600} />
               </View>
-              <Text className="text-typography-900 font-semibold text-sm flex-1" numberOfLines={1}>
+              <Text className="text-typography-900 font-body-semibold text-sm flex-1" numberOfLines={1}>
                 {r.title}
               </Text>
             </View>
@@ -472,9 +472,9 @@ function ContactDetailPreview({
       {/* Contact header */}
       <View className="items-center pt-5 pb-4 border-b border-border-100">
         <View className="w-16 h-16 rounded-2xl bg-primary-100 items-center justify-center mb-3">
-          <Text className="text-primary-700 text-xl font-bold">PK</Text>
+          <Text className="text-primary-700 text-xl font-body-bold">PK</Text>
         </View>
-        <Text className="text-typography-900 text-lg font-bold">Parinder Kumar</Text>
+        <Text className="text-typography-900 text-lg font-body-bold">Parinder Kumar</Text>
         <Text className="text-typography-500 text-sm mt-0.5">Neighbour</Text>
         <View className="flex-row mt-3">
           <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mx-2">
@@ -488,7 +488,7 @@ function ContactDetailPreview({
 
       {/* Conversations section */}
       <View className="px-4 pt-4">
-        <Text className="text-typography-500 text-xs font-semibold uppercase mb-2">
+        <Text className="text-typography-500 text-xs font-body-semibold uppercase mb-2">
           Conversations
         </Text>
         <View className="rounded-2xl border border-border-100 bg-background-50 p-3 mb-4">
@@ -497,7 +497,7 @@ function ContactDetailPreview({
               <Phone size={13} color={primary600} />
             </View>
             <View className="flex-1">
-              <Text className="text-typography-900 font-semibold text-sm">Phone Call</Text>
+              <Text className="text-typography-900 font-body-semibold text-sm">Phone Call</Text>
               <Text className="text-typography-500 text-xs">{today}</Text>
             </View>
           </View>
@@ -507,7 +507,7 @@ function ContactDetailPreview({
         </View>
 
         {/* Reminders section */}
-        <Text className="text-typography-500 text-xs font-semibold uppercase mb-2">
+        <Text className="text-typography-500 text-xs font-body-semibold uppercase mb-2">
           Reminders
         </Text>
         <View className="rounded-2xl border border-border-100 bg-background-50 p-3">
@@ -516,7 +516,7 @@ function ContactDetailPreview({
               <Bell size={13} color={primary600} />
             </View>
             <View className="flex-1">
-              <Text className="text-typography-900 font-semibold text-sm">Call Parinder</Text>
+              <Text className="text-typography-900 font-body-semibold text-sm">Call Parinder</Text>
               <Text className="text-typography-500 text-xs">Due {today} · Open</Text>
             </View>
           </View>

@@ -36,7 +36,7 @@ export default function SignIn() {
       <View className="flex-1 justify-center items-center px-8">
         <View className="mb-10 items-center">
           <HuskyLogo size={120} color={getThemeColor(colors, "primary-700")} />
-          <Text className="text-4xl font-bold text-typography-900 mt-4 mb-2">
+          <Text className="text-4xl font-heading-bold text-typography-900 mt-4 mb-2">
             Orbit
           </Text>
           <Text className="text-lg text-typography-600 text-center">
@@ -87,11 +87,11 @@ export default function SignIn() {
         >
           {!isLoading && (
             <View className="w-8 h-8 mr-3 rounded-full bg-secondary-100 items-center justify-center">
-              <Text className="text-secondary-700 font-semibold">G</Text>
+              <Text className="text-secondary-700 font-body-semibold">G</Text>
             </View>
           )}
           <Text
-            className={`text-lg font-semibold ${
+            className={`text-lg font-body-semibold ${
               isLoading ? "text-typography-400" : "text-typography-700"
             }`}
           >

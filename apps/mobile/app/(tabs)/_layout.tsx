@@ -111,6 +111,11 @@ export default function TabsLayout() {
         },
         headerTitleStyle: {
           fontWeight: "700",
+          fontFamily: Platform.select({
+            ios: "Lora_700Bold",
+            android: "Lora_700Bold",
+            default: "Lora, Georgia, serif",
+          }),
           color: getThemeColor(colors, "typography-900"),
         },
         headerShadowVisible: false,
@@ -132,7 +137,7 @@ export default function TabsLayout() {
           headerLeft: () => (
             <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 16 }}>
               <HuskyLogo size={46} color={getThemeColor(colors, "primary-700")} />
-              <Text style={{ fontSize: 20, fontWeight: "700", color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
+              <Text style={{ fontSize: 20, fontWeight: "700", fontFamily: Platform.select({ ios: "Lora_700Bold", android: "Lora_700Bold", default: "Lora, Georgia, serif" }), color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
                 Orbit
               </Text>
             </View>
@@ -150,7 +155,7 @@ export default function TabsLayout() {
           headerLeft: () => (
             <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 16 }}>
               <HuskyLogo size={46} color={getThemeColor(colors, "primary-700")} />
-              <Text style={{ fontSize: 20, fontWeight: "700", color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
+              <Text style={{ fontSize: 20, fontWeight: "700", fontFamily: Platform.select({ ios: "Lora_700Bold", android: "Lora_700Bold", default: "Lora, Georgia, serif" }), color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
                 Contacts
               </Text>
             </View>
@@ -168,7 +173,7 @@ export default function TabsLayout() {
           headerLeft: () => (
             <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 16 }}>
               <HuskyLogo size={46} color={getThemeColor(colors, "primary-700")} />
-              <Text style={{ fontSize: 20, fontWeight: "700", color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
+              <Text style={{ fontSize: 20, fontWeight: "700", fontFamily: Platform.select({ ios: "Lora_700Bold", android: "Lora_700Bold", default: "Lora, Georgia, serif" }), color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
                 Conversations
               </Text>
             </View>
@@ -186,7 +191,7 @@ export default function TabsLayout() {
           headerLeft: () => (
             <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 16 }}>
               <HuskyLogo size={46} color={getThemeColor(colors, "primary-700")} />
-              <Text style={{ fontSize: 20, fontWeight: "700", color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
+              <Text style={{ fontSize: 20, fontWeight: "700", fontFamily: Platform.select({ ios: "Lora_700Bold", android: "Lora_700Bold", default: "Lora, Georgia, serif" }), color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
                 Events
               </Text>
             </View>
@@ -204,7 +209,7 @@ export default function TabsLayout() {
           headerLeft: () => (
             <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 16 }}>
               <HuskyLogo size={46} color={getThemeColor(colors, "primary-700")} />
-              <Text style={{ fontSize: 20, fontWeight: "700", color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
+              <Text style={{ fontSize: 20, fontWeight: "700", fontFamily: Platform.select({ ios: "Lora_700Bold", android: "Lora_700Bold", default: "Lora, Georgia, serif" }), color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
                 Reminders
               </Text>
             </View>

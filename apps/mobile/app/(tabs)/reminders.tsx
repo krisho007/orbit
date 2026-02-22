@@ -85,7 +85,7 @@ function RemindersListHeader({
                 }`}
               >
                 <Text
-                  className={`text-sm font-medium ${
+                  className={`text-sm font-body-medium ${
                     isActive ? "text-primary-700" : "text-typography-700"
                   }`}
                 >
@@ -180,7 +180,7 @@ export default function RemindersScreen() {
 
           <View className="flex-1">
             <View className="flex-row items-center justify-between mb-1">
-              <Text className="text-typography-900 font-semibold flex-1" numberOfLines={1}>
+              <Text className="text-typography-900 font-body-semibold flex-1" numberOfLines={1}>
                 {item.title}
               </Text>
               <Text className="text-typography-400 text-xs ml-2">{dueLabel}</Text>
@@ -206,7 +206,7 @@ export default function RemindersScreen() {
       ) : (
         <>
           <HuskyLogo size={48} color={getThemeColor(colors, "typography-300")} />
-          <Text className="text-typography-900 text-lg font-semibold mb-2 mt-4">
+          <Text className="text-typography-900 text-lg font-body-semibold mb-2 mt-4">
             {search ? "No reminders found" : "No reminders yet"}
           </Text>
           <Text className="text-typography-500 text-center px-8">

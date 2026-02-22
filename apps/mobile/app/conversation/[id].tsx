@@ -150,7 +150,7 @@ export default function ConversationDetailScreen() {
         <Pressable onPress={handleBack} className="p-2">
           <ChevronLeft size={22} color={getThemeColor(colors, "primary-600")} />
         </Pressable>
-        <Text className="text-lg font-semibold text-typography-900">Conversation</Text>
+        <Text className="text-lg font-body-semibold text-typography-900">Conversation</Text>
         <View className="flex-row items-center">
           <Pressable onPress={handleDelete} className="p-2 mr-1">
             <Trash2 size={20} color={getThemeColor(colors, "error-500")} />
@@ -167,7 +167,7 @@ export default function ConversationDetailScreen() {
           <View className="w-16 h-16 rounded-2xl bg-primary-100 items-center justify-center mb-4">
             <MediumIcon size={28} color={getThemeColor(colors, "primary-600")} />
           </View>
-          <Text className="text-2xl font-bold text-typography-900 mb-1">
+          <Text className="text-2xl font-heading-bold text-typography-900 mb-1">
             {medium.label}
           </Text>
           <Text className="text-typography-500 text-base">
@@ -235,7 +235,7 @@ export default function ConversationDetailScreen() {
 
         {/* Linked Event */}
         <View className="px-4 mt-6">
-          <Text className="text-typography-900 text-base font-semibold mb-3">
+          <Text className="text-typography-900 text-base font-body-semibold mb-3">
             Linked Event
           </Text>
           {conversation.event ? (
@@ -248,7 +248,7 @@ export default function ConversationDetailScreen() {
                   <Calendar size={18} color={getThemeColor(colors, "primary-600")} />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-typography-900 text-sm font-semibold">
+                  <Text className="text-typography-900 text-sm font-body-semibold">
                     {conversation.event.title}
                   </Text>
                   <Text className="text-primary-600 text-sm mt-1">View event</Text>

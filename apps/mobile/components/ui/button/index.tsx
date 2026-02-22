@@ -91,7 +91,7 @@ const buttonStyle = tv({
 
 // Button text styles
 const buttonTextStyle = tv({
-  base: "font-semibold",
+  base: "font-body-semibold",
   variants: {
     action: {
       primary: "text-typography-0",

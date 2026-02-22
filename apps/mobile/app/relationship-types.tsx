@@ -156,7 +156,7 @@ export default function RelationshipTypesScreen() {
         <Pressable onPress={() => router.back()} className="p-2">
           <ChevronLeft size={22} color={getThemeColor(colors, "primary-600")} />
         </Pressable>
-        <Text className="text-lg font-semibold text-typography-900">
+        <Text className="text-lg font-body-semibold text-typography-900">
           Relationship Types
         </Text>
         <View className="w-10" />
@@ -175,7 +175,7 @@ export default function RelationshipTypesScreen() {
               disabled={isSeeding}
               className="mb-4 py-3 px-4 rounded-lg bg-primary-600 active:bg-primary-700"
             >
-              <Text className="text-white text-center text-base font-medium">
+              <Text className="text-white text-center text-base font-body-medium">
                 {isSeeding ? "Seeding..." : "Seed Default Types"}
               </Text>
             </Pressable>
@@ -184,7 +184,7 @@ export default function RelationshipTypesScreen() {
           {/* System Types */}
           {systemTypes.length > 0 && (
             <View className="mb-6">
-              <Text className="text-typography-500 text-sm font-medium mb-3 uppercase">
+              <Text className="text-typography-500 text-sm font-body-medium mb-3 uppercase">
                 System Types
               </Text>
               {systemTypes.map((type) => {
@@ -230,7 +230,7 @@ export default function RelationshipTypesScreen() {
 
           {/* Custom Types */}
           <View className="mb-6">
-            <Text className="text-typography-500 text-sm font-medium mb-3 uppercase">
+            <Text className="text-typography-500 text-sm font-body-medium mb-3 uppercase">
               Custom Types
             </Text>
             {customTypes.length === 0 && !showNewForm && (
@@ -295,7 +295,7 @@ export default function RelationshipTypesScreen() {
                   size={18}
                   color={getThemeColor(colors, "primary-600")}
                 />
-                <Text className="text-primary-600 text-sm font-medium ml-2">
+                <Text className="text-primary-600 text-sm font-body-medium ml-2">
                   Add New Type
                 </Text>
               </Pressable>
@@ -350,7 +350,7 @@ export default function RelationshipTypesScreen() {
                     disabled={isCreating}
                     className="flex-1 py-2.5 rounded-lg bg-primary-600"
                   >
-                    <Text className="text-white text-center text-sm font-medium">
+                    <Text className="text-white text-center text-sm font-body-medium">
                       {isCreating ? "Creating..." : "Create"}
                     </Text>
                   </Pressable>

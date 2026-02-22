@@ -187,7 +187,7 @@ export default function ReminderDetailScreen() {
         <Pressable onPress={handleBack} className="p-2">
           <ChevronLeft size={22} color={getThemeColor(colors, "primary-600")} />
         </Pressable>
-        <Text className="text-lg font-semibold text-typography-900">Reminder</Text>
+        <Text className="text-lg font-body-semibold text-typography-900">Reminder</Text>
         <View className="flex-row items-center">
           <Pressable onPress={handleDelete} className="p-2 mr-1">
             <Trash2 size={20} color={getThemeColor(colors, "error-500")} />
@@ -204,12 +204,12 @@ export default function ReminderDetailScreen() {
           <View className={`w-16 h-16 rounded-2xl ${statusColors.bg} items-center justify-center mb-4`}>
             <StatusIcon size={28} color={statusIconColor} />
           </View>
-          <Text className="text-2xl font-bold text-typography-900 mb-1 text-center px-4">
+          <Text className="text-2xl font-heading-bold text-typography-900 mb-1 text-center px-4">
             {reminder.title}
           </Text>
           <Text className="text-typography-500 text-base mb-3">{dueLabel}</Text>
           <View className={`px-3 py-1.5 rounded-full ${statusColors.pill}`}>
-            <Text className={`text-sm font-medium ${statusColors.pillText}`}>
+            <Text className={`text-sm font-body-medium ${statusColors.pillText}`}>
               {statusMeta.label}
             </Text>
           </View>
@@ -322,7 +322,7 @@ export default function ReminderDetailScreen() {
 
         {/* Status Buttons */}
         <View className="px-4 mt-6">
-          <Text className="text-typography-500 text-sm font-medium mb-3">Status</Text>
+          <Text className="text-typography-500 text-sm font-body-medium mb-3">Status</Text>
           <View className="flex-row flex-wrap">
             <Pressable
               disabled={isSaving}
@@ -334,7 +334,7 @@ export default function ReminderDetailScreen() {
               }`}
             >
               <Text
-                className={`text-sm font-medium ${
+                className={`text-sm font-body-medium ${
                   reminder.status === "OPEN" ? "text-primary-700" : "text-typography-700"
                 }`}
               >
@@ -352,7 +352,7 @@ export default function ReminderDetailScreen() {
               }`}
             >
               <Text
-                className={`text-sm font-medium ${
+                className={`text-sm font-body-medium ${
                   reminder.status === "DONE" ? "text-success-700" : "text-typography-700"
                 }`}
               >
@@ -370,7 +370,7 @@ export default function ReminderDetailScreen() {
               }`}
             >
               <Text
-                className={`text-sm font-medium ${
+                className={`text-sm font-body-medium ${
                   reminder.status === "CANCELED" ? "text-error-700" : "text-typography-700"
                 }`}
               >

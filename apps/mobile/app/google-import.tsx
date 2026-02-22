@@ -160,7 +160,7 @@ export default function GoogleImportScreen() {
     <SafeAreaView className="flex-1 bg-background-50">
       <ScrollView className="flex-1" contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
         <View className="mb-6">
-          <Text className="text-typography-900 text-3xl font-bold mb-2">
+          <Text className="text-typography-900 text-3xl font-heading-bold mb-2">
             Import Google Contacts
           </Text>
           <Text className="text-typography-600 text-base">
@@ -189,7 +189,7 @@ export default function GoogleImportScreen() {
         <View className="mb-4 p-4 rounded-2xl border border-border-200 bg-background-0">
           <View className="flex-row items-center justify-between mb-4">
             <View className="flex-1 mr-3">
-              <Text className="text-typography-900 font-semibold text-base">Include photos</Text>
+              <Text className="text-typography-900 font-body-semibold text-base">Include photos</Text>
               <Text className="text-typography-500 text-sm">Downloads Google profile photos.</Text>
             </View>
             <Switch
@@ -205,7 +205,7 @@ export default function GoogleImportScreen() {
 
           <View className="flex-row items-center justify-between mb-4">
             <View className="flex-1 mr-3">
-              <Text className="text-typography-900 font-semibold text-base">
+              <Text className="text-typography-900 font-body-semibold text-base">
                 Override existing contacts
               </Text>
               <Text className="text-typography-500 text-sm">
@@ -234,7 +234,7 @@ export default function GoogleImportScreen() {
             ) : (
               <View className="flex-row items-center">
                 <Download size={16} color={getThemeColor(colors, "typography-0")} />
-                <Text className="text-typography-0 font-semibold ml-2">Fetch Contacts</Text>
+                <Text className="text-typography-0 font-body-semibold ml-2">Fetch Contacts</Text>
               </View>
             )}
           </Pressable>
@@ -244,7 +244,7 @@ export default function GoogleImportScreen() {
           <View className="mb-4 p-4 rounded-2xl border border-border-200 bg-background-0">
             <View className="flex-row items-center mb-3">
               <Users size={18} color={getThemeColor(colors, "primary-600")} />
-              <Text className="text-typography-900 font-semibold ml-2">
+              <Text className="text-typography-900 font-body-semibold ml-2">
                 {contacts.length} contacts ready to import
               </Text>
             </View>
@@ -278,14 +278,14 @@ export default function GoogleImportScreen() {
               {isImporting ? (
                 <View className="flex-row items-center">
                   <ActivityIndicator size="small" color={getThemeColor(colors, "typography-0")} />
-                  <Text className="text-typography-0 font-semibold ml-2">
+                  <Text className="text-typography-0 font-body-semibold ml-2">
                     Importing {progress.current}/{progress.total}
                   </Text>
                 </View>
               ) : (
                 <View className="flex-row items-center">
                   <RefreshCw size={16} color={getThemeColor(colors, "typography-0")} />
-                  <Text className="text-typography-0 font-semibold ml-2">Import All</Text>
+                  <Text className="text-typography-0 font-body-semibold ml-2">Import All</Text>
                 </View>
               )}
             </Pressable>
@@ -296,7 +296,7 @@ export default function GoogleImportScreen() {
           <View className="mb-4 p-4 rounded-2xl border border-success-200 bg-success-50">
             <View className="flex-row items-center mb-2">
               <CircleCheck size={18} color={getThemeColor(colors, "success-600")} />
-              <Text className="text-success-700 font-semibold ml-2">Import complete</Text>
+              <Text className="text-success-700 font-body-semibold ml-2">Import complete</Text>
             </View>
             <Text className="text-success-700">Imported: {result.imported}</Text>
             <Text className="text-success-700">Updated: {result.updated}</Text>
@@ -315,7 +315,7 @@ export default function GoogleImportScreen() {
             {isCompletingOnboarding ? (
               <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
             ) : (
-              <Text className="text-typography-800 font-semibold">
+              <Text className="text-typography-800 font-body-semibold">
                 {isOnboardingEntry ? "Continue to Orbit" : "Done"}
               </Text>
             )}
@@ -329,7 +329,7 @@ export default function GoogleImportScreen() {
                 className="py-4 rounded-2xl border border-border-200 bg-background-0 items-center mb-3"
                 style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1 }]}
               >
-                <Text className="text-typography-700 font-medium">Back to onboarding</Text>
+                <Text className="text-typography-700 font-body-medium">Back to onboarding</Text>
               </Pressable>
               <Pressable
                 onPress={handleSkip}
@@ -337,7 +337,7 @@ export default function GoogleImportScreen() {
                 className="py-4 rounded-2xl items-center"
                 style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1 }]}
               >
-                <Text className="text-typography-500 font-medium">Skip onboarding</Text>
+                <Text className="text-typography-500 font-body-medium">Skip onboarding</Text>
               </Pressable>
             </>
           ) : (
@@ -347,7 +347,7 @@ export default function GoogleImportScreen() {
               className="py-4 rounded-2xl items-center"
               style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1 }]}
             >
-              <Text className="text-typography-500 font-medium">Cancel</Text>
+              <Text className="text-typography-500 font-body-medium">Cancel</Text>
             </Pressable>
           )}
         </View>

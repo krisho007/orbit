@@ -138,7 +138,7 @@ export default function NewConversationScreen() {
         <Pressable onPress={() => router.back()} className="p-2">
           <Text className="text-primary-600 text-base">Cancel</Text>
         </Pressable>
-        <Text className="text-lg font-semibold text-typography-900">New Conversation</Text>
+        <Text className="text-lg font-body-semibold text-typography-900">New Conversation</Text>
         <Pressable onPress={handleSubmit} disabled={createConversation.isPending} className="p-2">
           <Text
             className={`text-base ${
@@ -156,7 +156,7 @@ export default function NewConversationScreen() {
       >
       <ScrollView className="flex-1 px-4 py-6" keyboardShouldPersistTaps="handled">
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Medium *</Text>
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">Medium *</Text>
           <View className="flex-row flex-wrap">
             {MEDIUM_OPTIONS.map((option) => {
               const isActive = formData.medium === option.value;
@@ -171,7 +171,7 @@ export default function NewConversationScreen() {
                   }`}
                 >
                   <Text
-                    className={`text-sm font-medium ${
+                    className={`text-sm font-body-medium ${
                       isActive ? "text-primary-700" : "text-typography-700"
                     }`}
                   >
@@ -184,7 +184,7 @@ export default function NewConversationScreen() {
         </View>
 
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Date *</Text>
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">Date *</Text>
           <View className="flex-row">
             <Pressable
               onPress={() => setShowDatePicker(true)}
@@ -222,7 +222,7 @@ export default function NewConversationScreen() {
         </View>
 
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Follow-up Date</Text>
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">Follow-up Date</Text>
           {followUpAt ? (
             <View className="flex-row items-center">
               <Pressable
@@ -242,7 +242,7 @@ export default function NewConversationScreen() {
                 </Text>
               </Pressable>
               <Pressable onPress={() => setFollowUpAt(null)} className="p-2">
-                <Text className="text-error-600 text-sm font-medium">Clear</Text>
+                <Text className="text-error-600 text-sm font-body-medium">Clear</Text>
               </Pressable>
             </View>
           ) : (
@@ -275,7 +275,7 @@ export default function NewConversationScreen() {
         </View>
 
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">Notes</Text>
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">Notes</Text>
           <TextInput
             className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
             style={{ minHeight: 160 }}
@@ -290,7 +290,7 @@ export default function NewConversationScreen() {
         </View>
 
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">
             Participants (Optional)
           </Text>
           {selectedParticipants.length > 0 && (
@@ -301,10 +301,10 @@ export default function NewConversationScreen() {
                   onPress={() => removeParticipant(contact.id)}
                   className="flex-row items-center px-3 py-1.5 rounded-full mr-2 mb-2 bg-primary-100 border border-primary-300"
                 >
-                  <Text className="text-sm font-medium text-primary-700">
+                  <Text className="text-sm font-body-medium text-primary-700">
                     {contact.displayName}
                   </Text>
-                  <Text className="text-primary-700 ml-1.5 text-xs font-bold">✕</Text>
+                  <Text className="text-primary-700 ml-1.5 text-xs font-body-bold">✕</Text>
                 </Pressable>
               ))}
             </View>

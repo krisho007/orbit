@@ -146,7 +146,7 @@ export default function EventsScreen() {
             <Text className="text-xs text-typography-500 uppercase">
               {format(eventDate, "MMM")}
             </Text>
-            <Text className="text-2xl font-bold text-typography-900">
+            <Text className="text-2xl font-body-bold text-typography-900">
               {format(eventDate, "d")}
             </Text>
             <Text className="text-xs text-typography-400">
@@ -159,7 +159,7 @@ export default function EventsScreen() {
               <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mr-2">
                 <EventIcon size={14} color={getThemeColor(colors, "primary-600")} />
               </View>
-              <Text className="text-typography-900 font-semibold flex-1" numberOfLines={1}>
+              <Text className="text-typography-900 font-body-semibold flex-1" numberOfLines={1}>
                 {item.title}
               </Text>
             </View>
@@ -196,7 +196,7 @@ export default function EventsScreen() {
       ) : (
         <>
           <HuskyLogo size={48} color={getThemeColor(colors, "typography-300")} />
-          <Text className="text-typography-900 text-lg font-semibold mb-2 mt-4">
+          <Text className="text-typography-900 text-lg font-body-semibold mb-2 mt-4">
             {search ? "No events found" : "No events yet"}
           </Text>
           <Text className="text-typography-500 text-center px-8">

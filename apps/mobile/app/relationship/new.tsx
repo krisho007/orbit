@@ -208,7 +208,7 @@ export default function NewRelationshipScreen() {
         <Pressable onPress={() => router.back()} className="p-2">
           <Text className="text-primary-600 text-base">Cancel</Text>
         </Pressable>
-        <Text className="text-lg font-semibold text-typography-900">
+        <Text className="text-lg font-body-semibold text-typography-900">
           New Relationship
         </Text>
         <Pressable onPress={handleSubmit} disabled={createRelationship.isPending} className="p-2">
@@ -225,12 +225,12 @@ export default function NewRelationshipScreen() {
       <ScrollView className="flex-1 px-4 py-6" keyboardShouldPersistTaps="handled">
         {/* From Contact */}
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">
             From Contact
           </Text>
           {fromContact ? (
             <View className="px-4 py-3 bg-primary-50 rounded-lg border border-primary-200">
-              <Text className="text-primary-700 text-base font-medium">
+              <Text className="text-primary-700 text-base font-body-medium">
                 {fromContact.displayName}
               </Text>
             </View>
@@ -245,7 +245,7 @@ export default function NewRelationshipScreen() {
 
         {/* Relationship Type */}
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">
             Relationship Type *
           </Text>
 
@@ -254,7 +254,7 @@ export default function NewRelationshipScreen() {
               onPress={() => setSelectedType(null)}
               className="px-4 py-3 bg-primary-50 rounded-lg border border-primary-200"
             >
-              <Text className="text-primary-700 text-base font-medium">
+              <Text className="text-primary-700 text-base font-body-medium">
                 {selectedType.name}
               </Text>
               <Text className="text-primary-500 text-xs mt-1">Tap to change</Text>
@@ -319,7 +319,7 @@ export default function NewRelationshipScreen() {
                       onPress={() => setShowNewTypeForm(true)}
                       className="py-2"
                     >
-                      <Text className="text-primary-600 text-sm font-medium">
+                      <Text className="text-primary-600 text-sm font-body-medium">
                         + Create new type
                       </Text>
                     </Pressable>
@@ -374,7 +374,7 @@ export default function NewRelationshipScreen() {
                           disabled={isCreatingType}
                           className="flex-1 py-2 rounded-lg bg-primary-600"
                         >
-                          <Text className="text-white text-center text-sm font-medium">
+                          <Text className="text-white text-center text-sm font-body-medium">
                             {isCreatingType ? "Creating..." : "Create"}
                           </Text>
                         </Pressable>
@@ -389,7 +389,7 @@ export default function NewRelationshipScreen() {
 
         {/* To Contact */}
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">
             To Contact *
           </Text>
 
@@ -401,7 +401,7 @@ export default function NewRelationshipScreen() {
               }}
               className="px-4 py-3 bg-primary-50 rounded-lg border border-primary-200"
             >
-              <Text className="text-primary-700 text-base font-medium">
+              <Text className="text-primary-700 text-base font-body-medium">
                 {toContact.displayName}
               </Text>
               <Text className="text-primary-500 text-xs mt-1">Tap to change</Text>
@@ -461,7 +461,7 @@ export default function NewRelationshipScreen() {
 
         {/* Notes */}
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-medium mb-2">
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">
             Notes (Optional)
           </Text>
           <TextInput

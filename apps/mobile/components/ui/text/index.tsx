@@ -5,7 +5,7 @@ import { Text as RNText, type TextProps as RNTextProps } from "react-native";
 import { tv, type VariantProps } from "tailwind-variants";
 
 const textStyle = tv({
-  base: "text-typography-900",
+  base: "text-typography-900 font-body",
   variants: {
     size: {
       "2xs": "text-[10px] leading-[14px]",
@@ -21,7 +21,7 @@ const textStyle = tv({
       "6xl": "text-6xl leading-[1]",
     },
     bold: {
-      true: "font-bold",
+      true: "font-body-bold",
       false: "",
     },
     italic: {

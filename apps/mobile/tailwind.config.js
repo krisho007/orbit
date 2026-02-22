@@ -1,3 +1,5 @@
+const { platformSelect } = require("nativewind/theme");
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: "class",
@@ -164,8 +166,41 @@ module.exports = {
         },
       },
       fontFamily: {
-        heading: undefined,
-        body: undefined,
+        body: platformSelect({
+          ios: ["Inter_400Regular"],
+          android: ["Inter_400Regular"],
+          default: ["Inter", "system-ui", "sans-serif"],
+        }),
+        "body-medium": platformSelect({
+          ios: ["Inter_500Medium"],
+          android: ["Inter_500Medium"],
+          default: ["Inter", "system-ui", "sans-serif"],
+        }),
+        "body-semibold": platformSelect({
+          ios: ["Inter_600SemiBold"],
+          android: ["Inter_600SemiBold"],
+          default: ["Inter", "system-ui", "sans-serif"],
+        }),
+        "body-bold": platformSelect({
+          ios: ["Inter_700Bold"],
+          android: ["Inter_700Bold"],
+          default: ["Inter", "system-ui", "sans-serif"],
+        }),
+        heading: platformSelect({
+          ios: ["Lora_400Regular"],
+          android: ["Lora_400Regular"],
+          default: ["Lora", "Georgia", "serif"],
+        }),
+        "heading-semibold": platformSelect({
+          ios: ["Lora_600SemiBold"],
+          android: ["Lora_600SemiBold"],
+          default: ["Lora", "Georgia", "serif"],
+        }),
+        "heading-bold": platformSelect({
+          ios: ["Lora_700Bold"],
+          android: ["Lora_700Bold"],
+          default: ["Lora", "Georgia", "serif"],
+        }),
         mono: undefined,
       },
       borderRadius: {
@@ -181,5 +216,15 @@ module.exports = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    function ({ addUtilities }) {
+      addUtilities({
+        ".font-body-medium": { "font-weight": "500" },
+        ".font-body-semibold": { "font-weight": "600" },
+        ".font-body-bold": { "font-weight": "700" },
+        ".font-heading-semibold": { "font-weight": "600" },
+        ".font-heading-bold": { "font-weight": "700" },
+      });
+    },
+  ],
 };

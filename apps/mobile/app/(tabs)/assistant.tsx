@@ -682,10 +682,10 @@ export default function AssistantScreen() {
       >
         <View className="flex-row items-center">
           <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mr-3">
-            <Text className="text-primary-700 text-base font-semibold">{initial}</Text>
+            <Text className="text-primary-700 text-base font-body-semibold">{initial}</Text>
           </View>
           <View className="flex-1">
-            <Text className="text-typography-900 font-semibold text-base" numberOfLines={1}>
+            <Text className="text-typography-900 font-body-semibold text-base" numberOfLines={1}>
               {contact.displayName}
             </Text>
             {subtitle.length > 0 && (
@@ -733,7 +733,7 @@ export default function AssistantScreen() {
             <MediumIcon size={18} color={getThemeColor(colors, "primary-600")} />
           </View>
           <View className="flex-1">
-            <Text className="text-typography-900 font-semibold text-base" numberOfLines={1}>
+            <Text className="text-typography-900 font-body-semibold text-base" numberOfLines={1}>
               {participants}
             </Text>
             <Text className="text-typography-500 text-sm mt-0.5">
@@ -771,7 +771,7 @@ export default function AssistantScreen() {
             <CalendarDays size={18} color={getThemeColor(colors, "primary-600")} />
           </View>
           <View className="flex-1">
-            <Text className="text-typography-900 font-semibold text-base" numberOfLines={1}>
+            <Text className="text-typography-900 font-body-semibold text-base" numberOfLines={1}>
               {event.title}
             </Text>
             <Text className="text-typography-500 text-sm mt-0.5">
@@ -821,7 +821,7 @@ export default function AssistantScreen() {
             <Bell size={18} color={getThemeColor(colors, "primary-600")} />
           </View>
           <View className="flex-1">
-            <Text className="text-typography-900 font-semibold text-base" numberOfLines={1}>
+            <Text className="text-typography-900 font-body-semibold text-base" numberOfLines={1}>
               {reminder.title}
             </Text>
             <Text className="text-typography-500 text-sm mt-0.5">
@@ -882,7 +882,7 @@ export default function AssistantScreen() {
         key={`${option.entityKind}:${option.id}`}
         className="bg-background-0 border border-border-200 rounded-xl p-4 mb-3"
       >
-        <Text className="text-typography-900 font-semibold text-base" numberOfLines={1}>
+        <Text className="text-typography-900 font-body-semibold text-base" numberOfLines={1}>
           {option.title}
         </Text>
         {option.subtitle ? (
@@ -896,7 +896,7 @@ export default function AssistantScreen() {
               onPress={() => openSelectionOption(option)}
               className="rounded-xl border border-border-200 bg-background-50 px-3 py-2 mr-2 active:bg-background-100"
             >
-              <Text className="text-typography-700 text-sm font-medium">Open</Text>
+              <Text className="text-typography-700 text-sm font-body-medium">Open</Text>
             </Pressable>
           ) : null}
           <Pressable
@@ -904,7 +904,7 @@ export default function AssistantScreen() {
             disabled={isLoading}
             className={`rounded-xl px-3 py-2 ${isLoading ? "bg-primary-200" : "bg-primary-600 active:bg-primary-700"}`}
           >
-            <Text className="text-typography-0 text-sm font-medium">Select</Text>
+            <Text className="text-typography-0 text-sm font-body-medium">Select</Text>
           </Pressable>
         </View>
       </View>
@@ -1248,8 +1248,8 @@ export default function AssistantScreen() {
                 <Text
                   className={
                     action.style === "primary"
-                      ? "text-typography-0 text-sm font-medium"
-                      : "text-typography-700 text-sm font-medium"
+                      ? "text-typography-0 text-sm font-body-medium"
+                      : "text-typography-700 text-sm font-body-medium"
                   }
                 >
                   {action.label}
@@ -1266,7 +1266,7 @@ export default function AssistantScreen() {
     <View className="flex-1 justify-center px-5 pb-6">
       <View className="items-center mb-8">
         <HuskyLogo size={56} color={getThemeColor(colors, "primary-600")} />
-        <Text className="text-typography-900 text-lg font-semibold mt-4">What can I help with?</Text>
+        <Text className="text-typography-900 text-lg font-body-semibold mt-4">What can I help with?</Text>
         <Text className="text-typography-500 text-sm mt-1">
           Search, log, and plan — just ask.
         </Text>
@@ -1355,12 +1355,12 @@ export default function AssistantScreen() {
                     }],
                   }}
                 />
-                <Text className="text-typography-700 text-base font-medium flex-1">Listening...</Text>
+                <Text className="text-typography-700 text-base font-body-medium flex-1">Listening...</Text>
                 <Pressable
                   onPress={stopRecordingAndTranscribe}
                   className="bg-primary-600 rounded-2xl px-5 py-2.5 active:bg-primary-700"
                 >
-                  <Text className="text-typography-0 text-sm font-semibold">Done</Text>
+                  <Text className="text-typography-0 text-sm font-body-semibold">Done</Text>
                 </Pressable>
               </Animated.View>
             </View>
@@ -1436,7 +1436,7 @@ export default function AssistantScreen() {
     >
       <View className="flex-1 bg-background-50">
         <View className="flex-row items-center justify-between px-4 pt-4 pb-3 border-b border-border-200 bg-background-0">
-          <Text className="text-typography-900 text-lg font-semibold">Chat History</Text>
+          <Text className="text-typography-900 text-lg font-body-semibold">Chat History</Text>
           <Pressable
             onPress={() => setShowHistory(false)}
             className="w-9 h-9 rounded-xl items-center justify-center active:bg-background-100"
@@ -1467,7 +1467,7 @@ export default function AssistantScreen() {
               >
                 <View className="flex-row items-start justify-between">
                   <View className="flex-1 mr-3">
-                    <Text className="text-typography-900 font-semibold text-base" numberOfLines={1}>
+                    <Text className="text-typography-900 font-body-semibold text-base" numberOfLines={1}>
                       {item.title || "Untitled"}
                     </Text>
                     {item.lastMessage && (

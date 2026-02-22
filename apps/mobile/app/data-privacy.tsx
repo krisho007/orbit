@@ -48,12 +48,12 @@ export default function DataPrivacyScreen() {
         >
           <ArrowLeft size={20} color={getThemeColor(colors, "typography-700")} />
         </Pressable>
-        <Text className="text-typography-900 text-lg font-semibold">Data & Third Parties</Text>
+        <Text className="text-typography-900 text-lg font-body-semibold">Data & Third Parties</Text>
       </View>
 
       <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <View className="bg-background-0 rounded-2xl border border-border-100 p-5 mb-6">
-          <Text className="text-typography-900 text-base font-semibold mb-3">
+          <Text className="text-typography-900 text-base font-body-semibold mb-3">
             Data We Collect
           </Text>
           <Text className="text-typography-600 text-sm mb-4">
@@ -67,7 +67,7 @@ export default function DataPrivacyScreen() {
           ))}
         </View>
 
-        <Text className="text-typography-900 text-base font-semibold mb-3 px-1">
+        <Text className="text-typography-900 text-base font-body-semibold mb-3 px-1">
           Third-Party Services
         </Text>
         <Text className="text-typography-600 text-sm mb-4 px-1">
@@ -79,7 +79,7 @@ export default function DataPrivacyScreen() {
             key={service.name}
             className="bg-background-0 rounded-2xl border border-border-100 p-5 mb-4"
           >
-            <Text className="text-typography-900 text-base font-semibold mb-1">
+            <Text className="text-typography-900 text-base font-body-semibold mb-1">
               {service.name}
             </Text>
             <Text className="text-typography-600 text-sm mb-2">{service.purpose}</Text>
@@ -97,7 +97,7 @@ export default function DataPrivacyScreen() {
         ))}
 
         <View className="bg-background-0 rounded-2xl border border-border-100 p-5 mt-2">
-          <Text className="text-typography-900 text-sm font-semibold mb-2">Your Rights</Text>
+          <Text className="text-typography-900 text-sm font-body-semibold mb-2">Your Rights</Text>
           <Text className="text-typography-600 text-sm leading-5">
             You can export all your data or delete your account at any time from Settings.
             You can also control whether third-party AI processing is enabled

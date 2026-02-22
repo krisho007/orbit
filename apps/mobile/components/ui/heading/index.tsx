@@ -5,7 +5,7 @@ import { Text, type TextProps } from "react-native";
 import { tv, type VariantProps } from "tailwind-variants";
 
 const headingStyle = tv({
-  base: "text-typography-900 font-bold",
+  base: "text-typography-900 font-heading-bold",
   variants: {
     size: {
       "5xl": "text-5xl leading-[56px]",
@@ -23,8 +23,8 @@ const headingStyle = tv({
       false: "",
     },
     bold: {
-      true: "font-bold",
-      false: "font-normal",
+      true: "font-heading-bold",
+      false: "font-heading",
     },
     underline: {
       true: "underline",

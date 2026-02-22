@@ -131,7 +131,7 @@ export default function TabsLayout() {
           title: "Orbit",
           headerLeft: () => (
             <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 16 }}>
-              <HuskyLogo size={28} color={getThemeColor(colors, "primary-700")} />
+              <HuskyLogo size={46} color={getThemeColor(colors, "primary-700")} />
               <Text style={{ fontSize: 20, fontWeight: "700", color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
                 Orbit
               </Text>
@@ -139,7 +139,7 @@ export default function TabsLayout() {
           ),
           headerTitle: () => null,
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={HuskyLogo} iconSize={24} />
+            <TabIcon focused={focused} icon={HuskyLogo} iconSize={32} />
           ),
         }}
       />
@@ -147,6 +147,15 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: "Contacts",
+          headerLeft: () => (
+            <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 16 }}>
+              <HuskyLogo size={46} color={getThemeColor(colors, "primary-700")} />
+              <Text style={{ fontSize: 20, fontWeight: "700", color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
+                Contacts
+              </Text>
+            </View>
+          ),
+          headerTitle: () => null,
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} icon={Users} />
           ),
@@ -156,6 +165,15 @@ export default function TabsLayout() {
         name="conversations"
         options={{
           title: "Conversations",
+          headerLeft: () => (
+            <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 16 }}>
+              <HuskyLogo size={46} color={getThemeColor(colors, "primary-700")} />
+              <Text style={{ fontSize: 20, fontWeight: "700", color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
+                Conversations
+              </Text>
+            </View>
+          ),
+          headerTitle: () => null,
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} icon={MessageCircle} />
           ),
@@ -165,6 +183,15 @@ export default function TabsLayout() {
         name="events"
         options={{
           title: "Events",
+          headerLeft: () => (
+            <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 16 }}>
+              <HuskyLogo size={46} color={getThemeColor(colors, "primary-700")} />
+              <Text style={{ fontSize: 20, fontWeight: "700", color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
+                Events
+              </Text>
+            </View>
+          ),
+          headerTitle: () => null,
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} icon={CalendarDays} />
           ),
@@ -174,6 +201,15 @@ export default function TabsLayout() {
         name="reminders"
         options={{
           title: "Reminders",
+          headerLeft: () => (
+            <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 16 }}>
+              <HuskyLogo size={46} color={getThemeColor(colors, "primary-700")} />
+              <Text style={{ fontSize: 20, fontWeight: "700", color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
+                Reminders
+              </Text>
+            </View>
+          ),
+          headerTitle: () => null,
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} icon={Bell} />
           ),

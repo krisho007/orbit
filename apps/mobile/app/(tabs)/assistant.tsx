@@ -65,6 +65,8 @@ import {
   AssistantSelectionOption,
   AssistantConversationSummary,
 } from "../../lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { contactKeys, conversationKeys, eventKeys, reminderKeys } from "../../lib/query-keys";
 import { useAuth } from "../../lib/auth";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
 import { useGluestackUI } from "../../components/ui/gluestack-ui-provider";
@@ -149,6 +151,7 @@ const REMINDER_STATUS_META: Record<string, string> = {
 export default function AssistantScreen() {
   const router = useRouter();
   const navigation = useNavigation();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
@@ -603,6 +606,15 @@ export default function AssistantScreen() {
             },
           ];
         });
+
+        // Invalidate list caches when the assistant creates objects
+        if (response.ui?.kind === "created") {
+          const kinds = new Set(response.ui.cards.map((c) => c.kind));
+          if (kinds.has("contact")) queryClient.invalidateQueries({ queryKey: contactKeys.lists() });
+          if (kinds.has("conversation")) queryClient.invalidateQueries({ queryKey: conversationKeys.lists() });
+          if (kinds.has("event")) queryClient.invalidateQueries({ queryKey: eventKeys.lists() });
+          if (kinds.has("reminder")) queryClient.invalidateQueries({ queryKey: reminderKeys.lists() });
+        }
       } catch (error) {
         console.error("Assistant error:", error);
         setMessages((prev) => {
@@ -625,7 +637,7 @@ export default function AssistantScreen() {
         }, 100);
       }
     },
-    [messages, nextMessageId, consent, conversationId]
+    [messages, nextMessageId, consent, conversationId, queryClient]
   );
 
   // Derive whether confirmation buttons are pending (last assistant message has actions)

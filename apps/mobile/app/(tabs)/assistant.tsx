@@ -1435,8 +1435,13 @@ export default function AssistantScreen() {
       onRequestClose={() => setShowHistory(false)}
     >
       <View className="flex-1 bg-background-50">
-        <View className="flex-row items-center justify-between px-4 pt-4 pb-3 border-b border-border-200 bg-background-0">
-          <Text className="text-typography-900 text-lg font-body-semibold">Chat History</Text>
+        <View style={{ paddingTop: insets.top + 8 }} className="flex-row items-center justify-between px-4 pb-3 border-b border-border-200 bg-background-0">
+          <View className="flex-row items-center" style={{ marginLeft: 4 }}>
+            <HuskyLogo size={46} color={getThemeColor(colors, "primary-700")} />
+            <Text style={{ fontSize: 20, fontWeight: "700", fontFamily: Platform.select({ ios: "Lora_700Bold", android: "Lora_700Bold", default: "Lora, Georgia, serif" }), color: getThemeColor(colors, "typography-900"), marginLeft: 8 }}>
+              Chat History
+            </Text>
+          </View>
           <Pressable
             onPress={() => setShowHistory(false)}
             className="w-9 h-9 rounded-xl items-center justify-center active:bg-background-100"

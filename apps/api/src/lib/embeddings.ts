@@ -34,6 +34,46 @@ export function buildEmbeddingText({
 }
 
 /**
+ * Build enriched text for embedding an event.
+ * Format: [TYPE] meeting | [TITLE] Team standup | [LOCATION] Office | [PARTICIPANTS] Alice, Bob | [DESCRIPTION] weekly sync...
+ */
+export function buildEventEmbeddingText({
+  title,
+  eventType,
+  location,
+  description,
+  participantNames,
+}: {
+  title: string;
+  eventType?: string;
+  location?: string | null;
+  description?: string | null;
+  participantNames?: string[];
+}): string {
+  const parts: string[] = [];
+
+  if (eventType) {
+    parts.push(`[TYPE] ${eventType.toLowerCase().replace(/_/g, " ")}`);
+  }
+
+  parts.push(`[TITLE] ${title}`);
+
+  if (location) {
+    parts.push(`[LOCATION] ${location}`);
+  }
+
+  if (participantNames && participantNames.length > 0) {
+    parts.push(`[PARTICIPANTS] ${participantNames.join(", ")}`);
+  }
+
+  if (description) {
+    parts.push(`[DESCRIPTION] ${description}`);
+  }
+
+  return parts.join(" | ");
+}
+
+/**
  * Generate an embedding for a document (conversation content).
  * Uses RETRIEVAL_DOCUMENT task type for storage.
  */

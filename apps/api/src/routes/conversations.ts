@@ -16,7 +16,6 @@ import { formatValidationErrors, clampLimit } from "../utils/validation";
 import {
   generateEmbedding,
   generateQueryEmbedding,
-  generateEmbeddings,
   buildEmbeddingText,
 } from "../lib/embeddings";
 
@@ -713,101 +712,6 @@ app.put("/:id", async (c) => {
   } catch (error) {
     console.error("Error updating conversation:", error);
     return c.json({ error: "Failed to update conversation" }, 500);
-  }
-});
-
-// POST /api/conversations/embeddings/backfill - Generate embeddings for conversations that don't have one
-app.post("/embeddings/backfill", async (c) => {
-  const userId = c.get("userId");
-  const BATCH_SIZE = 100;
-
-  try {
-    // Find conversations with content but no embedding
-    const toEmbed = await db
-      .select({
-        id: conversations.id,
-        content: conversations.content,
-        medium: conversations.medium,
-      })
-      .from(conversations)
-      .where(
-        and(
-          eq(conversations.userId, userId),
-          isNotNull(conversations.content),
-          sql`${conversations.embedding} IS NULL`
-        )
-      )
-      .orderBy(desc(conversations.happenedAt))
-      .limit(BATCH_SIZE);
-
-    if (toEmbed.length === 0) {
-      return c.json({ processed: 0, remaining: 0 });
-    }
-
-    // Get participant names for each conversation
-    const convIds = toEmbed.map((c) => c.id);
-    const participantsData = await db
-      .select({
-        conversationId: conversationParticipants.conversationId,
-        displayName: contacts.displayName,
-      })
-      .from(conversationParticipants)
-      .innerJoin(contacts, eq(conversationParticipants.contactId, contacts.id))
-      .where(inArray(conversationParticipants.conversationId, convIds));
-
-    // Group participant names by conversation
-    const participantsByConv = new Map<string, string[]>();
-    for (const row of participantsData) {
-      const names = participantsByConv.get(row.conversationId) || [];
-      names.push(row.displayName);
-      participantsByConv.set(row.conversationId, names);
-    }
-
-    // Build texts for embedding
-    const texts = toEmbed.map((conv) =>
-      buildEmbeddingText({
-        content: conv.content,
-        medium: conv.medium,
-        participantNames: participantsByConv.get(conv.id) || [],
-      })
-    );
-
-    // Generate embeddings in batch
-    const embeddings = await generateEmbeddings(texts);
-
-    // Update each conversation with its embedding
-    let processed = 0;
-    for (let i = 0; i < toEmbed.length; i++) {
-      const conv = toEmbed[i];
-      const emb = embeddings[i];
-      if (conv && emb) {
-        await db
-          .update(conversations)
-          .set({ embedding: emb })
-          .where(eq(conversations.id, conv.id));
-        processed++;
-      }
-    }
-
-    // Count remaining
-    const [remainingResult] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(conversations)
-      .where(
-        and(
-          eq(conversations.userId, userId),
-          isNotNull(conversations.content),
-          sql`${conversations.embedding} IS NULL`
-        )
-      );
-
-    return c.json({
-      processed,
-      remaining: Number(remainingResult?.count || 0),
-    });
-  } catch (error) {
-    console.error("Error backfilling embeddings:", error);
-    return c.json({ error: "Failed to backfill embeddings" }, 500);
   }
 });
 

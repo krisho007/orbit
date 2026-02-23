@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { tool } from "ai";
-import { eq, and, desc, sql, ilike, or, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, ilike, or, inArray, isNotNull } from "drizzle-orm";
 import {
   db,
   contacts,
@@ -15,7 +15,128 @@ import { assertValidEventType, assertValidMedium } from "../enums";
 import { getOwnedEvent } from "../ownership";
 import { findBestContactMatch } from "../db-helpers";
 import { enrichEvents } from "../enrichment";
+import {
+  generateEmbedding,
+  generateQueryEmbedding,
+  buildEventEmbeddingText,
+} from "../../../lib/embeddings";
 import type { EnumSchemas } from "./contacts";
+
+/** Fire-and-forget: generate embedding for an event and store it. */
+function generateAndStoreEventEmbedding(
+  eventId: string,
+  title: string,
+  eventType: string,
+  participantIds: string[],
+  location?: string | null,
+  description?: string | null
+) {
+  (async () => {
+    try {
+      let participantNames: string[] = [];
+      if (participantIds.length > 0) {
+        const rows = await db
+          .select({ displayName: contacts.displayName })
+          .from(contacts)
+          .where(inArray(contacts.id, participantIds));
+        participantNames = rows.map((r) => r.displayName);
+      }
+
+      const text = buildEventEmbeddingText({
+        title,
+        eventType,
+        location,
+        description,
+        participantNames,
+      });
+      if (!text || text.length < 5) return;
+
+      const embedding = await generateEmbedding(text);
+      await db
+        .update(events)
+        .set({ embedding })
+        .where(eq(events.id, eventId));
+    } catch (err) {
+      console.error(`[embeddings] Failed to generate embedding for event ${eventId}:`, err);
+    }
+  })();
+}
+
+/** Semantic vector search for events. */
+async function semanticSearchEvents(
+  userId: string,
+  query: string,
+  eventType?: string,
+  limit?: number
+): Promise<ToolResult> {
+  const takeLimit = Math.min(limit || 10, 20);
+  console.log(`[assistant:tool] semanticSearchEvents — query="${query}", limit=${takeLimit}`);
+
+  try {
+    const queryEmbedding = await generateQueryEmbedding(query);
+    const embeddingStr = JSON.stringify(queryEmbedding);
+
+    const conditions = [
+      eq(events.userId, userId),
+      isNotNull(events.embedding),
+      sql`(${events.embedding} <=> ${embeddingStr}::vector) < 0.6`,
+    ];
+
+    if (eventType) {
+      conditions.push(eq(events.eventType, assertValidEventType(eventType)));
+    }
+
+    const eventsList = await db
+      .select({
+        id: events.id,
+        title: events.title,
+        eventType: events.eventType,
+        startAt: events.startAt,
+        endAt: events.endAt,
+        location: events.location,
+        description: events.description,
+        similarity: sql<number>`1 - (${events.embedding} <=> ${embeddingStr}::vector)`,
+      })
+      .from(events)
+      .where(and(...conditions))
+      .orderBy(sql`${events.embedding} <=> ${embeddingStr}::vector`)
+      .limit(takeLimit);
+
+    // Fetch participants for results
+    const eventIds = eventsList.map((e) => e.id);
+    let participants: any[] = [];
+    if (eventIds.length > 0) {
+      participants = await db
+        .select()
+        .from(eventParticipants)
+        .innerJoin(contacts, eq(eventParticipants.contactId, contacts.id))
+        .where(inArray(eventParticipants.eventId, eventIds));
+    }
+
+    console.log(`[assistant:tool] semanticSearchEvents — returning ${eventsList.length} result(s)`);
+
+    return {
+      type: "events_found",
+      count: eventsList.length,
+      events: eventsList.map((e) => ({
+        id: e.id,
+        title: e.title,
+        eventType: e.eventType,
+        startAt: e.startAt,
+        location: e.location,
+        description: e.description,
+        similarity: e.similarity,
+        participants: participants
+          .filter((p: any) => p.event_participants.eventId === e.id)
+          .map((p: any) => p.contacts.displayName),
+      })),
+    };
+  } catch (err) {
+    console.error(`[assistant:tool] semanticSearchEvents — error:`, err);
+    // Fallback to keyword search if vector search fails
+    return listEvents(userId, undefined, query, eventType, limit);
+  }
+}
 
 // ── Implementation functions ─────────────────────────────────────────
 
@@ -91,6 +212,16 @@ export async function createEvent(
           .from(contacts)
           .where(inArray(contacts.id, resolvedParticipantIds))
       : [];
+
+  // Fire-and-forget embedding generation
+  generateAndStoreEventEmbedding(
+    event.id,
+    event.title,
+    event.eventType,
+    resolvedParticipantIds,
+    event.location,
+    description
+  );
 
   return {
     type: "event_created",
@@ -317,6 +448,16 @@ export async function createEventByIds(
           .where(inArray(contacts.id, payload.participantIds))
       : [];
 
+  // Fire-and-forget embedding generation
+  generateAndStoreEventEmbedding(
+    newEvent.id,
+    newEvent.title,
+    newEvent.eventType,
+    payload.participantIds || [],
+    newEvent.location,
+    payload.description
+  );
+
   return {
     type: "event_created",
     id: newEvent.id,
@@ -356,7 +497,11 @@ export async function updateEventById(
     updateData.endAt = updates.endAt ? new Date(updates.endAt) : null;
   if (updates.location !== undefined) updateData.location = updates.location || null;
 
-  await db.update(events).set(updateData).where(eq(events.id, eventId));
+  const [updatedEvent] = await db
+    .update(events)
+    .set(updateData)
+    .where(eq(events.id, eventId))
+    .returning();
 
   if (updates.participantIds !== undefined) {
     await db.delete(eventParticipants).where(eq(eventParticipants.eventId, eventId));
@@ -369,6 +514,35 @@ export async function updateEventById(
         }))
       );
     }
+  }
+
+  // Regenerate embedding if relevant fields changed
+  if (
+    updates.title !== undefined ||
+    updates.description !== undefined ||
+    updates.location !== undefined ||
+    updates.eventType !== undefined ||
+    updates.participantIds !== undefined
+  ) {
+    let participantIdsForEmbedding: string[] = [];
+    if (updates.participantIds !== undefined) {
+      participantIdsForEmbedding = updates.participantIds;
+    } else {
+      const existingParticipants = await db
+        .select({ contactId: eventParticipants.contactId })
+        .from(eventParticipants)
+        .where(eq(eventParticipants.eventId, eventId));
+      participantIdsForEmbedding = existingParticipants.map((r) => r.contactId);
+    }
+
+    generateAndStoreEventEmbedding(
+      eventId,
+      updatedEvent?.title || existing.title,
+      updatedEvent?.eventType || existing.eventType,
+      participantIdsForEmbedding,
+      updatedEvent?.location,
+      updatedEvent?.description
+    );
   }
 
   return { type: "event_updated", id: eventId };
@@ -517,9 +691,9 @@ export function createEventTools(userId: string, schemas: EnumSchemas, assistant
     }),
 
     searchEvents: tool({
-      description: "Search events for context resolution",
+      description: "Search events by meaning (semantic search). Best for natural language queries like 'team meetings' or 'birthday celebrations'.",
       inputSchema: z.object({
-        searchTerm: z.string().optional().describe("Event text search"),
+        searchTerm: z.string().optional().describe("Natural language search query — finds conceptually related events"),
         participantName: z.string().optional().describe("Participant name"),
         eventType: schemas.optionalEventTypeSchema.describe("Event type filter"),
         limit: z.number().optional().describe("Maximum results"),
@@ -527,6 +701,10 @@ export function createEventTools(userId: string, schemas: EnumSchemas, assistant
       execute: async ({ searchTerm, participantName, eventType, limit }) => {
         if (participantName && !searchTerm && !eventType) {
           return queryEvents(userId, participantName, limit);
+        }
+        // Use semantic search when no participant filter — finds conceptually related events
+        if (searchTerm && !participantName) {
+          return semanticSearchEvents(userId, searchTerm, eventType, limit);
         }
         return listEvents(userId, undefined, searchTerm, eventType, limit);
       },

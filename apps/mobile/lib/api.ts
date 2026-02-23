@@ -314,6 +314,7 @@ export const eventsApi = {
     search?: string;
     eventType?: string;
     upcoming?: boolean;
+    semantic?: boolean;
     limit?: number;
   }) =>
     api.get<{

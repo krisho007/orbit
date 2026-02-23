@@ -1,7 +1,7 @@
 // Events API Routes
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, asc, sql, ilike, or, inArray, gte } from "drizzle-orm";
+import { eq, and, desc, asc, sql, ilike, or, inArray, gte, isNotNull } from "drizzle-orm";
 import {
   db,
   events,
@@ -12,12 +12,57 @@ import {
 } from "../db";
 import { authMiddleware } from "../middleware/auth";
 import { formatValidationErrors, clampLimit } from "../utils/validation";
+import {
+  generateEmbedding,
+  generateQueryEmbedding,
+  buildEventEmbeddingText,
+} from "../lib/embeddings";
 
 const app = new Hono();
 
 app.use("/*", authMiddleware);
 
 const PAGE_SIZE = 20;
+
+/** Fire-and-forget: generate embedding for an event and store it. */
+function generateAndStoreEventEmbedding(
+  eventId: string,
+  title: string,
+  eventType: string,
+  participantIds: string[],
+  location?: string | null,
+  description?: string | null
+) {
+  (async () => {
+    try {
+      let participantNames: string[] = [];
+      if (participantIds.length > 0) {
+        const rows = await db
+          .select({ displayName: contacts.displayName })
+          .from(contacts)
+          .where(inArray(contacts.id, participantIds));
+        participantNames = rows.map((r) => r.displayName);
+      }
+
+      const text = buildEventEmbeddingText({
+        title,
+        eventType,
+        location,
+        description,
+        participantNames,
+      });
+      if (!text || text.length < 5) return;
+
+      const embedding = await generateEmbedding(text);
+      await db
+        .update(events)
+        .set({ embedding })
+        .where(eq(events.id, eventId));
+    } catch (err) {
+      console.error(`[embeddings] Failed to generate embedding for event ${eventId}:`, err);
+    }
+  })();
+}
 
 // Validation schemas
 const conversationMediums = [
@@ -251,9 +296,89 @@ app.get("/", async (c) => {
   const search = c.req.query("search") || "";
   const eventType = c.req.query("eventType");
   const upcoming = c.req.query("upcoming") === "true";
+  const semantic = c.req.query("semantic") === "true";
   const limit = clampLimit(c.req.query("limit"), PAGE_SIZE);
 
   try {
+    // Semantic search path
+    if (semantic && search) {
+      const queryEmbedding = await generateQueryEmbedding(search);
+      const embeddingStr = JSON.stringify(queryEmbedding);
+      const distance = sql`${events.embedding} <=> ${embeddingStr}::vector`;
+
+      const conditions = [
+        eq(events.userId, userId),
+        isNotNull(events.embedding),
+        sql`(${events.embedding} <=> ${embeddingStr}::vector) < 0.5`,
+      ];
+
+      if (eventType && eventTypes.includes(eventType as any)) {
+        conditions.push(eq(events.eventType, eventType as any));
+      }
+
+      const eventsList = await db
+        .select({
+          id: events.id,
+          userId: events.userId,
+          title: events.title,
+          description: events.description,
+          eventType: events.eventType,
+          startAt: events.startAt,
+          endAt: events.endAt,
+          location: events.location,
+          assistantConversationId: events.assistantConversationId,
+          createdAt: events.createdAt,
+          updatedAt: events.updatedAt,
+          similarity: sql<number>`1 - (${events.embedding} <=> ${embeddingStr}::vector)`,
+        })
+        .from(events)
+        .where(and(...conditions))
+        .orderBy(sql`${events.embedding} <=> ${embeddingStr}::vector`)
+        .limit(limit);
+
+      const eventIds = eventsList.map((evt) => evt.id);
+
+      const [participantsData, conversationCounts] = await Promise.all([
+        eventIds.length > 0
+          ? db
+              .select()
+              .from(eventParticipants)
+              .innerJoin(contacts, eq(eventParticipants.contactId, contacts.id))
+              .where(inArray(eventParticipants.eventId, eventIds))
+          : [],
+        eventIds.length > 0
+          ? db
+              .select({
+                eventId: conversations.eventId,
+                count: sql<number>`count(*)`,
+              })
+              .from(conversations)
+              .where(inArray(conversations.eventId, eventIds))
+              .groupBy(conversations.eventId)
+          : [],
+      ]);
+
+      const enrichedEvents = eventsList.map((evt) => ({
+        ...evt,
+        participants: participantsData
+          .filter((p: any) => p.event_participants.eventId === evt.id)
+          .map((p: any) => ({
+            ...p.event_participants,
+            contact: p.contacts,
+          })),
+        _count: {
+          conversations:
+            conversationCounts.find((cc: any) => cc.eventId === evt.id)?.count || 0,
+        },
+      }));
+
+      return c.json({
+        events: enrichedEvents,
+        nextCursor: null,
+      });
+    }
+
+    // Standard keyword search path
     // Build base query conditions
     const conditions = [eq(events.userId, userId)];
 
@@ -453,6 +578,16 @@ app.post("/", async (c) => {
       );
     }
 
+    // Fire-and-forget embedding generation
+    generateAndStoreEventEmbedding(
+      newEvent.id,
+      newEvent.title,
+      newEvent.eventType,
+      data.participantIds || [],
+      newEvent.location,
+      newEvent.description
+    );
+
     return c.json(newEvent, 201);
   } catch (error) {
     console.error("Error creating event:", error);
@@ -515,6 +650,36 @@ app.put("/:id", async (c) => {
           }))
         );
       }
+    }
+
+    // Regenerate embedding if relevant fields changed
+    if (
+      data.title !== undefined ||
+      data.description !== undefined ||
+      data.location !== undefined ||
+      data.eventType !== undefined ||
+      data.participantIds !== undefined
+    ) {
+      // Get current participant IDs for embedding
+      let participantIdsForEmbedding: string[] = [];
+      if (data.participantIds !== undefined) {
+        participantIdsForEmbedding = data.participantIds;
+      } else {
+        const existingParticipants = await db
+          .select({ contactId: eventParticipants.contactId })
+          .from(eventParticipants)
+          .where(eq(eventParticipants.eventId, eventId));
+        participantIdsForEmbedding = existingParticipants.map((r) => r.contactId);
+      }
+
+      generateAndStoreEventEmbedding(
+        eventId,
+        updatedEvent?.title || "",
+        updatedEvent?.eventType || "OTHER",
+        participantIdsForEmbedding,
+        updatedEvent?.location,
+        updatedEvent?.description
+      );
     }
 
     return c.json(updatedEvent);

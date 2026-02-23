@@ -256,12 +256,15 @@ export const events = pgTable(
     endAt: timestamp("endAt", { mode: "date", withTimezone: true }),
     location: text("location"),
     assistantConversationId: text("assistantConversationId"),
+    embedding: vector("embedding", { dimensions: 768 }),
     createdAt: timestamp("createdAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updatedAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index("events_userId_idx").on(table.userId),
     index("events_userId_startAt_idx").on(table.userId, table.startAt),
+    index("events_embedding_idx")
+      .using("hnsw", table.embedding.op("vector_cosine_ops")),
   ]
 );
 

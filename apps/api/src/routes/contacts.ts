@@ -19,6 +19,7 @@ import {
 } from "../db";
 import { authMiddleware } from "../middleware/auth";
 import { formatValidationErrors, clampLimit } from "../utils/validation";
+import { getValidGoogleToken, GoogleTokenException } from "../utils/google-token";
 
 const app = new Hono();
 
@@ -75,7 +76,7 @@ const uploadImageSchema = z.object({
   fileName: z.string().optional(),
 });
 const fetchGoogleContactsSchema = z.object({
-  accessToken: z.string().min(1, "accessToken is required"),
+  accessToken: z.string().optional(),
   includePhotos: z.boolean().optional().default(true),
 });
 const googleImportContactSchema = z.object({
@@ -670,13 +671,30 @@ app.get("/search/phone", async (c) => {
 
 // POST /api/contacts/google/fetch - Fetch Google contacts from People API
 app.post("/google/fetch", async (c) => {
+  const userId = c.get("userId");
   const body = await c.req.json();
   const validation = fetchGoogleContactsSchema.safeParse(body);
   if (!validation.success) {
     return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
-  const { accessToken, includePhotos } = validation.data;
+  let { accessToken } = validation.data;
+  const { includePhotos } = validation.data;
+
+  // If no token provided in request, use stored/refreshed token
+  if (!accessToken) {
+    try {
+      accessToken = await getValidGoogleToken(userId);
+    } catch (err) {
+      if (err instanceof GoogleTokenException) {
+        return c.json(
+          { error: err.message, code: "GOOGLE_REAUTH_REQUIRED" },
+          401
+        );
+      }
+      throw err;
+    }
+  }
 
   try {
     const allGoogleConnections: any[] = [];

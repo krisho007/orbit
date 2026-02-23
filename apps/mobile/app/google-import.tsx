@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -29,13 +29,8 @@ export default function GoogleImportScreen() {
 
   const router = useRouter();
   const colors = useThemeColors();
-  const { user, session } = useAuth();
+  const { user } = useAuth();
   const { markOnboardingComplete } = useOnboarding();
-
-  const accessToken = useMemo(
-    () => ((session as unknown as { provider_token?: string } | null)?.provider_token ?? null),
-    [session]
-  );
 
   const [includePhotos, setIncludePhotos] = useState(true);
   const [overrideExisting, setOverrideExisting] = useState(false);
@@ -48,13 +43,6 @@ export default function GoogleImportScreen() {
   const [isCompletingOnboarding, setIsCompletingOnboarding] = useState(false);
 
   const handleFetchContacts = async () => {
-    if (!accessToken) {
-      setError(
-        "Google token is unavailable. Please sign out and sign in again to grant contacts access."
-      );
-      return;
-    }
-
     setIsFetching(true);
     setError(null);
     setResult(null);
@@ -62,13 +50,18 @@ export default function GoogleImportScreen() {
 
     try {
       const response = await contactsApi.fetchGoogleContacts({
-        accessToken,
         includePhotos,
       });
       setContacts(response.contacts || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch Google contacts:", err);
-      setError("Failed to fetch contacts from Google.");
+      if (err?.message?.includes("GOOGLE_REAUTH_REQUIRED") || err?.message?.includes("sign in with Google")) {
+        setError(
+          "Your Google authorization has expired. Please sign out and sign in again with Google to re-authorize contacts access."
+        );
+      } else {
+        setError("Failed to fetch contacts from Google.");
+      }
     } finally {
       setIsFetching(false);
     }
@@ -169,15 +162,6 @@ export default function GoogleImportScreen() {
               : "Bring your Google contacts into Orbit anytime."}
           </Text>
         </View>
-
-        {!accessToken && (
-          <View className="mb-4 p-4 rounded-xl border border-warning-200 bg-warning-50">
-            <Text className="text-warning-700 text-sm">
-              We could not find a Google access token in your current session. Sign out and sign in
-              again if fetching fails.
-            </Text>
-          </View>
-        )}
 
         {error && (
           <View className="mb-4 p-4 rounded-xl border border-error-200 bg-background-error flex-row">

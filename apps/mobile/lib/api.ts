@@ -236,7 +236,7 @@ export const contactsApi = {
   deleteImage: (contactId: string, imageId: string) =>
     api.delete<{ success: true }>(`/api/contacts/${contactId}/images/${imageId}`),
 
-  fetchGoogleContacts: (data: { accessToken: string; includePhotos?: boolean }) =>
+  fetchGoogleContacts: (data: { accessToken?: string; includePhotos?: boolean }) =>
     api.post<{ contacts: GoogleImportContact[] }>("/api/contacts/google/fetch", data),
 
   importGoogleContactsBatch: (
@@ -435,6 +435,11 @@ export const userApi = {
   exportData: () => api.get<Record<string, unknown>>("/api/users/me/export"),
 
   deleteAccount: () => api.delete<{ success: true }>("/api/users/me"),
+
+  storeGoogleTokens: (data: {
+    providerToken: string;
+    providerRefreshToken?: string;
+  }) => api.put<{ success: true }>("/api/users/me/google-tokens", data),
 };
 
 // Assistant

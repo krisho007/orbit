@@ -6,6 +6,7 @@ import * as Linking from "expo-linking";
 import * as AuthSession from "expo-auth-session";
 import Constants from "expo-constants";
 import { supabase } from "./supabase";
+import { userApi } from "./api";
 
 // Required for expo-web-browser to handle redirect properly
 WebBrowser.maybeCompleteAuthSession();
@@ -68,11 +69,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (code) {
           console.log("[Auth] Found code in deep link, exchanging...");
           const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-          
+
           if (error) {
             console.error("[Auth] Deep link code exchange failed:", error.message);
           } else {
             console.log("[Auth] Deep link code exchange successful:", data.session?.user?.email);
+
+            // Store Google tokens from deep link PKCE exchange
+            const dlProviderToken = (data.session as any)?.provider_token as string | undefined;
+            const dlProviderRefreshToken = (data.session as any)?.provider_refresh_token as string | undefined;
+            if (dlProviderToken) {
+              userApi
+                .storeGoogleTokens({
+                  providerToken: dlProviderToken,
+                  ...(dlProviderRefreshToken ? { providerRefreshToken: dlProviderRefreshToken } : {}),
+                })
+                .catch((err) =>
+                  console.error("[Auth] Failed to store Google tokens (deep link):", err)
+                );
+            }
           }
         }
       } catch (err) {
@@ -100,6 +115,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 console.error("[Auth] Code exchange failed:", error.message);
               } else {
                 console.log("[Auth] Code exchange successful:", data.session?.user?.email);
+
+                // Store Google tokens from web PKCE exchange
+                const webProviderToken = (data.session as any)?.provider_token as string | undefined;
+                const webProviderRefreshToken = (data.session as any)?.provider_refresh_token as string | undefined;
+                if (webProviderToken) {
+                  userApi
+                    .storeGoogleTokens({
+                      providerToken: webProviderToken,
+                      ...(webProviderRefreshToken ? { providerRefreshToken: webProviderRefreshToken } : {}),
+                    })
+                    .catch((err) =>
+                      console.error("[Auth] Failed to store Google tokens (web PKCE):", err)
+                    );
+                }
               }
             } else {
               console.log("[Auth] Code already processed, skipping exchange");
@@ -149,6 +178,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
+
+      // Capture Google provider tokens on sign-in and store server-side
+      if (_event === "SIGNED_IN" && session) {
+        const providerToken = (session as any).provider_token as string | undefined;
+        const providerRefreshToken = (session as any).provider_refresh_token as string | undefined;
+        if (providerToken) {
+          userApi
+            .storeGoogleTokens({
+              providerToken,
+              ...(providerRefreshToken ? { providerRefreshToken } : {}),
+            })
+            .catch((err) =>
+              console.error("[Auth] Failed to store Google tokens:", err)
+            );
+        }
+      }
     });
 
     return () => {
@@ -247,17 +292,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (accessToken && refreshToken) {
             // Implicit flow - set session directly
             console.log("[Auth] Using implicit flow with tokens");
+
+            // Extract Google provider tokens from the hash fragment
+            const googleProviderToken = hashParams.get('provider_token');
+            const googleProviderRefreshToken = hashParams.get('provider_refresh_token');
+
             const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
             });
-            
+
             if (sessionError) {
               console.error("[Auth] Set session error:", sessionError.message);
               throw sessionError;
             }
-            
+
             console.log("[Auth] OAuth successful:", sessionData.session?.user.email);
+
+            // Store Google tokens server-side
+            if (googleProviderToken) {
+              userApi
+                .storeGoogleTokens({
+                  providerToken: googleProviderToken,
+                  ...(googleProviderRefreshToken ? { providerRefreshToken: googleProviderRefreshToken } : {}),
+                })
+                .catch((err) =>
+                  console.error("[Auth] Failed to store Google tokens (implicit):", err)
+                );
+            }
           } else if (code) {
             // PKCE flow - exchange code for session
             console.log("[Auth] Using PKCE flow with code");
@@ -272,8 +334,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (!exchangeData.session) {
               throw new Error("No session returned from OAuth exchange.");
             }
-            
+
             console.log("[Auth] OAuth successful:", exchangeData.session.user.email);
+
+            // Store Google tokens from PKCE exchange response
+            const pkceProviderToken = (exchangeData.session as any).provider_token as string | undefined;
+            const pkceProviderRefreshToken = (exchangeData.session as any).provider_refresh_token as string | undefined;
+            if (pkceProviderToken) {
+              userApi
+                .storeGoogleTokens({
+                  providerToken: pkceProviderToken,
+                  ...(pkceProviderRefreshToken ? { providerRefreshToken: pkceProviderRefreshToken } : {}),
+                })
+                .catch((err) =>
+                  console.error("[Auth] Failed to store Google tokens (PKCE native):", err)
+                );
+            }
           } else {
             console.error("[Auth] No tokens or code found in callback URL");
             console.error("[Auth] URL was:", url);

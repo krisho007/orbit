@@ -75,6 +75,9 @@ export const users = pgTable("users", {
   // When set, the assistant knows who "I" / "me" / "my" refers to.
   primaryContactId: text("primaryContactId"),
   thirdPartyConsentGranted: boolean("thirdPartyConsentGranted").default(false).notNull(),
+  googleProviderToken: text("googleProviderToken"),
+  googleProviderRefreshToken: text("googleProviderRefreshToken"),
+  googleTokenExpiresAt: timestamp("googleTokenExpiresAt", { mode: "date", withTimezone: true }),
   createdAt: timestamp("createdAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
 });

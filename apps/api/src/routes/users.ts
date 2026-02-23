@@ -323,6 +323,43 @@ app.get("/me/export", async (c) => {
   }
 });
 
+// PUT /api/users/me/google-tokens - Store Google OAuth tokens
+app.put("/me/google-tokens", async (c) => {
+  const userId = c.get("userId");
+  const body = await c.req.json();
+
+  const schema = z.object({
+    providerToken: z.string().min(1, "Provider token is required"),
+    providerRefreshToken: z.string().optional(),
+  });
+
+  const validation = schema.safeParse(body);
+  if (!validation.success) {
+    return c.json({ error: formatValidationErrors(validation.error) }, 400);
+  }
+
+  const { providerToken, providerRefreshToken } = validation.data;
+
+  try {
+    const updateData: Record<string, unknown> = {
+      googleProviderToken: providerToken,
+      googleTokenExpiresAt: new Date(Date.now() + 55 * 60 * 1000), // ~55 min
+      updatedAt: new Date(),
+    };
+
+    // Only overwrite refresh token if a new one is provided
+    if (providerRefreshToken) {
+      updateData.googleProviderRefreshToken = providerRefreshToken;
+    }
+
+    await db.update(users).set(updateData).where(eq(users.id, userId));
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Error storing Google tokens:", error);
+    return c.json({ error: "Failed to store Google tokens" }, 500);
+  }
+});
+
 // DELETE /api/users/me - Delete account and all data (GDPR Article 17)
 app.delete("/me", async (c) => {
   const userId = c.get("userId");

@@ -101,7 +101,6 @@ const assistantDraftState: AssistantDraftState = {
 const SUGGESTIONS = [
   "Add a new contact: Lisa Chen, PM at Google",
   "Remind me to call John Vegas on 23rd March",
-  "What are my upcoming events?",
   "When did I speak with Katie last?",
   "I had a call with Sarah today",
   "Feeling happy after the sprint demo",

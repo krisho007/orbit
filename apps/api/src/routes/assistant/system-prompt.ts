@@ -45,9 +45,11 @@ export function buildSystemPrompt(
   userContext: UserContext,
   enumConfig: AssistantEnumConfig,
   intents: AssistantIntent[],
-  confirmationRequired: boolean
+  confirmationRequired: boolean,
+  timezone?: string
 ): string {
-  const today = formatToday(new Date());
+  const tz = timezone || "UTC";
+  const today = formatToday(new Date(), tz);
 
   const safeUserName = sanitizeForPrompt(userContext.userName || userContext.userEmail);
   const safeEmail = sanitizeForPrompt(userContext.userEmail, 500);
@@ -111,7 +113,7 @@ Extract all names, dates, details, and parameters from the EARLIER conversation 
 
   return `You are a helpful assistant for Orbit, a personal CRM app. Help users manage contacts, conversations, events, and reminders.
 
-Today's date is ${today}.
+Today's date and time in the user's timezone (${tz}): ${today}.
 ${userSection}
 
 ## Current Task
@@ -179,8 +181,15 @@ When users asks for any deletion ask them to search and delete manually from the
 - IMPORTANT: When search/query tools return lists of results, do NOT enumerate them as numbered or bulleted lists in your text. The app renders interactive cards for each result. Just write a brief sentence like "Here are the contacts I found."
 - Keep responses brief when tool results are available; the client will render result cards.
 - When returning lists of contacts, conversations, events, or reminders, keep results to 10 or fewer.
-- When users mention relative dates like "today", "tomorrow", "yesterday", "next week", etc., convert them to actual dates based on today's date. If no date is mentioned, assume it's for today.
-- IMPORTANT: All date/time values MUST be full ISO 8601 datetime strings with time component (e.g., "2026-02-21T10:00:00.000Z"). Never pass date-only strings like "2026-02-21" — always include the time. If no specific time is mentioned, use a reasonable default (e.g., 09:00 for morning events, 10:00 for meetings, current time for conversations happening now).
+TIMEZONE RULES:
+- The user's timezone is ${tz}.
+- When the user mentions times (e.g., "4:30 PM", "morning", "10 AM"), they mean their local time in ${tz}.
+- When speaking to the user, always reference times in their local timezone (${tz}).
+- All date/time values passed to tools MUST be in UTC (ISO 8601 with Z suffix).
+- You MUST convert the user's local time to UTC before passing to any tool.
+  Example: If user is in Asia/Kolkata (UTC+5:30) and says "4:30 PM", the UTC time is 11:00 AM → "2026-02-21T11:00:00.000Z".
+- When users mention relative dates like "today", "tomorrow", "yesterday", "next week", etc., convert them based on the user's local date shown above. If no date is mentioned, assume it's for today.
+- IMPORTANT: All date/time values MUST be full ISO 8601 datetime strings with time component (e.g., "2026-02-21T10:00:00.000Z"). Never pass date-only strings like "2026-02-21" — always include the time. If no specific time is mentioned, use a reasonable default (e.g., 09:00 for morning events, 10:00 for meetings, current time for conversations happening now — all in the user's local timezone, then converted to UTC).
 - IMPORTANT: Never show technical IDs (UUIDs) to the user. When confirming an action, describe the result using human-readable details like names, dates, and descriptions only. For example, say "I've created the contact for Ramakrishna Bangaradka" — NOT "I've created the contact for Ramakrishna Bangaradka (ID: 80b5bc29-...)".
 - Be direct and concise.`;
 }

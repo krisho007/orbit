@@ -32,7 +32,16 @@ export function isExplicitUserConfirmation(text: string): boolean {
   const normalized = text.trim().toLowerCase().replace(/[.!?]+$/, "");
   if (!normalized) return false;
 
-  return CONFIRMATION_TOKENS.has(normalized);
+  // Exact match first
+  if (CONFIRMATION_TOKENS.has(normalized)) return true;
+
+  // Compound confirmation: "Sounds good. Go ahead." → split on sentence
+  // boundaries and check that every segment is a confirmation token.
+  const segments = normalized
+    .split(/[.!?,;]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return segments.length > 1 && segments.every((seg) => CONFIRMATION_TOKENS.has(seg));
 }
 
 export const REJECTION_TOKENS = new Set([

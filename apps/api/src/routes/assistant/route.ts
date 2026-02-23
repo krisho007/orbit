@@ -31,7 +31,7 @@ async function validateAndSetup(c: any) {
     return { error: c.json({ error: formatValidationErrors(validation.error) }, 400) };
   }
 
-  const { messages, conversationId } = validation.data;
+  const { messages, conversationId, timezone } = validation.data;
   const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user");
 
   if (!lastUserMessage) {
@@ -93,7 +93,7 @@ async function validateAndSetup(c: any) {
     throw assistantConvId;
   }
 
-  return { userId, messages, lastUserMessage, assistantConvId };
+  return { userId, messages, lastUserMessage, assistantConvId, timezone };
 }
 
 // POST /api/assistant - Process chat message
@@ -108,7 +108,7 @@ app.post("/", async (c) => {
     try {
       const setup = await validateAndSetup(c);
       if ("error" in setup) return setup.error;
-      const { userId, messages, lastUserMessage, assistantConvId } = setup;
+      const { userId, messages, lastUserMessage, assistantConvId, timezone } = setup;
 
       // Use a ReadableStream to emit NDJSON lines.
       // Bun's idle timeout or client disconnect can close the controller while
@@ -135,7 +135,8 @@ app.post("/", async (c) => {
                 messages as ChatMessage[],
                 undefined,
                 assistantConvId,
-                (message) => writeLine({ type: "status", message })
+                (message) => writeLine({ type: "status", message }),
+                timezone
               ),
               db.insert(assistantMessages).values({
                 assistantConversationId: assistantConvId,
@@ -209,7 +210,7 @@ app.post("/", async (c) => {
   try {
     const setup = await validateAndSetup(c);
     if ("error" in setup) return setup.error;
-    const { userId, messages, lastUserMessage, assistantConvId } = setup;
+    const { userId, messages, lastUserMessage, assistantConvId, timezone } = setup;
 
     // Fire user message save concurrently with LLM processing —
     // processMessageLLM doesn't depend on the message being persisted
@@ -218,7 +219,9 @@ app.post("/", async (c) => {
         userId,
         messages as ChatMessage[],
         undefined,
-        assistantConvId
+        assistantConvId,
+        undefined,
+        timezone
       ),
       db.insert(assistantMessages).values({
         assistantConversationId: assistantConvId,

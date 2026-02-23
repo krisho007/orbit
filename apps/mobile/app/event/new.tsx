@@ -36,7 +36,7 @@ const EVENT_TYPE_OPTIONS: { value: EventType; label: string }[] = [
 
 export default function NewEventScreen() {
   const router = useRouter();
-  const { contactId } = useLocalSearchParams<{ contactId?: string }>();
+  const { contactId, prefill } = useLocalSearchParams<{ contactId?: string; prefill?: string }>();
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
   const createEvent = useCreateEvent();
@@ -58,6 +58,39 @@ export default function NewEventScreen() {
     eventType: "OTHER" as EventType,
     location: "",
   });
+
+  useEffect(() => {
+    if (!prefill) return;
+    try {
+      const data = JSON.parse(prefill);
+      setFormData((prev) => ({
+        ...prev,
+        ...(data.title ? { title: data.title } : {}),
+        ...(data.eventType ? { eventType: data.eventType } : {}),
+        ...(data.location ? { location: data.location } : {}),
+        ...(data.description ? { description: data.description } : {}),
+      }));
+      if (data.startAt) {
+        const d = new Date(data.startAt);
+        if (!Number.isNaN(d.getTime())) setStartAt(d);
+      }
+      if (data.endAt) {
+        const d = new Date(data.endAt);
+        if (!Number.isNaN(d.getTime())) setEndAt(d);
+      }
+      if (data.participantNames && Array.isArray(data.participantNames)) {
+        for (const name of data.participantNames) {
+          contactsApi.list({ search: String(name), limit: 1 }).then((res) => {
+            if (res.contacts.length > 0) {
+              setSelectedParticipants((prev) =>
+                prev.some((p) => p.id === res.contacts[0].id) ? prev : [...prev, res.contacts[0]]
+              );
+            }
+          }).catch(() => {});
+        }
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (!contactId) return;

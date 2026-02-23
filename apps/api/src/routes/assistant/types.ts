@@ -9,6 +9,7 @@ export const messageSchema = z.object({
 export const chatSchema = z.object({
   messages: z.array(messageSchema),
   conversationId: z.string().optional(),
+  timezone: z.string().optional(),
 });
 
 export const PAGE_SIZE = 20;
@@ -82,7 +83,7 @@ export type AssistantUi =
   | { kind: "reminders"; count: number; reminders: AssistantReminderCard[] }
   | { kind: "created"; cards: AssistantCreatedCard[] }
   | { kind: "selection"; prompt: string; options: AssistantSelectionOption[] }
-  | { kind: "confirmation"; action: string; details?: Record<string, unknown> };
+  | { kind: "confirmation"; action: string; entityType?: string; details?: Record<string, unknown> };
 
 // ── Action buttons ──────────────────────────────────────────────────
 export type AssistantAction = {
@@ -153,14 +154,21 @@ export const createContactAllowedFields = new Set([
 ]);
 
 // ── Date formatting ──────────────────────────────────────────────────
-export function formatToday(date: Date): string {
+export function formatToday(date: Date, timezone?: string): string {
+  const tz = timezone || "UTC";
   const datePart = date.toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
-    timeZone: "UTC",
+    timeZone: tz,
+  });
+  const timePart = date.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: tz,
   });
   const iso = date.toISOString();
-  return `${datePart} (ISO: ${iso})`;
+  return `${datePart}, current time: ${timePart} (UTC: ${iso})`;
 }

@@ -50,6 +50,8 @@ import {
   Trash2,
   ThumbsUp,
   ThumbsDown,
+  Pencil,
+  ClipboardCheck,
 } from "lucide-react-native";
 import {
   assistantApi,
@@ -1111,6 +1113,94 @@ export default function AssistantScreen() {
           ) : (
             cards.map(renderReminderCard)
           )}
+        </View>
+      );
+    }
+
+    if (ui.kind === "confirmation" && ui.details && Object.keys(ui.details).length > 0) {
+      const FIELD_LABELS: Record<string, string> = {
+        displayName: "Name",
+        company: "Company",
+        jobTitle: "Job Title",
+        primaryPhone: "Phone",
+        primaryEmail: "Email",
+        notes: "Notes",
+        medium: "Medium",
+        happenedAt: "Date",
+        content: "Notes",
+        title: "Title",
+        eventType: "Type",
+        startAt: "Start",
+        endAt: "End",
+        location: "Location",
+        dueAt: "Due",
+        participantNames: "Participants",
+      };
+
+      const MEDIUM_LABELS: Record<string, string> = {
+        PHONE_CALL: "Phone Call",
+        WHATSAPP: "WhatsApp",
+        EMAIL: "Email",
+        CHANCE_ENCOUNTER: "Chance Encounter",
+        ONLINE_MEETING: "Online Meeting",
+        IN_PERSON_MEETING: "In-Person Meeting",
+        OTHER: "Other",
+      };
+
+      const formatFieldValue = (key: string, value: unknown): string => {
+        if (value == null) return "";
+        if (key === "medium" && typeof value === "string") return MEDIUM_LABELS[value] || value;
+        if ((key === "happenedAt" || key === "startAt" || key === "endAt" || key === "dueAt") && typeof value === "string") {
+          return formatDateTime(value, "MMM d, yyyy 'at' h:mm a", String(value));
+        }
+        if (Array.isArray(value)) return value.join(", ");
+        return String(value);
+      };
+
+      const entries = Object.entries(ui.details).filter(
+        ([, v]) => v != null && String(v).trim().length > 0
+      );
+
+      const canEdit = ui.entityType === "contact" || ui.entityType === "conversation" || ui.entityType === "event" || ui.entityType === "reminder";
+
+      const handleEdit = () => {
+        Keyboard.dismiss();
+        const prefill = JSON.stringify(ui.details);
+        const routes: Record<string, string> = {
+          contact: "/contact/new",
+          conversation: "/conversation/new",
+          event: "/event/new",
+          reminder: "/reminder/new",
+        };
+        const pathname = routes[ui.entityType!];
+        if (pathname) {
+          router.push({ pathname: pathname as any, params: { prefill } });
+        }
+      };
+
+      return (
+        <View className="bg-background-0 border border-border-200 rounded-xl p-4">
+          <View className="flex-row items-center mb-3">
+            <View className="w-8 h-8 rounded-lg bg-primary-100 items-center justify-center mr-2">
+              <ClipboardCheck size={16} color={getThemeColor(colors, "primary-600")} />
+            </View>
+            <Text className="text-typography-800 font-body-semibold text-sm flex-1">Proposed Details</Text>
+            {canEdit && (
+              <Pressable
+                onPress={handleEdit}
+                className="flex-row items-center px-3 py-1.5 rounded-lg bg-background-50 border border-border-200 active:bg-background-100"
+              >
+                <Pencil size={14} color={getThemeColor(colors, "typography-600")} />
+                <Text className="text-typography-600 text-sm font-body-medium ml-1.5">Edit</Text>
+              </Pressable>
+            )}
+          </View>
+          {entries.map(([key, value]) => (
+            <View key={key} className="flex-row py-1.5">
+              <Text className="text-typography-500 text-sm w-28">{FIELD_LABELS[key] || key}</Text>
+              <Text className="text-typography-900 text-sm flex-1 flex-shrink">{formatFieldValue(key, value)}</Text>
+            </View>
+          ))}
         </View>
       );
     }

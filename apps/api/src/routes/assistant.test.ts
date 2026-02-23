@@ -1297,6 +1297,19 @@ describe("processMessageLLM", () => {
       expect(isExplicitUserConfirmation("yes?!")).toBe(true);
     });
 
+    it("accepts compound confirmations (multiple tokens joined by punctuation)", () => {
+      expect(isExplicitUserConfirmation("Sounds good. Go ahead.")).toBe(true);
+      expect(isExplicitUserConfirmation("Yes, go ahead")).toBe(true);
+      expect(isExplicitUserConfirmation("Sure! Proceed!")).toBe(true);
+      expect(isExplicitUserConfirmation("Ok, confirmed")).toBe(true);
+      expect(isExplicitUserConfirmation("Yep. Do it.")).toBe(true);
+    });
+
+    it("rejects compound text where any segment is not a confirmation", () => {
+      expect(isExplicitUserConfirmation("Yes, but change the time")).toBe(false);
+      expect(isExplicitUserConfirmation("Sounds good. Also add Bob.")).toBe(false);
+    });
+
     it("rejects arbitrary text", () => {
       expect(isExplicitUserConfirmation("create a contact")).toBe(false);
       expect(isExplicitUserConfirmation("no")).toBe(false);
@@ -1681,6 +1694,105 @@ describe("processMessageLLM", () => {
 
       expect(response.ui.action).toBe("Create contact Alice with phone +1 555 000 1111");
       expect(response.ui.details).toEqual({ displayName: "Alice", primaryPhone: "+1 555 000 1111" });
+    });
+  });
+
+  // ============================================
+  // 14. TIMEZONE SUPPORT
+  // ============================================
+
+  describe("Timezone Support", () => {
+    let formatToday: typeof import("./assistant").formatToday;
+    let buildSystemPrompt: typeof import("./assistant").buildSystemPrompt;
+
+    beforeEach(async () => {
+      ({ formatToday, buildSystemPrompt } = await import("./assistant"));
+    });
+
+    it("formatToday defaults to UTC when no timezone provided", () => {
+      const date = new Date("2026-02-23T14:30:00.000Z");
+      const result = formatToday(date);
+      expect(result).toContain("Monday");
+      expect(result).toContain("February 23, 2026");
+      expect(result).toContain("current time:");
+      expect(result).toContain("02:30 PM");
+      expect(result).toContain("UTC:");
+    });
+
+    it("formatToday formats in the given IANA timezone", () => {
+      // 14:30 UTC = 20:00 IST (UTC+5:30)
+      const date = new Date("2026-02-23T14:30:00.000Z");
+      const result = formatToday(date, "Asia/Kolkata");
+      expect(result).toContain("Monday");
+      expect(result).toContain("February 23, 2026");
+      expect(result).toContain("08:00 PM");
+      expect(result).toContain("UTC:");
+    });
+
+    it("formatToday handles date boundary crossing", () => {
+      // 22:00 UTC on Feb 23 = 03:30 AM IST on Feb 24
+      const date = new Date("2026-02-23T22:00:00.000Z");
+      const result = formatToday(date, "Asia/Kolkata");
+      expect(result).toContain("Tuesday");
+      expect(result).toContain("February 24, 2026");
+      expect(result).toContain("03:30 AM");
+    });
+
+    it("buildSystemPrompt includes timezone rules when timezone provided", () => {
+      const userContext = { userName: "Test", userEmail: "test@test.com", primaryContactId: null, primaryContactName: null };
+      const enumConfig = { conversationMediums: ["PHONE_CALL"], eventTypes: ["MEETING"], reminderStatuses: ["OPEN"] };
+      const prompt = buildSystemPrompt(userContext, enumConfig, ["unknown"], false, "Asia/Kolkata");
+      expect(prompt).toContain("Asia/Kolkata");
+      expect(prompt).toContain("TIMEZONE RULES:");
+      expect(prompt).toContain("convert the user's local time to UTC");
+    });
+
+    it("buildSystemPrompt defaults to UTC when no timezone provided", () => {
+      const userContext = { userName: "Test", userEmail: "test@test.com", primaryContactId: null, primaryContactName: null };
+      const enumConfig = { conversationMediums: ["PHONE_CALL"], eventTypes: ["MEETING"], reminderStatuses: ["OPEN"] };
+      const prompt = buildSystemPrompt(userContext, enumConfig, ["unknown"], false);
+      expect(prompt).toContain("user's timezone (UTC)");
+      expect(prompt).toContain("TIMEZONE RULES:");
+    });
+
+    it("processMessageLLM accepts timezone parameter", async () => {
+      let callCount = 0;
+      const fakeGenerate = (async (opts: any) => {
+        callCount++;
+        if (callCount === 1) {
+          // First call is intent classification — return unknown
+          return { text: '{"intents":["create_event"]}' };
+        }
+        // Second call is the actual LLM call — verify timezone in system prompt
+        expect(opts.system).toContain("America/New_York");
+        expect(opts.system).toContain("TIMEZONE RULES:");
+        return {
+          text: "Created event.",
+          toolResults: [
+            {
+              output: {
+                type: "event_created",
+                id: "event-1",
+                title: "Meeting",
+                startAt: "2026-02-23T20:00:00.000Z",
+                location: null,
+                participants: [],
+              },
+            },
+          ],
+        };
+      }) as unknown as typeof generateText;
+
+      const response = await processMessageLLM(
+        "user-1",
+        [{ role: "user", content: "Create a meeting at 3 PM" }],
+        fakeGenerate,
+        undefined,
+        undefined,
+        "America/New_York"
+      );
+
+      expect(response.ui?.kind).toBe("created");
     });
   });
 });

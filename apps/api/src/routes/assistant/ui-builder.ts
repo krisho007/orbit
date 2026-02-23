@@ -109,6 +109,7 @@ export function buildUiFromToolResults(
       return {
         kind: "confirmation",
         action: String(output.action || ""),
+        entityType: output.entityType ? String(output.entityType) : undefined,
         details: output.details as Record<string, unknown> | undefined,
       };
     }

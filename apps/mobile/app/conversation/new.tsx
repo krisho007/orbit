@@ -34,7 +34,7 @@ const MEDIUM_OPTIONS: { value: ConversationMedium; label: string }[] = [
 
 export default function NewConversationScreen() {
   const router = useRouter();
-  const { contactId, eventId } = useLocalSearchParams<{ contactId?: string; eventId?: string }>();
+  const { contactId, eventId, prefill } = useLocalSearchParams<{ contactId?: string; eventId?: string; prefill?: string }>();
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
   const createConversation = useCreateConversation();
@@ -54,6 +54,30 @@ export default function NewConversationScreen() {
     content: "",
     medium: "OTHER" as ConversationMedium,
   });
+
+  useEffect(() => {
+    if (!prefill) return;
+    try {
+      const data = JSON.parse(prefill);
+      if (data.medium) setFormData((prev) => ({ ...prev, medium: data.medium }));
+      if (data.content) setFormData((prev) => ({ ...prev, content: data.content }));
+      if (data.happenedAt) {
+        const d = new Date(data.happenedAt);
+        if (!Number.isNaN(d.getTime())) setHappenedAt(d);
+      }
+      if (data.participantNames && Array.isArray(data.participantNames)) {
+        for (const name of data.participantNames) {
+          contactsApi.list({ search: String(name), limit: 1 }).then((res) => {
+            if (res.contacts.length > 0) {
+              setSelectedParticipants((prev) =>
+                prev.some((p) => p.id === res.contacts[0].id) ? prev : [...prev, res.contacts[0]]
+              );
+            }
+          }).catch(() => {});
+        }
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (!contactId) return;

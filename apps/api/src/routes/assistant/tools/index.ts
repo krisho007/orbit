@@ -39,14 +39,15 @@ export function buildToolSet(userId: string, schemas: AllSchemas, assistantConve
       description: "Propose a create/update action and ask the user to confirm before executing. Use this to present a clear summary of what you plan to do.",
       inputSchema: z.object({
         action: z.string().describe("What you intend to do, e.g. 'Create a phone call conversation with Alice about project timeline'"),
+        entityType: z.enum(["contact", "conversation", "event", "reminder"]).describe("The type of entity being created or updated"),
         details: z.string().optional().describe("JSON object with key details of the proposed action, e.g. '{\"title\":\"Meeting\",\"date\":\"2025-03-01\"}'"),
       }),
-      execute: async ({ action, details }) => {
+      execute: async ({ action, entityType, details }) => {
         let parsed: Record<string, unknown> | undefined;
         if (details) {
           try { parsed = JSON.parse(details); } catch { parsed = { summary: details }; }
         }
-        return { type: "confirmation_requested", action, details: parsed };
+        return { type: "confirmation_requested", action, entityType, details: parsed };
       },
     }),
   };

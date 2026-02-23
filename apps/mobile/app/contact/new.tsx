@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,13 +9,14 @@ import {
   Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
 import { useCreateContact } from "../../hooks/use-contacts";
 
 export default function NewContactScreen() {
   const router = useRouter();
+  const { prefill } = useLocalSearchParams<{ prefill?: string }>();
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
   const createContact = useCreateContact();
@@ -30,6 +31,22 @@ export default function NewContactScreen() {
     primaryEmail: "",
     notes: "",
   });
+
+  useEffect(() => {
+    if (!prefill) return;
+    try {
+      const data = JSON.parse(prefill);
+      setFormData((prev) => ({
+        ...prev,
+        ...(data.displayName ? { displayName: data.displayName } : {}),
+        ...(data.company ? { company: data.company } : {}),
+        ...(data.jobTitle ? { jobTitle: data.jobTitle } : {}),
+        ...(data.primaryPhone ? { primaryPhone: data.primaryPhone } : {}),
+        ...(data.primaryEmail ? { primaryEmail: data.primaryEmail } : {}),
+        ...(data.notes ? { notes: data.notes } : {}),
+      }));
+    } catch {}
+  }, []);
 
   const pickImage = async () => {
     try {

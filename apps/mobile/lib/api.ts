@@ -492,7 +492,7 @@ export type AssistantUi =
   | { kind: "reminders"; count: number; reminders: AssistantReminderCard[] }
   | { kind: "created"; cards: AssistantCreatedCard[] }
   | { kind: "selection"; prompt: string; options: AssistantSelectionOption[] }
-  | { kind: "confirmation"; action: string; details?: Record<string, unknown> };
+  | { kind: "confirmation"; action: string; entityType?: string; details?: Record<string, unknown> };
 
 export type AssistantAction = {
   label: string;
@@ -537,10 +537,11 @@ export type AssistantConversationDetail = {
 
 export const assistantApi = {
   chat: (messages: ChatMessage[], conversationId?: string, onStatus?: (message: string) => void) => {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (onStatus) {
-      return api.streamPost<ChatResponse>("/api/assistant", { messages, conversationId }, onStatus);
+      return api.streamPost<ChatResponse>("/api/assistant", { messages, conversationId, timezone }, onStatus);
     }
-    return api.post<ChatResponse>("/api/assistant", { messages, conversationId });
+    return api.post<ChatResponse>("/api/assistant", { messages, conversationId, timezone });
   },
 
   listConversations: (cursor?: string) =>

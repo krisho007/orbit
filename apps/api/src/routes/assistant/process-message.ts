@@ -111,7 +111,8 @@ export async function processMessageLLM(
   messages: ChatMessage[],
   generate: typeof generateText = generateText,
   assistantConversationId?: string,
-  onStatus?: StatusCallback
+  onStatus?: StatusCallback,
+  timezone?: string
 ): Promise<{ text: string; ui: AssistantUi | null; actions?: AssistantAction[]; cachedIntents?: AssistantIntent[]; modelName?: string; inputTokens?: number; outputTokens?: number }> {
   const apiKeyGuard = getProviderApiKeyEnvGuard();
   if (!apiKeyGuard.configured) {
@@ -236,7 +237,7 @@ export async function processMessageLLM(
 
   const result = await generate({
     model: getModel(),
-    system: buildSystemPrompt(userContext, enumConfig, inferredIntents, confirmationRequired),
+    system: buildSystemPrompt(userContext, enumConfig, inferredIntents, confirmationRequired, timezone),
     messages: modelMessages,
     tools: toolsForRun,
     experimental_repairToolCall: async ({ toolCall, error, messages }) => {

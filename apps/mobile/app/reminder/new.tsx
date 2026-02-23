@@ -34,7 +34,7 @@ const RECURRENCE_OPTIONS: Array<{ value: ReminderRecurrence; label: string }> = 
 
 export default function NewReminderScreen() {
   const router = useRouter();
-  const { contactId } = useLocalSearchParams<{ contactId?: string }>();
+  const { contactId, prefill } = useLocalSearchParams<{ contactId?: string; prefill?: string }>();
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
   const createReminder = useCreateReminder();
@@ -57,6 +57,33 @@ export default function NewReminderScreen() {
     recurrence: "NONE" as ReminderRecurrence,
     recurrenceInterval: "1",
   });
+
+  useEffect(() => {
+    if (!prefill) return;
+    try {
+      const data = JSON.parse(prefill);
+      setFormData((prev) => ({
+        ...prev,
+        ...(data.title ? { title: data.title } : {}),
+        ...(data.notes ? { notes: data.notes } : {}),
+      }));
+      if (data.dueAt) {
+        const d = new Date(data.dueAt);
+        if (!Number.isNaN(d.getTime())) setDueDate(d);
+      }
+      if (data.participantNames && Array.isArray(data.participantNames)) {
+        for (const name of data.participantNames) {
+          contactsApi.list({ search: String(name), limit: 1 }).then((res) => {
+            if (res.contacts.length > 0) {
+              setSelectedParticipants((prev) =>
+                prev.some((p) => p.id === res.contacts[0].id) ? prev : [...prev, res.contacts[0]]
+              );
+            }
+          }).catch(() => {});
+        }
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (!contactId) return;

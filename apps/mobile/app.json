@@ -16,7 +16,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.orbit.app"
+      "bundleIdentifier": "com.stellarorbit.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +24,7 @@
         "backgroundColor": "#FFFFFF"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.orbit.app",
+      "package": "com.stellarorbit.app",
       "versionCode": 1,
       "permissions": [
         "POST_NOTIFICATIONS",

@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { View, Text, FlatList, Pressable } from "react-native";
+import { View, Text, FlatList, Pressable, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
 import {
   Briefcase,
@@ -32,20 +32,21 @@ const EVENT_META: Record<
   OTHER: { label: "Other", icon: Bookmark },
 };
 
-function formatRelativeDate(dateStr: string): string {
+function formatRelativeDate(dateStr: string): { label: string; isToday: boolean } {
   const date = new Date(dateStr);
-  if (Number.isNaN(date.getTime())) return "Unknown";
+  if (Number.isNaN(date.getTime())) return { label: "Unknown", isToday: false };
   const time = format(date, "h:mm a");
-  if (isToday(date)) return `Today, ${time}`;
-  if (isTomorrow(date)) return `Tomorrow, ${time}`;
-  return format(date, "MMM d, h:mm a");
+  if (isToday(date)) return { label: `Today, ${time}`, isToday: true };
+  if (isTomorrow(date)) return { label: `Tomorrow, ${time}`, isToday: false };
+  return { label: format(date, "MMM d, h:mm a"), isToday: false };
 }
 
-function UpcomingEventCard({ event }: { event: Event }) {
+function UpcomingEventCard({ event, cardWidth }: { event: Event; cardWidth: number }) {
   const router = useRouter();
   const colors = useThemeColors();
   const meta = EVENT_META[event.eventType] || EVENT_META.OTHER;
   const EventIcon = meta.icon;
+  const dateInfo = formatRelativeDate(event.startAt);
 
   return (
     <Pressable
@@ -55,35 +56,46 @@ function UpcomingEventCard({ event }: { event: Event }) {
           params: { id: event.id, from: "/(tabs)/assistant" },
         })
       }
-      className="bg-background-0 border border-border-200 rounded-xl p-3 mr-3 active:bg-background-50"
-      style={{ width: 160 }}
+      className="bg-background-0 border border-border-200 rounded-xl mr-2.5 active:bg-background-50"
+      style={{
+        width: cardWidth,
+        borderLeftWidth: 3,
+        borderLeftColor: getThemeColor(colors, dateInfo.isToday ? "primary-500" : "primary-200"),
+      }}
     >
-      <View className="flex-row items-center mb-2">
-        <View className="w-7 h-7 rounded-lg bg-primary-100 items-center justify-center mr-2">
-          <EventIcon size={14} color={getThemeColor(colors, "primary-600")} />
-        </View>
-        <Text className="text-typography-500 text-xs flex-1" numberOfLines={1}>
-          {meta.label}
+      <View className="px-3 py-2.5">
+        {/* Title — most important */}
+        <Text className="text-typography-900 font-body-semibold text-[13px] leading-[18px]" numberOfLines={1}>
+          {event.title}
         </Text>
+        {/* Date + type on one line */}
+        <View className="flex-row items-center mt-1.5">
+          <EventIcon size={11} color={getThemeColor(colors, "typography-400")} />
+          <Text
+            className={`text-[11px] ml-1 font-body-medium ${dateInfo.isToday ? "text-primary-600" : "text-typography-500"}`}
+            numberOfLines={1}
+          >
+            {dateInfo.label}
+          </Text>
+        </View>
       </View>
-      <Text className="text-typography-900 font-body-semibold text-sm" numberOfLines={1}>
-        {event.title}
-      </Text>
-      <Text className="text-typography-500 text-xs mt-1" numberOfLines={1}>
-        {formatRelativeDate(event.startAt)}
-      </Text>
     </Pressable>
   );
 }
 
 export function UpcomingEventsWidget() {
   const { data: events, isLoading } = useUpcomingEvents();
+  const { width: screenWidth } = useWindowDimensions();
+  // Show ~2.3 cards on mobile (<500px), ~3.3 on wider screens
+  const cardWidth = screenWidth < 500
+    ? Math.floor((screenWidth - 32 - 20) / 2.3)
+    : 200;
 
   if (isLoading || !events || events.length === 0) return null;
 
   return (
-    <View className="mb-4">
-      <Text className="text-typography-500 text-xs font-body-semibold uppercase tracking-wide px-4 mb-2">
+    <View className="pt-1 pb-3">
+      <Text className="text-typography-400 text-[11px] font-body-semibold uppercase tracking-wider px-4 mb-2">
         Upcoming
       </Text>
       <FlatList
@@ -92,7 +104,7 @@ export function UpcomingEventsWidget() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 16 }}
-        renderItem={({ item }) => <UpcomingEventCard event={item} />}
+        renderItem={({ item }) => <UpcomingEventCard event={item} cardWidth={cardWidth} />}
       />
     </View>
   );

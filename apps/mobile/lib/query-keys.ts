@@ -25,6 +25,7 @@ export const eventKeys = {
   lists: () => [...eventKeys.all, "list"] as const,
   list: (filters: { search?: string; eventType?: string }) =>
     [...eventKeys.lists(), filters] as const,
+  upcoming: () => [...eventKeys.all, "upcoming"] as const,
   details: () => [...eventKeys.all, "detail"] as const,
   detail: (id: string) => [...eventKeys.details(), id] as const,
 };

@@ -75,6 +75,7 @@ import { useGluestackUI } from "../../components/ui/gluestack-ui-provider";
 import { AiConsentDialog } from "../../components/ai-consent-dialog";
 import { HeaderMenu } from "../../components/header-menu";
 import { HuskyLogo } from "../../components/HuskyLogo";
+import { UpcomingEventsWidget } from "../../components/upcoming-events-widget";
 
 type Message = ChatMessage & {
   id: string;
@@ -528,13 +529,15 @@ export default function AssistantScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // Refresh upcoming events when the screen regains focus
+      queryClient.invalidateQueries({ queryKey: eventKeys.upcoming() });
       // Scroll chat to the bottom when the screen regains focus
       // (e.g. returning from a contact/conversation/event/reminder detail screen).
       const timer = setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: false });
       }, 100);
       return () => clearTimeout(timer);
-    }, [])
+    }, [queryClient])
   );
 
   const nextMessageId = useCallback((prefix: string) => {
@@ -614,7 +617,7 @@ export default function AssistantScreen() {
           const kinds = new Set(response.ui.cards.map((c) => c.kind));
           if (kinds.has("contact")) queryClient.invalidateQueries({ queryKey: contactKeys.lists() });
           if (kinds.has("conversation")) queryClient.invalidateQueries({ queryKey: conversationKeys.lists() });
-          if (kinds.has("event")) queryClient.invalidateQueries({ queryKey: eventKeys.lists() });
+          if (kinds.has("event")) queryClient.invalidateQueries({ queryKey: eventKeys.all });
           if (kinds.has("reminder")) queryClient.invalidateQueries({ queryKey: reminderKeys.lists() });
         }
       } catch (error) {
@@ -1383,7 +1386,10 @@ export default function AssistantScreen() {
       keyboardVerticalOffset={headerHeight}
     >
       {messages.length === 0 ? (
-        <EmptyState />
+        <View className="flex-1">
+          <UpcomingEventsWidget />
+          <EmptyState />
+        </View>
       ) : (
         <FlatList
           ref={flatListRef}
@@ -1391,6 +1397,7 @@ export default function AssistantScreen() {
           data={messages}
           keyExtractor={(item) => item.id}
           renderItem={renderMessage}
+          ListHeaderComponent={<UpcomingEventsWidget />}
           contentContainerStyle={{ flexGrow: 1, paddingTop: 16, paddingBottom: 8 }}
           nestedScrollEnabled
           showsVerticalScrollIndicator

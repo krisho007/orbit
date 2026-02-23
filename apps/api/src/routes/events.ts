@@ -1,7 +1,7 @@
 // Events API Routes
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, sql, ilike, or, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, sql, ilike, or, inArray, gte } from "drizzle-orm";
 import {
   db,
   events,
@@ -250,11 +250,16 @@ app.get("/", async (c) => {
   const cursor = c.req.query("cursor");
   const search = c.req.query("search") || "";
   const eventType = c.req.query("eventType");
+  const upcoming = c.req.query("upcoming") === "true";
   const limit = clampLimit(c.req.query("limit"), PAGE_SIZE);
 
   try {
     // Build base query conditions
     const conditions = [eq(events.userId, userId)];
+
+    if (upcoming) {
+      conditions.push(gte(events.startAt, new Date()));
+    }
 
     if (eventType && eventTypes.includes(eventType as any)) {
       conditions.push(eq(events.eventType, eventType as any));
@@ -270,6 +275,9 @@ app.get("/", async (c) => {
       );
     }
 
+    const orderDirection = upcoming ? asc : desc;
+    const cursorComparison = upcoming ? ">" : "<";
+
     // Fetch events
     let eventsList;
     if (cursor) {
@@ -279,17 +287,17 @@ app.get("/", async (c) => {
         .where(
           and(
             ...conditions,
-            sql`${events.startAt} < (SELECT "startAt" FROM events WHERE id = ${cursor})`
+            sql`${events.startAt} ${sql.raw(cursorComparison)} (SELECT "startAt" FROM events WHERE id = ${cursor})`
           )
         )
-        .orderBy(desc(events.startAt))
+        .orderBy(orderDirection(events.startAt))
         .limit(limit + 1);
     } else {
       eventsList = await db
         .select()
         .from(events)
         .where(and(...conditions))
-        .orderBy(desc(events.startAt))
+        .orderBy(orderDirection(events.startAt))
         .limit(limit + 1);
     }
 

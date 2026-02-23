@@ -313,6 +313,7 @@ export const eventsApi = {
     cursor?: string;
     search?: string;
     eventType?: string;
+    upcoming?: boolean;
     limit?: number;
   }) =>
     api.get<{

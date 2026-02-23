@@ -34,13 +34,22 @@ export function useEvent(id: string) {
   });
 }
 
+export function useUpcomingEvents(limit = 7) {
+  return useQuery({
+    queryKey: eventKeys.upcoming(),
+    queryFn: () => eventsApi.list({ upcoming: true, limit }),
+    select: (data) => data.events,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
 export function useCreateEvent() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (data: CreateEventData) => eventsApi.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: eventKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: eventKeys.all });
     },
   });
 }
@@ -55,7 +64,7 @@ export function useUpdateEvent() {
       queryClient.invalidateQueries({
         queryKey: eventKeys.detail(variables.id),
       });
-      queryClient.invalidateQueries({ queryKey: eventKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: eventKeys.all });
     },
   });
 }
@@ -66,7 +75,7 @@ export function useDeleteEvent() {
   return useMutation({
     mutationFn: (id: string) => eventsApi.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: eventKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: eventKeys.all });
     },
   });
 }

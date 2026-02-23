@@ -58,8 +58,9 @@ export function buildSystemPrompt(
     userSection = `
 ## Current User
 <user_data>The logged-in user is "${safeUserName}" (email: ${safeEmail}).
-Their contact record in the CRM is: "${safeContactName}" (ID: ${userContext.primaryContactId}).</user_data>
+Their contact record in the CRM is: "${safeContactName}" (internal ID for tool use only: ${userContext.primaryContactId}).</user_data>
 When the user says "I", "me", "my", "mine", they are referring to this contact.
+IMPORTANT: The IDs above are for internal tool calls ONLY. NEVER include them in your text responses.
 For example, "Abhinav is my son" means: create a relationship from the user's contact to Abhinav with type "Son".`;
   } else {
     userSection = `
@@ -80,8 +81,11 @@ Do NOT ask for raw IDs — always resolve names to contacts automatically.`;
 This turn requires explicit confirmation before creating the contact.
 - The user explicitly wants to create a NEW contact. Do NOT search for existing contacts.
 - Extract all available fields from the user's message (name, phone, email, company, jobTitle, location, notes, etc.).
-- Summarize the planned creation and ask for confirmation.
-  Example: "I'll create a new contact for Lisa Chen, PM at Google. Shall I go ahead?"
+- You MUST call request_confirmation with:
+  - entityType: "contact"
+  - details: JSON with the proposed field values, e.g. {"displayName": "Lisa Chen", "company": "Google", "jobTitle": "PM"}
+    Supported fields: displayName, company, jobTitle, primaryPhone, primaryEmail, notes
+- Also provide a brief text summary (e.g. "I'll create a new contact for Lisa Chen, PM at Google.").
 - Do NOT execute any mutating tool until the user explicitly confirms.`
       : `## Confirmation Gate
 This turn requires explicit confirmation before any create/update/delete action.
@@ -90,8 +94,14 @@ This turn requires explicit confirmation before any create/update/delete action.
   - If a single strong match exists (exact name match or very high similarity), use it.
   - If multiple matches exist but none closely match, tell the user you couldn't find an exact match and offer to create a new contact.
   - If NO matches are found, clearly state this and offer to create the contact.
-- After context is clear, summarize the COMPLETE action plan. For example:
-  "I'll log a conversation: Met [Name] at [Location], discussed [topic]. Medium: In-Person. Date: Today (${today}). Shall I go ahead or do you need changes?"
+- After context is clear, you MUST call request_confirmation with:
+  - entityType: the type of entity ("contact", "conversation", "event", "reminder")
+  - details: JSON with the proposed field values matching the entity schema:
+    Contact: {"displayName", "company", "jobTitle", "primaryPhone", "primaryEmail", "notes"}
+    Conversation: {"medium", "happenedAt", "content", "participantNames"}
+    Event: {"title", "eventType", "startAt", "endAt", "location", "participantNames"}
+    Reminder: {"title", "dueAt", "notes", "participantNames"}
+- Also provide a brief text summary describing the planned action.
 - CRITICAL: Your text response MUST describe the planned action, not just list search results.
 - Do NOT execute any mutating tool until the user explicitly confirms.`
     : `## Confirmation Gate

@@ -391,6 +391,10 @@ export async function processMessageLLM(
 
   let text = summarizeUiText(effectiveUi, result.text, confirmationRequired);
 
+  // Strip technical IDs that the LLM may leak despite system prompt instructions.
+  // Matches patterns like "(ID: abc123...)" or "(ID: cmj7grica023ula04vr68kziv)"
+  text = text.replace(/\s*\(ID:\s*[a-zA-Z0-9_-]+\)/g, "");
+
   const createContactCalls = toolCalls.filter((call) => call.toolName === "create_contact");
   const contactCreated = toolResults.some(
     (toolResult) =>
@@ -421,8 +425,8 @@ export async function processMessageLLM(
     (tr) => tr.output?.type === "confirmation_requested"
   );
   const textIndicatesPlan =
-    /\b(going to|will|plan to|about to|shall I|would you like me to|want me to|should I|ready to)\b/i.test(result.text) &&
-    /\b(go ahead|confirm|proceed|changes|create|log|add|set up|schedule|save)\b/i.test(result.text);
+    /\b(going to|will|plan to|propose to|about to|shall I|would you like (me )?to|want me to|should I|ready to|i'd like to|let me)\b/i.test(result.text) &&
+    /\b(go ahead|confirm|proceed|changes|create|log|add|set up|schedule|save|update|record)\b/i.test(result.text);
 
   // Don't show confirmation buttons when the response is a failure/error message
   // asking the user for more information (e.g. contact creation failed).

@@ -68,8 +68,13 @@ const addImageSchema = z.object({
   imageUrl: z.string().url(),
   publicId: z.string().optional().or(z.literal("")),
 });
+// 5MB in base64 ≈ ceil(5*1024*1024 * 4/3) + padding
+const MAX_BASE64_LENGTH = Math.ceil((5 * 1024 * 1024 * 4) / 3) + 4;
 const uploadImageSchema = z.object({
-  base64Data: z.string().min(1, "base64Data is required"),
+  base64Data: z
+    .string()
+    .min(1, "base64Data is required")
+    .max(MAX_BASE64_LENGTH, "base64Data exceeds 5MB limit"),
   contentType: z
     .string()
     .regex(/^image\/[a-zA-Z0-9.+-]+$/, "contentType must be an image MIME type"),

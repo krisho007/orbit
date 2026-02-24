@@ -2,6 +2,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "hono/bun";
 
@@ -15,11 +16,13 @@ import assistantRouter from "./routes/assistant";
 import remindersRouter from "./routes/reminders";
 import usersRouter from "./routes/users";
 import speechRouter from "./routes/speech";
+import { rateLimiter, strictRateLimiter } from "./middleware/rate-limit";
 
 const app = new Hono();
 
 // Middleware
 app.use("*", logger());
+app.use("/api/*", bodyLimit({ maxSize: 8 * 1024 * 1024 })); // 8MB body limit
 
 const ALLOWED_ORIGINS = (
   process.env.CORS_ALLOWED_ORIGINS ||
@@ -55,6 +58,11 @@ app.get("/api", (c) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Rate limiting
+app.use("/api/*", rateLimiter); // 200 req/min general
+app.use("/api/assistant/*", strictRateLimiter); // 20 req/min for LLM endpoints
+app.use("/api/speech/*", strictRateLimiter); // 20 req/min for speech endpoints
 
 // API Routes
 app.route("/api/contacts", contactsRouter);

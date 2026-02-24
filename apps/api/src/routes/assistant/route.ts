@@ -1,9 +1,9 @@
 import { Hono } from "hono";
-import { eq, and, desc, asc, lt } from "drizzle-orm";
+import { eq, and, desc, asc, lt, sql } from "drizzle-orm";
 import { authMiddleware } from "../../middleware/auth";
 import { formatValidationErrors } from "../../utils/validation";
 import type { ChatMessage } from "./types";
-import { chatSchema } from "./types";
+import { chatSchema, MAX_USER_MESSAGES_PER_CONVERSATION } from "./types";
 import { processMessageLLM } from "./process-message";
 import {
   db,
@@ -91,6 +91,28 @@ async function validateAndSetup(c: any) {
       return { error: c.json({ error: "Conversation not found" }, 404) };
     }
     throw assistantConvId;
+  }
+
+  // Enforce per-conversation user message limit
+  if (conversationId) {
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(assistantMessages)
+      .where(
+        and(
+          eq(assistantMessages.assistantConversationId, assistantConvId),
+          eq(assistantMessages.role, "user")
+        )
+      );
+    const userMessageCount = Number(countResult?.count || 0);
+    if (userMessageCount >= MAX_USER_MESSAGES_PER_CONVERSATION) {
+      return {
+        error: c.json(
+          { error: "Conversation limit reached (10 messages). Please start a new conversation." },
+          400
+        ),
+      };
+    }
   }
 
   return { userId, messages, lastUserMessage, assistantConvId, timezone };

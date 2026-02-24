@@ -2,6 +2,7 @@ import { z } from "zod";
 
 // ── Message schemas ──────────────────────────────────────────────────
 export const MAX_USER_MESSAGE_LENGTH = 2_000;
+export const MAX_USER_MESSAGES_PER_CONVERSATION = 10;
 
 export const messageSchema = z.object({
   role: z.enum(["user", "assistant"]),

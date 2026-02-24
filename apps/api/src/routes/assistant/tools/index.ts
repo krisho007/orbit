@@ -6,6 +6,7 @@ import { createEventTools } from "./events";
 import { createReminderTools } from "./reminders";
 import { createTagTools } from "./tags";
 import { createRelationshipTools } from "./relationships";
+import { sanitizeToolResult } from "../sanitize";
 
 export type AllSchemas = {
   mediumSchema: any;
@@ -15,6 +16,29 @@ export type AllSchemas = {
   optionalReminderStatusSchema: any;
   completionStatusSchema: any;
 };
+
+/**
+ * Wrap every tool's execute function to sanitize user-controlled fields
+ * in tool results, preventing prompt injection via malicious data.
+ */
+function withSanitizedResults(tools: Record<string, any>): Record<string, any> {
+  const wrapped: Record<string, any> = {};
+  for (const [name, t] of Object.entries(tools)) {
+    if (t?.execute) {
+      const originalExecute = t.execute;
+      wrapped[name] = {
+        ...t,
+        execute: async (args: any) => {
+          const result = await originalExecute(args);
+          return sanitizeToolResult(result);
+        },
+      };
+    } else {
+      wrapped[name] = t;
+    }
+  }
+  return wrapped;
+}
 
 export function buildToolSet(userId: string, schemas: AllSchemas, assistantConversationId?: string) {
   const contactTools = createContactTools(userId, schemas, assistantConversationId);
@@ -27,7 +51,7 @@ export function buildToolSet(userId: string, schemas: AllSchemas, assistantConve
   const tagTools = createTagTools(userId);
   const relationshipTools = createRelationshipTools(userId);
 
-  const tools = {
+  const tools = withSanitizedResults({
     ...contactTools,
     ...conversationTools,
     ...eventTools,
@@ -50,7 +74,7 @@ export function buildToolSet(userId: string, schemas: AllSchemas, assistantConve
         return { type: "confirmation_requested", action, entityType, details: parsed };
       },
     }),
-  };
+  });
 
   const toolsWithAliases = {
     ...tools,

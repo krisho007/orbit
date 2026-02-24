@@ -1,0 +1,5 @@
+# Generated training data (large files, not tracked in git)
+generated.jsonl
+validated.jsonl
+train.jsonl
+train-test.jsonl

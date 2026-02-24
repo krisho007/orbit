@@ -1,20 +1,26 @@
 import { google } from "@ai-sdk/google";
 import { createGroq } from "@ai-sdk/groq";
+import { createOpenAI } from "@ai-sdk/openai";
 
-export type AIProvider = "google" | "groq";
+export type AIProvider = "google" | "groq" | "finetuned";
 
 const DEFAULT_MODELS: Record<AIProvider, string> = {
   google: "gemini-flash-lite-latest",
   groq: "llama-3.1-8b-instant",
+  finetuned: "your-org/orbit-assistant-v1",
 };
 
 const groq = createGroq();
 
 export function getProvider(): AIProvider {
   const raw = process.env.AI_PROVIDER || "google";
-  if (raw === "google" || raw === "groq") return raw;
+  if (raw === "google" || raw === "groq" || raw === "finetuned") return raw;
   console.warn(`[assistant:model] Unknown AI_PROVIDER "${raw}", falling back to google`);
   return "google";
+}
+
+export function isFinetunedProvider(): boolean {
+  return getProvider() === "finetuned";
 }
 
 export function getModelName(): string {
@@ -45,10 +51,41 @@ export function getClassificationModel() {
   return google(modelName);
 }
 
+// ── Fine-tuned model (OpenAI-compatible API via Together.ai) ────────
+
+let togetherClient: ReturnType<typeof createOpenAI> | null = null;
+
+function getTogetherClient() {
+  if (!togetherClient) {
+    togetherClient = createOpenAI({
+      apiKey: process.env.TOGETHER_API_KEY || "",
+      baseURL: "https://api.together.xyz/v1",
+    });
+  }
+  return togetherClient;
+}
+
+export function getFinetunedModelName(): string {
+  return process.env.TOGETHER_MODEL || DEFAULT_MODELS.finetuned;
+}
+
+export function getFinetunedModel() {
+  const client = getTogetherClient();
+  const modelName = getFinetunedModelName();
+  return client(modelName);
+}
+
 export function getProviderApiKeyEnvGuard(): { configured: boolean; message: string } {
   const provider = getProvider();
 
-  if (provider === "groq") {
+  if (provider === "finetuned") {
+    if (!process.env.TOGETHER_API_KEY) {
+      return {
+        configured: false,
+        message: "Assistant is not configured. Set TOGETHER_API_KEY in apps/api/.env to enable the fine-tuned model.",
+      };
+    }
+  } else if (provider === "groq") {
     if (!process.env.GROQ_API_KEY) {
       return {
         configured: false,

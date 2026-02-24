@@ -1,13 +1,16 @@
 import { z } from "zod";
 
 // ── Message schemas ──────────────────────────────────────────────────
+export const MAX_MESSAGE_LENGTH = 2_000;
+export const MAX_CHAT_MESSAGES = 50;
+
 export const messageSchema = z.object({
   role: z.enum(["user", "assistant"]),
-  content: z.string(),
+  content: z.string().max(MAX_MESSAGE_LENGTH, "Message too long (max 2000 characters)"),
 });
 
 export const chatSchema = z.object({
-  messages: z.array(messageSchema),
+  messages: z.array(messageSchema).max(MAX_CHAT_MESSAGES, "Too many messages in conversation"),
   conversationId: z.string().optional(),
   timezone: z.string().optional(),
 });

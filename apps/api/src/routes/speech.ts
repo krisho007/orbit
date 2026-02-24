@@ -1,6 +1,4 @@
 // Speech-to-Text API Route (Sarvam AI proxy)
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
@@ -12,10 +10,6 @@ app.use("/*", authMiddleware);
 
 const SARVAM_API_KEY = process.env.SARVAM_API_KEY;
 const SARVAM_STT_URL = "https://api.sarvam.ai/speech-to-text";
-const SPEECH_DUMP_AUDIO = ["1", "true", "yes"].includes(
-  (process.env.SPEECH_DUMP_AUDIO || "").toLowerCase()
-);
-const SPEECH_DUMP_DIR = process.env.SPEECH_DUMP_DIR || "/tmp/orbit-speech-dumps";
 
 type SarvamErrorPayload = {
   error?: {
@@ -26,35 +20,6 @@ type SarvamErrorPayload = {
 type SarvamSuccessPayload = {
   transcript?: string;
 };
-
-function sanitizeSegment(value: string): string {
-  const sanitized = value.replace(/[^a-zA-Z0-9._-]/g, "_");
-  return sanitized.length > 0 ? sanitized : "unknown";
-}
-
-async function maybeDumpUploadedAudio(
-  file: File,
-  userId: string
-): Promise<string | null> {
-  if (!SPEECH_DUMP_AUDIO) {
-    return null;
-  }
-
-  const ext = file.name.includes(".")
-    ? file.name.slice(file.name.lastIndexOf("."))
-    : "";
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const safeUser = sanitizeSegment(userId);
-  const safeExt = sanitizeSegment(ext || ".bin");
-  const fileName = `${timestamp}_${safeUser}_${crypto.randomUUID()}${safeExt}`;
-  const dumpPath = join(SPEECH_DUMP_DIR, fileName);
-
-  await mkdir(SPEECH_DUMP_DIR, { recursive: true });
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  await writeFile(dumpPath, bytes);
-
-  return dumpPath;
-}
 
 /**
  * POST /api/speech/transcribe
@@ -106,14 +71,6 @@ app.post("/transcribe", async (c) => {
   }
 
   try {
-    const dumpPath = await maybeDumpUploadedAudio(audioFile, userId).catch((err) => {
-      console.error("[Speech] Failed to dump uploaded audio:", err);
-      return null;
-    });
-    if (dumpPath) {
-      console.log("[Speech] Dumped uploaded audio to:", dumpPath);
-    }
-
     console.log(
       "[Speech] Forwarding file - name:",
       audioFile.name,

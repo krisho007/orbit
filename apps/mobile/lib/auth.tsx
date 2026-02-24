@@ -22,8 +22,10 @@ const getRedirectUrl = () => {
     scheme: "orbit",
     path: "auth/callback",
   });
-  console.log("[Auth] Generated redirect URL:", redirectUrl);
-  console.log("[Auth] Running in Expo Go:", isExpoGo);
+  if (__DEV__) {
+    console.log("[Auth] Generated redirect URL:", redirectUrl);
+    console.log("[Auth] Running in Expo Go:", isExpoGo);
+  }
   return redirectUrl;
 };
 
@@ -61,7 +63,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let isMounted = true;
 
     const handleDeepLink = async (url: string) => {
-      console.log("[Auth] Handling deep link:", url);
+      if (__DEV__) console.log("[Auth] Handling deep link:", url);
+      else console.log("[Auth] Handling deep link");
       try {
         const parsedUrl = new URL(url);
         const code = parsedUrl.searchParams.get("code");
@@ -73,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (error) {
             console.error("[Auth] Deep link code exchange failed:", error.message);
           } else {
-            console.log("[Auth] Deep link code exchange successful:", data.session?.user?.email);
+            console.log("[Auth] Deep link code exchange successful");
 
             // Store Google tokens from deep link PKCE exchange
             const dlProviderToken = (data.session as any)?.provider_token as string | undefined;
@@ -114,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               if (error) {
                 console.error("[Auth] Code exchange failed:", error.message);
               } else {
-                console.log("[Auth] Code exchange successful:", data.session?.user?.email);
+                console.log("[Auth] Code exchange successful");
 
                 // Store Google tokens from web PKCE exchange
                 const webProviderToken = (data.session as any)?.provider_token as string | undefined;
@@ -174,7 +177,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log("Auth state changed:", _event, session?.user?.email);
+      if (__DEV__) console.log("Auth state changed:", _event, session?.user?.email);
+      else console.log("Auth state changed:", _event);
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
@@ -239,7 +243,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         
-        console.log("[Auth] Native OAuth redirect URL:", redirectTo);
+        if (__DEV__) console.log("[Auth] Native OAuth redirect URL:", redirectTo);
         
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: "google",
@@ -257,7 +261,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (error) throw error;
 
         console.log("[Auth] Opening browser for OAuth...");
-        console.log("[Auth] OAuth URL:", data.url);
+        if (__DEV__) console.log("[Auth] OAuth URL:", data.url);
         
         // Open the OAuth URL in an in-app browser
         const result = await WebBrowser.openAuthSessionAsync(
@@ -268,11 +272,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         );
 
-        console.log("[Auth] Browser result:", result.type, JSON.stringify(result));
+        console.log("[Auth] Browser result:", result.type);
+        if (__DEV__) console.log("[Auth] Browser result details:", JSON.stringify(result));
 
         if (result.type === "success") {
           const url = result.url;
-          console.log("[Auth] Callback URL:", url);
+          if (__DEV__) console.log("[Auth] Callback URL:", url);
+          else console.log("[Auth] Callback URL received");
           
           // Parse the URL to extract tokens or code
           const parsedUrl = new URL(url);
@@ -307,7 +313,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               throw sessionError;
             }
 
-            console.log("[Auth] OAuth successful:", sessionData.session?.user.email);
+            console.log("[Auth] OAuth successful (implicit flow)");
 
             // Store Google tokens server-side
             if (googleProviderToken) {
@@ -335,7 +341,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               throw new Error("No session returned from OAuth exchange.");
             }
 
-            console.log("[Auth] OAuth successful:", exchangeData.session.user.email);
+            console.log("[Auth] OAuth successful (PKCE flow)");
 
             // Store Google tokens from PKCE exchange response
             const pkceProviderToken = (exchangeData.session as any).provider_token as string | undefined;
@@ -352,7 +358,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           } else {
             console.error("[Auth] No tokens or code found in callback URL");
-            console.error("[Auth] URL was:", url);
+            if (__DEV__) console.error("[Auth] URL was:", url);
             throw new Error("No authorization data in callback URL");
           }
         } else if (result.type === "cancel") {

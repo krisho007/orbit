@@ -5,6 +5,7 @@ import { logger } from "hono/logger";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "hono/bun";
+import { secureHeaders } from "hono/secure-headers";
 
 // Import routes
 import contactsRouter from "./routes/contacts";
@@ -22,6 +23,24 @@ const app = new Hono();
 
 // Middleware
 app.use("*", logger());
+app.use(
+  "*",
+  secureHeaders({
+    contentSecurityPolicy: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https://*.supabase.co", "https://api.sarvam.ai"],
+      fontSrc: ["'self'", "data:"],
+      frameAncestors: ["'none'"],
+    },
+    xFrameOptions: "DENY",
+    xContentTypeOptions: "nosniff",
+    referrerPolicy: "strict-origin-when-cross-origin",
+    crossOriginOpenerPolicy: "same-origin",
+  })
+);
 app.use("/api/*", bodyLimit({ maxSize: 8 * 1024 * 1024 })); // 8MB body limit
 
 const ALLOWED_ORIGINS = (

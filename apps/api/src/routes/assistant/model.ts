@@ -2,25 +2,30 @@ import { google } from "@ai-sdk/google";
 import { createGroq } from "@ai-sdk/groq";
 import { createOpenAI } from "@ai-sdk/openai";
 
-export type AIProvider = "google" | "groq" | "finetuned";
+export type AIProvider = "google" | "groq" | "finetuned" | "google_structured";
 
 const DEFAULT_MODELS: Record<AIProvider, string> = {
   google: "gemini-flash-lite-latest",
   groq: "llama-3.1-8b-instant",
   finetuned: "your-org/orbit-assistant-v1",
+  google_structured: "gemini-flash-lite-latest",
 };
 
 const groq = createGroq();
 
 export function getProvider(): AIProvider {
   const raw = process.env.AI_PROVIDER || "google";
-  if (raw === "google" || raw === "groq" || raw === "finetuned") return raw;
+  if (raw === "google" || raw === "groq" || raw === "finetuned" || raw === "google_structured") return raw;
   console.warn(`[assistant:model] Unknown AI_PROVIDER "${raw}", falling back to google`);
   return "google";
 }
 
 export function isFinetunedProvider(): boolean {
   return getProvider() === "finetuned";
+}
+
+export function isStructuredProvider(): boolean {
+  return getProvider() === "google_structured";
 }
 
 export function getModelName(): string {
@@ -83,6 +88,13 @@ export function getProviderApiKeyEnvGuard(): { configured: boolean; message: str
       return {
         configured: false,
         message: "Assistant is not configured. Set TOGETHER_API_KEY in apps/api/.env to enable the fine-tuned model.",
+      };
+    }
+  } else if (provider === "google_structured") {
+    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+      return {
+        configured: false,
+        message: "Assistant is not configured. Set GOOGLE_GENERATIVE_AI_API_KEY in apps/api/.env to enable LLM features.",
       };
     }
   } else if (provider === "groq") {

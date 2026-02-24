@@ -1,8 +1,9 @@
 import { generateText, InvalidToolInputError, NoSuchToolError } from "ai";
-import { getModel, getModelName, getProviderApiKeyEnvGuard, getProvider, isFinetunedProvider } from "./model";
+import { getModel, getModelName, getProviderApiKeyEnvGuard, getProvider, isFinetunedProvider, isStructuredProvider } from "./model";
 import { stepCountIs } from "ai";
 import type { ChatMessage, ToolResult, ToolCallMeta, AssistantUi, AssistantAction, AssistantIntent, StatusCallback } from "./types";
 import { processMessageFinetuned } from "./process-message-finetuned";
+import { processMessageStructured } from "./process-message-structured";
 import { eq, and, desc } from "drizzle-orm";
 import { db, assistantMessages } from "../../db";
 import { SCHEMA_ENUM_CONFIG, loadAssistantEnumConfig, enumValueSchema } from "./enums";
@@ -115,6 +116,11 @@ export async function processMessageLLM(
   onStatus?: StatusCallback,
   timezone?: string
 ): Promise<{ text: string; ui: AssistantUi | null; actions?: AssistantAction[]; cachedIntents?: AssistantIntent[]; modelName?: string; inputTokens?: number; outputTokens?: number }> {
+  // Route to structured single-pass flow when AI_PROVIDER=google_structured
+  if (isStructuredProvider() && generate === generateText) {
+    return processMessageStructured(userId, messages, assistantConversationId, onStatus, timezone);
+  }
+
   // Route to fine-tuned single-pass flow when AI_PROVIDER=finetuned
   if (isFinetunedProvider() && generate === generateText) {
     return processMessageFinetuned(userId, messages, assistantConversationId, onStatus, timezone);

@@ -1,0 +1,167 @@
+/**
+ * System prompt builder for Path 3: Gemini Few-Shot Structured Output.
+ *
+ * Assembles a detailed system prompt that includes the full OrbitModelOutput schema,
+ * rules, and 8-10 selected few-shot examples from the seed dataset so that Gemini
+ * Flash Lite can produce valid JSON in a single pass without fine-tuning.
+ */
+
+import { formatToday } from "./types";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+// ── Load & cache seed examples at startup ────────────────────────────
+
+type SeedExample = {
+  input: {
+    messages: Array<{ role: string; content: string }>;
+    user_context: { userName: string; timezone: string };
+    current_datetime_utc: string;
+  };
+  output: Record<string, unknown>;
+};
+
+let cachedExamples: SeedExample[] | null = null;
+
+function loadSeedExamples(): SeedExample[] {
+  if (cachedExamples) return cachedExamples;
+
+  try {
+    const filePath = resolve(
+      import.meta.dir,
+      "../../../../../scripts/training/seed-examples.jsonl"
+    );
+    const raw = readFileSync(filePath, "utf-8");
+    cachedExamples = raw
+      .split("\n")
+      .filter((line) => line.trim().length > 0)
+      .map((line) => JSON.parse(line) as SeedExample);
+  } catch (err) {
+    console.warn("[assistant:structured] Failed to load seed examples:", err);
+    cachedExamples = [];
+  }
+
+  return cachedExamples;
+}
+
+/**
+ * Select a representative subset of seed examples covering key patterns.
+ * Indices chosen from the 20-example seed dataset:
+ *
+ *  0 - create_conversation (log a call with contact)
+ *  1 - create_contact (simple)
+ *  2 - search_conversation (display results)
+ *  3 - create_reminder (with relative time)
+ *  5 - unknown / greeting
+ *  6 - edit_contact (update field)
+ * 14 - delete_entity
+ * 15 - create_conversation_with_contact (multi-action)
+ * 18 - multi-intent (conversation + event)
+ */
+const SELECTED_INDICES = [0, 1, 2, 3, 5, 6, 14, 15, 18];
+
+function selectExamples(all: SeedExample[]): SeedExample[] {
+  return SELECTED_INDICES.filter((i) => i < all.length).map((i) => all[i]!);
+}
+
+function formatExample(ex: SeedExample): string {
+  const userMsg =
+    ex.input.messages.find((m) => m.role === "user")?.content ?? "";
+  const outputJson = JSON.stringify(ex.output);
+  return `User: "${userMsg}"\nOutput: ${outputJson}`;
+}
+
+// ── Schema documentation ─────────────────────────────────────────────
+
+const SCHEMA_DOC = `
+OrbitModelOutput:
+- intents: string[] — one or more of: create_contact, search_contact, edit_contact, create_conversation, create_conversation_with_contact, search_conversation, edit_conversation, create_event, create_event_with_conversation, search_event, edit_event, create_reminder, create_reminder_with_context, search_reminder, edit_reminder, delete_entity, unknown
+- searches: SearchInstruction[] — what to look up before acting (can be empty)
+- action: ActionInstruction | null — single-intent mutation (use for one action)
+- actions: ActionInstruction[] | undefined — multi-intent mutations (use instead of action when multiple)
+- response: string — human-friendly text for the user
+- needs_confirmation: boolean — true for any create/update/complete action
+- needs_resolution: boolean — true if any search has purpose resolve_participant or resolve_target
+
+SearchInstruction:
+- id: "s1", "s2", etc.
+- entity_type: contact | conversation | event | reminder
+- search_type: fuzzy_name | phone | keyword | semantic
+- query: string
+- purpose: resolve_participant | resolve_target | display_results
+
+ActionInstruction:
+- operation: create | update | complete
+- entity_type: contact | conversation | event | reminder | relationship
+- params: { field-specific parameters }
+- participant_refs: ["s1.best_match"] (optional — for linking to search results)
+- target_ref: "s1.best_match" (optional — for updates/completions)
+`.trim();
+
+// ── Rules ────────────────────────────────────────────────────────────
+
+const RULES = `
+Rules:
+- needs_confirmation = true for ANY create/update/complete action
+- needs_confirmation = false for search-only and unknown intents
+- needs_resolution = true when searches[] contains purpose resolve_participant or resolve_target
+- needs_resolution = false when all searches are display_results or there are no searches
+- For time fields use relative tokens: NOW, TODAY_HH:MM, TOMORROW_HH:MM, YESTERDAY_HH:MM, YESTERDAY, +Nd_HH:MM, +Nd, -Nd_HH:MM, -Nd, NEXT_WEEK_HH:MM
+- NEVER include database IDs in the response text
+- For multi-action messages, use the actions[] array (not the singular action field)
+- For single actions, use the action field (not actions[])
+- For delete requests, set intents to ["delete_entity"] with NO action — explain deletion is done via UI
+- For greetings/unknown, set intents to ["unknown"] with no searches and no action
+- When creating a conversation with a new contact (not in CRM), use intents ["create_conversation_with_contact"] with actions[] containing both a contact create and a conversation create, where the conversation uses participant_refs: ["created_contact.best_match"]
+- The response should be natural, concise, and describe what you will do
+`.trim();
+
+// ── Main builder ─────────────────────────────────────────────────────
+
+export function buildStructuredSystemPrompt(
+  userContext: {
+    userName: string | null;
+    userEmail: string;
+    primaryContactId: string | null;
+    primaryContactName: string | null;
+  },
+  enumConfig: {
+    conversationMediums: string[];
+    eventTypes: string[];
+    reminderStatuses: string[];
+  },
+  timezone: string
+): string {
+  const now = new Date();
+  const todayStr = formatToday(now, timezone);
+
+  const examples = selectExamples(loadSeedExamples());
+  const formattedExamples = examples.map(formatExample).join("\n\n");
+
+  const userContactLine = userContext.primaryContactId
+    ? `User's contact: ${userContext.primaryContactName} (${userContext.primaryContactId})`
+    : "";
+
+  return [
+    "You are the Orbit CRM assistant. You MUST respond with ONLY valid JSON matching the OrbitModelOutput schema below. No markdown, no explanation, no text before or after the JSON.",
+    "",
+    `User: ${userContext.userName || userContext.userEmail} | Timezone: ${timezone} | ${todayStr}`,
+    userContactLine,
+    "",
+    "## Schema",
+    "",
+    SCHEMA_DOC,
+    "",
+    `Mediums: ${enumConfig.conversationMediums.join(", ")}`,
+    `Event types: ${enumConfig.eventTypes.join(", ")}`,
+    `Reminder statuses: ${enumConfig.reminderStatuses.join(", ")}`,
+    "",
+    "## " + RULES,
+    "",
+    "## Examples",
+    "",
+    formattedExamples,
+  ]
+    .filter((line) => line !== undefined)
+    .join("\n");
+}

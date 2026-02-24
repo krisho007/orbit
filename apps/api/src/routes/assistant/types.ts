@@ -1,18 +1,32 @@
 import { z } from "zod";
 
 // ── Message schemas ──────────────────────────────────────────────────
-export const MAX_MESSAGE_LENGTH = 2_000;
-export const MAX_CHAT_MESSAGES = 50;
+export const MAX_USER_MESSAGE_LENGTH = 2_000;
 
 export const messageSchema = z.object({
   role: z.enum(["user", "assistant"]),
-  content: z.string().max(MAX_MESSAGE_LENGTH, "Message too long (max 2000 characters)"),
+  content: z.string(),
 });
 
 export const chatSchema = z.object({
-  messages: z.array(messageSchema).max(MAX_CHAT_MESSAGES, "Too many messages in conversation"),
+  messages: z.array(messageSchema),
   conversationId: z.string().optional(),
   timezone: z.string().optional(),
+}).superRefine((data, ctx) => {
+  // Only limit length on user messages — assistant messages can be longer (tool results, etc.)
+  for (let i = 0; i < data.messages.length; i++) {
+    const msg = data.messages[i]!;
+    if (msg.role === "user" && msg.content.length > MAX_USER_MESSAGE_LENGTH) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.too_big,
+        maximum: MAX_USER_MESSAGE_LENGTH,
+        type: "string",
+        inclusive: true,
+        message: "Message too long (max 2000 characters)",
+        path: ["messages", i, "content"],
+      });
+    }
+  }
 });
 
 export const PAGE_SIZE = 20;

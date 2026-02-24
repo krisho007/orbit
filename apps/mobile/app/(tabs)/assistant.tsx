@@ -1470,7 +1470,7 @@ export default function AssistantScreen() {
                   value={input}
                   onChangeText={setInput}
                   multiline
-                  maxLength={1000}
+                  maxLength={2000}
                   editable={!inputDisabled}
                   textAlignVertical="top"
                   blurOnSubmit={false}

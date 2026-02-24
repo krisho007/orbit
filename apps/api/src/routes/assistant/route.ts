@@ -172,6 +172,8 @@ app.post("/", async (c) => {
               ? JSON.stringify({ ...(response.ui || {}), _cachedIntents: response.cachedIntents })
               : response.ui ? JSON.stringify(response.ui) : null;
 
+            const elapsed = Date.now() - startTime;
+
             // Save assistant response
             await db.insert(assistantMessages).values({
               assistantConversationId: assistantConvId,
@@ -181,9 +183,8 @@ app.post("/", async (c) => {
               modelName: response.modelName,
               inputTokens: response.inputTokens,
               outputTokens: response.outputTokens,
+              responseTimeMs: elapsed,
             });
-
-            const elapsed = Date.now() - startTime;
             console.log(`[assistant] ✅ Stream response (${elapsed}ms): "${response.text.substring(0, 200)}${response.text.length > 200 ? "..." : ""}"`);
 
             writeLine({
@@ -257,6 +258,8 @@ app.post("/", async (c) => {
       ? JSON.stringify({ ...(response.ui || {}), _cachedIntents: response.cachedIntents })
       : response.ui ? JSON.stringify(response.ui) : null;
 
+    const elapsed = Date.now() - startTime;
+
     // Save assistant response
     await db.insert(assistantMessages).values({
       assistantConversationId: assistantConvId,
@@ -266,9 +269,8 @@ app.post("/", async (c) => {
       modelName: response.modelName,
       inputTokens: response.inputTokens,
       outputTokens: response.outputTokens,
+      responseTimeMs: elapsed,
     });
-
-    const elapsed = Date.now() - startTime;
     console.log(`[assistant] ✅ Response (${elapsed}ms): "${response.text.substring(0, 200)}${response.text.length > 200 ? "..." : ""}"`);
     if (response.ui) {
       console.log(`[assistant] 🎨 UI attached: kind=${response.ui.kind}`);

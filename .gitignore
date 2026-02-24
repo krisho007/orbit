@@ -37,6 +37,7 @@ yarn-error.log*
 *.orig.*
 web-build/
 *.apk
+*.aab
 
 # iOS/Android (Expo managed)
 ios/

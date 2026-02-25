@@ -305,7 +305,20 @@ export async function processMessageStructured(
         tz,
         assistantConversationId
       );
-      const toolResults = actionResults.map((r) => ({ output: r.result }));
+
+      // Check for execution failures
+      const failedActions = actionResults.filter((r) => !r.success);
+      if (failedActions.length > 0 && failedActions.length === actionResults.length) {
+        const errorMsg = failedActions[0]?.result?.message || "Unknown error";
+        console.error(`[assistant:structured] All actions failed:`, errorMsg);
+        return {
+          text: `Something went wrong: ${errorMsg}. Please try again.`,
+          ui: null,
+          cachedIntents: cached.intents as AssistantIntent[],
+        };
+      }
+
+      const toolResults = actionResults.filter((r) => r.success).map((r) => ({ output: r.result }));
       const ui = buildUiFromToolResults(toolResults);
       const text = summarizeUiText(ui, cached.response);
 
@@ -401,11 +414,25 @@ export async function processMessageStructured(
 
     if (allActions.length > 0) {
       const firstAction = allActions[0]!;
+      // Enrich details with participant names from search queries
+      const details = { ...firstAction.params } as Record<string, unknown>;
+      if (firstAction.participant_refs && firstAction.participant_refs.length > 0) {
+        const participantNames = firstAction.participant_refs
+          .map((ref) => {
+            const searchId = ref.split(".")[0];
+            const search = output.searches.find((s) => s.id === searchId);
+            return search?.query;
+          })
+          .filter(Boolean);
+        if (participantNames.length > 0) {
+          details.participants = participantNames.join(", ");
+        }
+      }
       ui = {
         kind: "confirmation",
         action: output.response,
         entityType: firstAction.entity_type,
-        details: firstAction.params as Record<string, unknown>,
+        details,
       };
       cachedOutput = {
         intents: output.intents,
@@ -553,7 +580,22 @@ export async function processMessageStructured(
       assistantConversationId
     );
 
-    const toolResults = actionResults.map((r) => ({ output: r.result }));
+    // Check for execution failures
+    const failedActions = actionResults.filter((r) => !r.success);
+    if (failedActions.length > 0 && failedActions.length === actionResults.length) {
+      const errorMsg = failedActions[0]?.result?.message || "Unknown error";
+      console.error(`[assistant:structured] All actions failed:`, errorMsg);
+      return {
+        text: `Something went wrong: ${errorMsg}. Please try again.`,
+        ui: null,
+        cachedIntents: output.intents as AssistantIntent[],
+        modelName,
+        inputTokens,
+        outputTokens,
+      };
+    }
+
+    const toolResults = actionResults.filter((r) => r.success).map((r) => ({ output: r.result }));
     const ui = buildUiFromToolResults(toolResults);
     const text = summarizeUiText(ui, output.response);
 

@@ -1136,7 +1136,15 @@ export default function AssistantScreen() {
         endAt: "End",
         location: "Location",
         dueAt: "Due",
-        participantNames: "Participants",
+        participants: "With",
+        participantNames: "With",
+      };
+
+      const ENTITY_TYPE_LABELS: Record<string, string> = {
+        contact: "Proposed Contact",
+        conversation: "Proposed Conversation",
+        event: "Proposed Event",
+        reminder: "Proposed Reminder",
       };
 
       const MEDIUM_LABELS: Record<string, string> = {
@@ -1149,9 +1157,22 @@ export default function AssistantScreen() {
         OTHER: "Other",
       };
 
+      const EVENT_TYPE_LABELS: Record<string, string> = {
+        MEETING: "Meeting",
+        CALL: "Call",
+        CONFERENCE: "Conference",
+        WORKSHOP: "Workshop",
+        SOCIAL: "Social",
+        BIRTHDAY: "Birthday",
+        ANNIVERSARY: "Anniversary",
+        HOLIDAY: "Holiday",
+        OTHER: "Other",
+      };
+
       const formatFieldValue = (key: string, value: unknown): string => {
         if (value == null) return "";
         if (key === "medium" && typeof value === "string") return MEDIUM_LABELS[value] || value;
+        if (key === "eventType" && typeof value === "string") return EVENT_TYPE_LABELS[value] || value;
         if ((key === "happenedAt" || key === "startAt" || key === "endAt" || key === "dueAt") && typeof value === "string") {
           return formatDateTime(value, "MMM d, yyyy 'at' h:mm a", String(value));
         }
@@ -1160,7 +1181,7 @@ export default function AssistantScreen() {
       };
 
       const entries = Object.entries(ui.details).filter(
-        ([, v]) => v != null && String(v).trim().length > 0
+        ([key, v]) => v != null && String(v).trim().length > 0 && !key.startsWith("_")
       );
 
       const canEdit = ui.entityType === "contact" || ui.entityType === "conversation" || ui.entityType === "event" || ui.entityType === "reminder";
@@ -1186,7 +1207,7 @@ export default function AssistantScreen() {
             <View className="w-8 h-8 rounded-lg bg-primary-100 items-center justify-center mr-2">
               <ClipboardCheck size={16} color={getThemeColor(colors, "primary-600")} />
             </View>
-            <Text className="text-typography-800 font-body-semibold text-sm flex-1">Proposed Details</Text>
+            <Text className="text-typography-800 font-body-semibold text-sm flex-1">{(ui.entityType && ENTITY_TYPE_LABELS[ui.entityType]) || "Proposed Details"}</Text>
             {canEdit && (
               <Pressable
                 onPress={handleEdit}

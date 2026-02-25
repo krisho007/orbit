@@ -38,6 +38,8 @@ import {
 } from "lucide-react-native";
 import { eventsApi, conversationsApi, Event, Conversation } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
+import { useDeleteEvent } from "../../hooks/use-events";
+import { useConfirmDialog } from "../../components/confirm-dialog";
 
 const EVENT_META: Record<
   string,
@@ -110,6 +112,8 @@ export default function EventDetailScreen() {
   const [linkableConversations, setLinkableConversations] = useState<Conversation[]>([]);
   const [isLoadingLinkable, setIsLoadingLinkable] = useState(false);
   const [linkingId, setLinkingId] = useState<string | null>(null);
+  const deleteEvent = useDeleteEvent();
+  const { confirm, ConfirmDialogElement } = useConfirmDialog();
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -234,22 +238,20 @@ export default function EventDetailScreen() {
   };
 
   const handleDelete = async () => {
-    Alert.alert("Delete Event", "Are you sure you want to delete this event?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await eventsApi.delete(id);
-            handleBack();
-          } catch (error) {
-            console.error("Failed to delete event:", error);
-            Alert.alert("Error", "Failed to delete event");
-          }
-        },
-      },
-    ]);
+    const confirmed = await confirm({
+      title: "Delete Event",
+      message: "Are you sure you want to delete this event?",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      await deleteEvent.mutateAsync(id);
+      handleBack();
+    } catch (error) {
+      console.error("Failed to delete event:", error);
+      Alert.alert("Error", "Failed to delete event");
+    }
   };
 
   const handleEdit = () => {
@@ -586,6 +588,8 @@ export default function EventDetailScreen() {
 
         <View className="h-8" />
       </ScrollView>
+
+      {ConfirmDialogElement}
     </SafeAreaView>
   );
 }

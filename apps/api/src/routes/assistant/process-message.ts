@@ -115,7 +115,7 @@ export async function processMessageLLM(
   assistantConversationId?: string,
   onStatus?: StatusCallback,
   timezone?: string
-): Promise<{ text: string; ui: AssistantUi | null; actions?: AssistantAction[]; cachedIntents?: AssistantIntent[]; modelName?: string; inputTokens?: number; outputTokens?: number }> {
+): Promise<{ text: string; ui: AssistantUi | null; actions?: AssistantAction[]; cachedIntents?: AssistantIntent[]; cachedOutput?: Record<string, unknown>; modelName?: string; inputTokens?: number; outputTokens?: number }> {
   // Route to structured single-pass flow when AI_PROVIDER=google_structured
   if (isStructuredProvider() && generate === generateText) {
     return processMessageStructured(userId, messages, assistantConversationId, onStatus, timezone);

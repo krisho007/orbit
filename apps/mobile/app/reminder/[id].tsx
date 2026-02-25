@@ -26,6 +26,8 @@ import {
 } from "lucide-react-native";
 import { Reminder, ReminderStatus, remindersApi } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
+import { useDeleteReminder } from "../../hooks/use-reminders";
+import { useConfirmDialog } from "../../components/confirm-dialog";
 
 const STATUS_META: Record<ReminderStatus, { label: string; icon: typeof Bell }> = {
   OPEN: { label: "Open", icon: Bell },
@@ -79,6 +81,8 @@ export default function ReminderDetailScreen() {
   const [reminder, setReminder] = useState<Reminder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const deleteReminder = useDeleteReminder();
+  const { confirm, ConfirmDialogElement } = useConfirmDialog();
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -130,22 +134,20 @@ export default function ReminderDetailScreen() {
 
   const handleDelete = async () => {
     if (!reminder) return;
-    Alert.alert("Delete Reminder", "Are you sure you want to delete this reminder?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await remindersApi.delete(reminder.id);
-            handleBack();
-          } catch (error) {
-            console.error("Failed to delete reminder:", error);
-            Alert.alert("Error", "Failed to delete reminder");
-          }
-        },
-      },
-    ]);
+    const confirmed = await confirm({
+      title: "Delete Reminder",
+      message: "Are you sure you want to delete this reminder?",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      await deleteReminder.mutateAsync(reminder.id);
+      handleBack();
+    } catch (error) {
+      console.error("Failed to delete reminder:", error);
+      Alert.alert("Error", "Failed to delete reminder");
+    }
   };
 
   if (isLoading) {
@@ -382,6 +384,8 @@ export default function ReminderDetailScreen() {
 
         <View className="h-8" />
       </ScrollView>
+
+      {ConfirmDialogElement}
     </SafeAreaView>
   );
 }

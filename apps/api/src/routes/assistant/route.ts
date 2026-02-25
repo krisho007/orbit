@@ -168,8 +168,11 @@ app.post("/", async (c) => {
             ]);
 
             // Embed cached intents in stored UI for retrieval on confirmation turns
-            const streamUiForStorage = response.cachedIntents?.length
-              ? JSON.stringify({ ...(response.ui || {}), _cachedIntents: response.cachedIntents })
+            const streamUiExtras: Record<string, unknown> = {};
+            if (response.cachedIntents?.length) streamUiExtras._cachedIntents = response.cachedIntents;
+            if (response.cachedOutput) streamUiExtras._cachedOutput = response.cachedOutput;
+            const streamUiForStorage = Object.keys(streamUiExtras).length > 0
+              ? JSON.stringify({ ...(response.ui || {}), ...streamUiExtras })
               : response.ui ? JSON.stringify(response.ui) : null;
 
             const elapsed = Date.now() - startTime;
@@ -254,8 +257,11 @@ app.post("/", async (c) => {
     ]);
 
     // Embed cached intents in stored UI for retrieval on confirmation turns
-    const uiForStorage = response.cachedIntents?.length
-      ? JSON.stringify({ ...(response.ui || {}), _cachedIntents: response.cachedIntents })
+    const uiExtras: Record<string, unknown> = {};
+    if (response.cachedIntents?.length) uiExtras._cachedIntents = response.cachedIntents;
+    if (response.cachedOutput) uiExtras._cachedOutput = response.cachedOutput;
+    const uiForStorage = Object.keys(uiExtras).length > 0
+      ? JSON.stringify({ ...(response.ui || {}), ...uiExtras })
       : response.ui ? JSON.stringify(response.ui) : null;
 
     const elapsed = Date.now() - startTime;
@@ -393,8 +399,8 @@ app.get("/conversations/:id", async (c) => {
     updatedAt: conv.updatedAt.toISOString(),
     messages: msgs.map((m) => {
       let ui = m.ui ? JSON.parse(m.ui) : null;
-      if (ui && "_cachedIntents" in ui) {
-        const { _cachedIntents, ...rest } = ui;
+      if (ui && ("_cachedIntents" in ui || "_cachedOutput" in ui)) {
+        const { _cachedIntents, _cachedOutput, ...rest } = ui;
         ui = rest.kind ? rest : null;
       }
       return {

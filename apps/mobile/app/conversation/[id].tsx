@@ -30,6 +30,8 @@ import {
 } from "lucide-react-native";
 import { conversationsApi, Conversation } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
+import { useDeleteConversation } from "../../hooks/use-conversations";
+import { useConfirmDialog } from "../../components/confirm-dialog";
 
 const MEDIUM_META: Record<
   string,
@@ -54,6 +56,8 @@ export default function ConversationDetailScreen() {
   const backHref = Array.isArray(from) ? from[0] : from;
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const deleteConversation = useDeleteConversation();
+  const { confirm, ConfirmDialogElement } = useConfirmDialog();
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -90,22 +94,20 @@ export default function ConversationDetailScreen() {
   };
 
   const handleDelete = async () => {
-    Alert.alert("Delete Conversation", "Are you sure you want to delete this conversation?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await conversationsApi.delete(id);
-            handleBack();
-          } catch (error) {
-            console.error("Failed to delete conversation:", error);
-            Alert.alert("Error", "Failed to delete conversation");
-          }
-        },
-      },
-    ]);
+    const confirmed = await confirm({
+      title: "Delete Conversation",
+      message: "Are you sure you want to delete this conversation?",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      await deleteConversation.mutateAsync(id);
+      handleBack();
+    } catch (error) {
+      console.error("Failed to delete conversation:", error);
+      Alert.alert("Error", "Failed to delete conversation");
+    }
   };
 
   const handleEdit = () => {
@@ -265,6 +267,8 @@ export default function ConversationDetailScreen() {
 
         <View className="h-8" />
       </ScrollView>
+
+      {ConfirmDialogElement}
     </SafeAreaView>
   );
 }

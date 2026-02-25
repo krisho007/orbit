@@ -11,6 +11,7 @@ import {
   BackHandler,
   useWindowDimensions,
 } from "react-native";
+import { useConfirmDialog } from "../../components/confirm-dialog";
 import { RelationshipGraph } from "../../components/relationship-graph";
 import { RelationshipGraphFullscreen } from "../../components/relationship-graph-fullscreen";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -88,6 +89,7 @@ export default function ContactDetailScreen() {
 
   const { data: contact, isLoading } = useContact(id);
   const deleteContact = useDeleteContact();
+  const { confirm, ConfirmDialogElement } = useConfirmDialog();
 
   const conversationsQuery = useConversationsByContact(id);
   const conversations = conversationsQuery.data?.pages.flatMap((p) => p.conversations) ?? [];
@@ -136,26 +138,20 @@ export default function ContactDetailScreen() {
   };
 
   const handleDelete = async () => {
-    Alert.alert(
-      "Delete Contact",
-      "Are you sure you want to delete this contact?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteContact.mutateAsync(id);
-              handleBack();
-            } catch (error) {
-              console.error("Failed to delete contact:", error);
-              Alert.alert("Error", "Failed to delete contact");
-            }
-          },
-        },
-      ]
-    );
+    const confirmed = await confirm({
+      title: "Delete Contact",
+      message: "Are you sure you want to delete this contact?",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      await deleteContact.mutateAsync(id);
+      handleBack();
+    } catch (error) {
+      console.error("Failed to delete contact:", error);
+      Alert.alert("Error", "Failed to delete contact");
+    }
   };
 
   if (isLoading) {
@@ -616,6 +612,8 @@ export default function ContactDetailScreen() {
 
         <View className="h-8" />
       </ScrollView>
+
+      {ConfirmDialogElement}
 
       {contact && (
         <RelationshipGraphFullscreen

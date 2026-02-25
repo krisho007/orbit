@@ -20,11 +20,13 @@ import {
 } from "lucide-react-native";
 import { RelationshipType, relationshipTypesApi } from "../lib/api";
 import { getThemeColor, useThemeColors } from "../lib/theme";
+import { useConfirmDialog } from "../components/confirm-dialog";
 
 export default function RelationshipTypesScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const placeholderColor = getThemeColor(colors, "typography-500");
+  const { confirm, ConfirmDialogElement } = useConfirmDialog();
 
   const [types, setTypes] = useState<RelationshipType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -114,27 +116,21 @@ export default function RelationshipTypesScreen() {
     }
   };
 
-  const handleDelete = (type: RelationshipType) => {
-    Alert.alert(
-      "Delete Type",
-      `Delete "${type.name}"? Relationships using this type will also be deleted.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await relationshipTypesApi.delete(type.id);
-              await loadTypes();
-            } catch (error) {
-              console.error("Failed to delete type:", error);
-              Alert.alert("Error", "Failed to delete relationship type");
-            }
-          },
-        },
-      ]
-    );
+  const handleDelete = async (type: RelationshipType) => {
+    const confirmed = await confirm({
+      title: "Delete Type",
+      message: `Delete "${type.name}"? Relationships using this type will also be deleted.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      await relationshipTypesApi.delete(type.id);
+      await loadTypes();
+    } catch (error) {
+      console.error("Failed to delete type:", error);
+      Alert.alert("Error", "Failed to delete relationship type");
+    }
   };
 
   const systemTypes = types.filter((t) => t.isSystem);
@@ -362,6 +358,8 @@ export default function RelationshipTypesScreen() {
           <View className="h-8" />
         </ScrollView>
       )}
+
+      {ConfirmDialogElement}
     </SafeAreaView>
   );
 }

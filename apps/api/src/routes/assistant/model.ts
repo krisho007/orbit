@@ -1,22 +1,18 @@
 import { google } from "@ai-sdk/google";
-import { createGroq } from "@ai-sdk/groq";
 import { createOpenAI } from "@ai-sdk/openai";
 
-export type AIProvider = "google" | "groq" | "finetuned" | "google_structured" | "cerebras";
+export type AIProvider = "google" | "finetuned" | "google_structured" | "cerebras";
 
 const DEFAULT_MODELS: Record<AIProvider, string> = {
   google: "gemini-flash-lite-latest",
-  groq: "llama-3.1-8b-instant",
   finetuned: "your-org/orbit-assistant-v1",
   google_structured: "gemini-flash-lite-latest",
   cerebras: "llama3.1-8b",
 };
 
-const groq = createGroq();
-
 export function getProvider(): AIProvider {
   const raw = process.env.AI_PROVIDER || "google";
-  if (raw === "google" || raw === "groq" || raw === "finetuned" || raw === "google_structured" || raw === "cerebras") return raw;
+  if (raw === "google" || raw === "finetuned" || raw === "google_structured" || raw === "cerebras") return raw;
   console.warn(`[assistant:model] Unknown AI_PROVIDER "${raw}", falling back to google`);
   return "google";
 }
@@ -38,9 +34,6 @@ export function getModel() {
   const provider = getProvider();
   const modelName = getModelName();
 
-  if (provider === "groq") {
-    return groq(modelName);
-  }
   if (provider === "cerebras") {
     return getCerebrasClient()(modelName);
   }
@@ -54,9 +47,6 @@ export function getClassificationModel() {
     process.env.AI_MODEL ||
     DEFAULT_MODELS[provider];
 
-  if (provider === "groq") {
-    return groq(modelName);
-  }
   return google(modelName);
 }
 
@@ -120,13 +110,6 @@ export function getProviderApiKeyEnvGuard(): { configured: boolean; message: str
       return {
         configured: false,
         message: "Assistant is not configured. Set CEREBRAS_API_KEY in apps/api/.env to enable the Cerebras model.",
-      };
-    }
-  } else if (provider === "groq") {
-    if (!process.env.GROQ_API_KEY) {
-      return {
-        configured: false,
-        message: "Assistant is not configured. Set GROQ_API_KEY in apps/api/.env to enable LLM features.",
       };
     }
   } else {

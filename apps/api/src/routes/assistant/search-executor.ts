@@ -12,6 +12,12 @@ import { listReminders } from "./tools/reminders";
 
 export type { ResolvedSearch };
 
+// Generic terms that should NOT be treated as participant/contact names.
+// When these appear as the query in display_results searches, we skip
+// participant-name-based filtering (queryConversations / queryEvents) and
+// use plain listing functions instead.
+const GENERIC_LISTING_TERMS = ["recent", "latest", "all", "upcoming", "last", "new", "pending"];
+
 export async function executeSearches(
   userId: string,
   searches: SearchInstruction[]
@@ -165,7 +171,15 @@ async function executeConversationSearch(
   let result: ToolResult;
   const limit = search.purpose === "display_results" ? 5 : 10;
 
-  if (search.search_type === "keyword" || search.search_type === "semantic") {
+  // For display_results with generic listing terms (e.g. "recent", "latest"),
+  // use listConversations to get recent conversations without participant filtering.
+  // queryConversations treats the query as a participant name, so "recent" would
+  // fuzzy-match a contact name (e.g. "Wipro Reception") and return nothing useful.
+  const isGenericQuery = GENERIC_LISTING_TERMS.includes(search.query.toLowerCase().trim());
+
+  if (search.purpose === "display_results" && isGenericQuery) {
+    result = await listConversations(userId, undefined, undefined, undefined, limit);
+  } else if (search.search_type === "keyword" || search.search_type === "semantic") {
     // queryConversations searches by participant name — use it for name-based queries
     result = await queryConversations(userId, search.query, undefined, limit);
   } else {
@@ -208,7 +222,13 @@ async function executeEventSearch(
   let result: ToolResult;
   const limit = search.purpose === "display_results" ? 5 : 10;
 
-  if (search.search_type === "keyword" || search.search_type === "semantic") {
+  // Same generic-term guard as conversations: queryEvents treats the query as
+  // a participant name and would fuzzy-match "upcoming" to an unrelated contact.
+  const isGenericEventQuery = GENERIC_LISTING_TERMS.includes(search.query.toLowerCase().trim());
+
+  if (search.purpose === "display_results" && isGenericEventQuery) {
+    result = await listEvents(userId, undefined, undefined, undefined, limit);
+  } else if (search.search_type === "keyword" || search.search_type === "semantic") {
     result = await queryEvents(userId, search.query, limit);
   } else {
     result = await listEvents(userId, undefined, search.query, undefined, limit);
@@ -246,7 +266,11 @@ async function executeReminderSearch(
   search: SearchInstruction,
   base: ResolvedSearch
 ): Promise<ResolvedSearch> {
-  const result = await listReminders(userId, undefined, search.query);
+  // For generic listing queries, don't pass the query as a text search filter.
+  // "pending" should list all open reminders, not search for "pending" in titles.
+  const isGenericReminderQuery = GENERIC_LISTING_TERMS.includes(search.query.toLowerCase().trim());
+  const searchText = (search.purpose === "display_results" && isGenericReminderQuery) ? undefined : search.query;
+  const result = await listReminders(userId, undefined, searchText);
 
   if (result.type === "error") return base;
 

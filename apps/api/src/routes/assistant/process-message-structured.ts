@@ -564,6 +564,11 @@ export async function processMessageStructured(
     onStatus?.("Searching...");
     searchResults = await executeSearches(userId, output.searches);
 
+    // Log search results for debugging
+    for (const [searchId, search] of searchResults) {
+      console.log(`[assistant:structured] Search ${searchId}: entity=${search.entity_type}, purpose=${search.purpose}, candidates=${search.candidates.length}, ambiguous=${search.ambiguous}, bestMatch=${search.best_match?.displayName ?? "none"}`);
+    }
+
     // Collect ambiguous search IDs
     const ambiguousSearchIds: string[] = [];
     for (const [searchId, search] of searchResults) {

@@ -107,6 +107,11 @@ async function executeContactSearch(
     );
     const ambiguous = viableCandidates.length > 1 && !exactMatchFound;
 
+    console.log(`[finetuned:search] Contact search "${search.query}" → ${candidates.length} candidate(s), ${viableCandidates.length} viable, exactMatch=${exactMatchFound}, ambiguous=${ambiguous}`);
+    for (const c of candidates) {
+      console.log(`[finetuned:search]   - "${c.displayName}" (similarity=${c.similarity ?? "n/a"})`);
+    }
+
     return {
       ...base,
       best_match: bestMatch ? { id: bestMatch.id, displayName: bestMatch.displayName } : null,

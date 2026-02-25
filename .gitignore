@@ -55,3 +55,8 @@ android/
 !apps/mobile/android/app/src/main/java/com/orbit/app/
 !apps/mobile/android/app/src/main/java/com/orbit/app/MainActivity.kt
 !apps/mobile/android/app/src/main/java/com/orbit/app/PhoneStateReceiver.kt
+
+# Allow Claude Code commands to be tracked
+!.claude/
+.claude/*
+!.claude/commands/

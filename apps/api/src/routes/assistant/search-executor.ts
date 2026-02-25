@@ -97,10 +97,15 @@ async function executeContactSearch(
 
     const bestMatch = candidates[0] ?? null;
     const exactMatchFound = Boolean(result.exactMatchFound);
-    const highSimilarity = bestMatch?.similarity !== undefined && bestMatch.similarity >= 0.7;
 
-    // Ambiguous if multiple candidates and no clear winner
-    const ambiguous = candidates.length > 1 && !exactMatchFound && !highSimilarity;
+    // Ambiguous if 2+ viable candidates (similarity >= 0.4) and no exact match.
+    // This catches "Vikram" → "Vikram Patel" (0.85) + "Vikram Singh" (0.80) as ambiguous,
+    // while "Bob" → "Bob Smith" (0.85) + "Bobby Smithson" (0.30) auto-selects Bob Smith.
+    const VIABLE_THRESHOLD = 0.4;
+    const viableCandidates = candidates.filter(
+      (c) => c.similarity === undefined || c.similarity >= VIABLE_THRESHOLD
+    );
+    const ambiguous = viableCandidates.length > 1 && !exactMatchFound;
 
     return {
       ...base,

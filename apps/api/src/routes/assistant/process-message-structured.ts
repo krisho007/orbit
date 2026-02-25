@@ -9,13 +9,14 @@
 
 import type { ChatMessage, AssistantUi, AssistantAction, AssistantIntent, StatusCallback } from "./types";
 import { getModel, getModelName, getProviderApiKeyEnvGuard } from "./model";
-import { isExplicitUserConfirmation, isExplicitUserRejection } from "./guardrails";
+import { isExplicitUserConfirmation, isExplicitUserRejection, parseUserSelection } from "./guardrails";
 import { loadAssistantEnumConfig } from "./enums";
 import { getUserContext } from "./db-helpers";
 import { buildUiFromToolResults, summarizeUiText } from "./ui-builder";
 import { parseModelOutput, getActions } from "./finetuned-types";
 import type { OrbitModelOutput, ActionInstruction, SearchInstruction } from "./finetuned-types";
 import { executeSearches } from "./search-executor";
+import type { ResolvedSearch } from "./search-executor";
 import { executeActions } from "./action-executor";
 import { extractLastUserText } from "./error-helpers";
 import { buildStructuredSystemPrompt } from "./structured-prompt";
@@ -57,6 +58,10 @@ type CachedOutput = {
   actions: ActionInstruction[];
   searches: SearchInstruction[];
   response: string;
+  // Disambiguation state: all search results keyed by search ID
+  resolvedSearches?: Record<string, ResolvedSearch>;
+  // Search IDs still needing user selection
+  pendingAmbiguous?: string[];
 };
 
 // ── Participant fallback: when resolve_participant searches fail ─────
@@ -219,6 +224,148 @@ export async function processMessageStructured(
     };
   }
 
+  // ── Selection shortcut: user picked from disambiguation list ──────
+  const selection = parseUserSelection(lastUserText);
+  if (selection && assistantConversationId) {
+    const cached = await loadCachedOutput(assistantConversationId);
+    if (cached && cached.resolvedSearches && cached.pendingAmbiguous && cached.pendingAmbiguous.length > 0) {
+      console.log(`[assistant:structured] Selection detected — entity ${selection.entityId}`);
+
+      const currentSearchId = cached.pendingAmbiguous[0]!;
+      const currentResolved = cached.resolvedSearches[currentSearchId];
+
+      if (currentResolved) {
+        // Find the selected candidate and update best_match
+        const selectedCandidate = currentResolved.candidates.find((c) => c.id === selection.entityId);
+        if (selectedCandidate) {
+          currentResolved.best_match = { id: selectedCandidate.id, displayName: selectedCandidate.displayName };
+          currentResolved.ambiguous = false;
+        }
+      }
+
+      // Remove from pending
+      const remainingPending = cached.pendingAmbiguous.slice(1);
+
+      if (remainingPending.length > 0) {
+        // More ambiguous searches to resolve — show next selection UI
+        const nextSearchId = remainingPending[0]!;
+        const nextResolved = cached.resolvedSearches[nextSearchId];
+
+        if (nextResolved && nextResolved.candidates.length > 0) {
+          const updatedCached: CachedOutput = {
+            ...cached,
+            resolvedSearches: cached.resolvedSearches,
+            pendingAmbiguous: remainingPending,
+          };
+          return {
+            text: `I found multiple matching ${nextResolved.entity_type}s. Please pick one.`,
+            ui: {
+              kind: "selection" as const,
+              prompt: `I found multiple matching ${nextResolved.entity_type}s. Please pick one.`,
+              options: nextResolved.candidates.slice(0, 10).map((c) => ({
+                id: c.id,
+                entityKind: nextResolved.entity_type as any,
+                title: c.displayName,
+                subtitle: null,
+                selectMessage: `Use ${nextResolved.entity_type} ID ${c.id} as the selected context for this request.`,
+              })),
+            },
+            cachedIntents: cached.intents as AssistantIntent[],
+            cachedOutput: updatedCached,
+          };
+        }
+      }
+
+      // No more pending — check for participant fallback (0-match searches)
+      const searchResultsMap = new Map(Object.entries(cached.resolvedSearches));
+      const participantFallback = buildParticipantFallback(
+        cached.searches,
+        searchResultsMap as Map<string, { best_match: { id: string; displayName: string } | null; [key: string]: unknown }>,
+        cached.actions,
+        cached.intents,
+        cached.response
+      );
+      if (participantFallback) {
+        const fallbackCached: CachedOutput = {
+          intents: participantFallback.fallbackIntents,
+          actions: participantFallback.fallbackActions,
+          searches: participantFallback.fallbackSearches,
+          response: participantFallback.fallbackResponse,
+          resolvedSearches: cached.resolvedSearches,
+        };
+        return {
+          text: participantFallback.fallbackResponse,
+          ui: {
+            kind: "confirmation",
+            action: participantFallback.fallbackResponse,
+            entityType: participantFallback.fallbackActions[0]?.entity_type ?? "contact",
+            details: participantFallback.fallbackActions[0]?.params as Record<string, unknown>,
+          },
+          actions: [
+            { label: "Go ahead", message: "go ahead", style: "primary" },
+            { label: "I need changes", message: "No, I need changes", style: "secondary" },
+          ],
+          cachedIntents: participantFallback.fallbackIntents as AssistantIntent[],
+          cachedOutput: fallbackCached,
+        };
+      }
+
+      // Check for failed resolve_target — dead-end
+      for (const search of cached.searches) {
+        const resolved = cached.resolvedSearches[search.id];
+        if (resolved && search.purpose === "resolve_target" && !resolved.best_match) {
+          return {
+            text: `I couldn't find a ${search.entity_type} matching "${search.query}". Would you like to try a different name?`,
+            ui: null,
+            cachedIntents: cached.intents as AssistantIntent[],
+          };
+        }
+      }
+
+      // All resolved — show confirmation card with enriched names
+      const firstAction = cached.actions[0];
+      let details: Record<string, unknown> = {};
+      if (firstAction) {
+        details = { ...firstAction.params } as Record<string, unknown>;
+        if (firstAction.participant_refs && firstAction.participant_refs.length > 0) {
+          const participantNames = firstAction.participant_refs
+            .map((ref) => {
+              const searchId = ref.split(".")[0]!;
+              const resolved = cached.resolvedSearches![searchId];
+              return resolved?.best_match?.displayName;
+            })
+            .filter(Boolean);
+          if (participantNames.length > 0) {
+            details.participants = participantNames.join(", ");
+          }
+        }
+      }
+
+      const updatedCached: CachedOutput = {
+        ...cached,
+        resolvedSearches: cached.resolvedSearches,
+        pendingAmbiguous: [],
+      };
+      return {
+        text: cached.response,
+        ui: firstAction
+          ? {
+              kind: "confirmation",
+              action: cached.response,
+              entityType: firstAction.entity_type,
+              details,
+            }
+          : null,
+        actions: [
+          { label: "Go ahead", message: "go ahead", style: "primary" },
+          { label: "I need changes", message: "No, I need changes", style: "secondary" },
+        ],
+        cachedIntents: cached.intents as AssistantIntent[],
+        cachedOutput: updatedCached,
+      };
+    }
+  }
+
   // ── Confirmation shortcut: replay cached actions without re-calling LLM ──
   if (isConfirmation && assistantConversationId) {
     const cached = await loadCachedOutput(assistantConversationId);
@@ -226,8 +373,14 @@ export async function processMessageStructured(
       console.log(`[assistant:structured] Confirmation detected — executing ${cached.actions.length} cached action(s)`);
       const tz = timezone || "UTC";
 
-      let searchResults = new Map();
-      if (cached.searches.length > 0) {
+      let searchResults = new Map<string, ResolvedSearch>();
+
+      if (cached.resolvedSearches) {
+        // Use pre-resolved searches from disambiguation flow — no re-running
+        console.log(`[assistant:structured] Using ${Object.keys(cached.resolvedSearches).length} pre-resolved search(es) from cache`);
+        searchResults = new Map(Object.entries(cached.resolvedSearches));
+      } else if (cached.searches.length > 0) {
+        // Legacy/backward compat: re-run searches
         onStatus?.("Searching...");
         searchResults = await executeSearches(userId, cached.searches);
 
@@ -239,7 +392,7 @@ export async function processMessageStructured(
               ui: {
                 kind: "selection" as const,
                 prompt: `I found multiple matching ${search.entity_type}s. Please pick one.`,
-                options: search.candidates.slice(0, 5).map((c: { id: string; displayName: string }) => ({
+                options: search.candidates.slice(0, 10).map((c: { id: string; displayName: string }) => ({
                   id: c.id,
                   entityKind: search.entity_type as any,
                   title: c.displayName,
@@ -402,88 +555,63 @@ export async function processMessageStructured(
 
   const allActions = getActions(output);
 
-  // ── Confirmation flow ─────────────────────────────────────────────
-  if (output.needs_confirmation && !isConfirmation) {
-    const actions: AssistantAction[] = [
-      { label: "Go ahead", message: "go ahead", style: "primary" },
-      { label: "I need changes", message: "No, I need changes", style: "secondary" },
-    ];
-
-    let ui: AssistantUi | null = null;
-    let cachedOutput: CachedOutput | undefined;
-
-    if (allActions.length > 0) {
-      const firstAction = allActions[0]!;
-      // Enrich details with participant names from search queries
-      const details = { ...firstAction.params } as Record<string, unknown>;
-      if (firstAction.participant_refs && firstAction.participant_refs.length > 0) {
-        const participantNames = firstAction.participant_refs
-          .map((ref) => {
-            const searchId = ref.split(".")[0];
-            const search = output.searches.find((s) => s.id === searchId);
-            return search?.query;
-          })
-          .filter(Boolean);
-        if (participantNames.length > 0) {
-          details.participants = participantNames.join(", ");
-        }
-      }
-      ui = {
-        kind: "confirmation",
-        action: output.response,
-        entityType: firstAction.entity_type,
-        details,
-      };
-      cachedOutput = {
-        intents: output.intents,
-        actions: allActions,
-        searches: output.searches,
-        response: output.response,
-      };
-    }
-
-    return {
-      text: output.response,
-      ui,
-      actions,
-      cachedIntents: output.intents as AssistantIntent[],
-      cachedOutput,
-      modelName,
-      inputTokens,
-      outputTokens,
-    };
-  }
-
-  // ── Search resolution ─────────────────────────────────────────────
-  let searchResults = new Map();
+  // ── Search resolution (BEFORE confirmation) ─────────────────────
+  // Execute all searches upfront so we can detect ambiguity before showing
+  // the confirmation card. This prevents the bug where confirmation appears
+  // before disambiguation.
+  let searchResults = new Map<string, ResolvedSearch>();
   if (output.searches.length > 0) {
     onStatus?.("Searching...");
     searchResults = await executeSearches(userId, output.searches);
 
-    // Check for ambiguous results that need user resolution
-    for (const [, search] of searchResults) {
+    // Collect ambiguous search IDs
+    const ambiguousSearchIds: string[] = [];
+    for (const [searchId, search] of searchResults) {
       if (search.ambiguous && search.candidates.length > 1) {
-        const selectionUi: AssistantUi = {
-          kind: "selection",
-          prompt: `I found multiple matching ${search.entity_type}s. Please pick one.`,
-          options: search.candidates.slice(0, 5).map((c: { id: string; displayName: string }) => ({
+        ambiguousSearchIds.push(searchId);
+      }
+    }
+
+    // If any searches are ambiguous, show selection UI for the first one
+    // and cache the full state so subsequent selections can proceed
+    if (ambiguousSearchIds.length > 0) {
+      const firstAmbiguousId = ambiguousSearchIds[0]!;
+      const firstAmbiguous = searchResults.get(firstAmbiguousId)!;
+
+      // Build resolvedSearches record from the Map
+      const resolvedSearches: Record<string, ResolvedSearch> = {};
+      for (const [id, resolved] of searchResults) {
+        resolvedSearches[id] = resolved;
+      }
+
+      const cachedOutput: CachedOutput = {
+        intents: output.intents,
+        actions: allActions,
+        searches: output.searches,
+        response: output.response,
+        resolvedSearches,
+        pendingAmbiguous: ambiguousSearchIds,
+      };
+
+      return {
+        text: `I found multiple matching ${firstAmbiguous.entity_type}s. Please pick one.`,
+        ui: {
+          kind: "selection" as const,
+          prompt: `I found multiple matching ${firstAmbiguous.entity_type}s. Please pick one.`,
+          options: firstAmbiguous.candidates.slice(0, 10).map((c) => ({
             id: c.id,
-            entityKind: search.entity_type as any,
+            entityKind: firstAmbiguous.entity_type as any,
             title: c.displayName,
             subtitle: null,
-            selectMessage: `Use contact ID ${c.id} as the selected context for this request.`,
+            selectMessage: `Use ${firstAmbiguous.entity_type} ID ${c.id} as the selected context for this request.`,
           })),
-        };
-
-        return {
-          text: `I found multiple matching ${search.entity_type}s. Please pick one.`,
-          ui: selectionUi,
-          cachedIntents: output.intents as AssistantIntent[],
-          modelName,
-          inputTokens,
-          outputTokens,
-        };
-      }
+        },
+        cachedIntents: output.intents as AssistantIntent[],
+        cachedOutput,
+        modelName,
+        inputTokens,
+        outputTokens,
+      };
     }
 
     // Check for failed resolve_participant — try fallback instead of dead-ending
@@ -495,11 +623,17 @@ export async function processMessageStructured(
       output.response
     );
     if (participantFallback) {
+      // Build resolvedSearches record for cache
+      const resolvedSearches: Record<string, ResolvedSearch> = {};
+      for (const [id, resolved] of searchResults) {
+        resolvedSearches[id] = resolved;
+      }
       const fallbackCached: CachedOutput = {
         intents: participantFallback.fallbackIntents,
         actions: participantFallback.fallbackActions,
         searches: participantFallback.fallbackSearches,
         response: participantFallback.fallbackResponse,
+        resolvedSearches,
       };
       return {
         text: participantFallback.fallbackResponse,
@@ -535,6 +669,70 @@ export async function processMessageStructured(
         };
       }
     }
+  }
+
+  // ── Confirmation flow (now with resolved search data) ──────────────
+  if (output.needs_confirmation && !isConfirmation) {
+    const actions: AssistantAction[] = [
+      { label: "Go ahead", message: "go ahead", style: "primary" },
+      { label: "I need changes", message: "No, I need changes", style: "secondary" },
+    ];
+
+    let ui: AssistantUi | null = null;
+    let cachedOutput: CachedOutput | undefined;
+
+    if (allActions.length > 0) {
+      const firstAction = allActions[0]!;
+      // Enrich details with resolved display names (not just search queries)
+      const details = { ...firstAction.params } as Record<string, unknown>;
+      if (firstAction.participant_refs && firstAction.participant_refs.length > 0) {
+        const participantNames = firstAction.participant_refs
+          .map((ref) => {
+            const searchId = ref.split(".")[0]!;
+            const resolved = searchResults.get(searchId);
+            // Use resolved display name if available, fall back to search query
+            if (resolved?.best_match?.displayName) return resolved.best_match.displayName;
+            const search = output.searches.find((s) => s.id === searchId);
+            return search?.query;
+          })
+          .filter(Boolean);
+        if (participantNames.length > 0) {
+          details.participants = participantNames.join(", ");
+        }
+      }
+      ui = {
+        kind: "confirmation",
+        action: output.response,
+        entityType: firstAction.entity_type,
+        details,
+      };
+
+      // Build resolvedSearches record for cache so confirmation shortcut
+      // can skip re-running searches
+      const resolvedSearches: Record<string, ResolvedSearch> = {};
+      for (const [id, resolved] of searchResults) {
+        resolvedSearches[id] = resolved;
+      }
+
+      cachedOutput = {
+        intents: output.intents,
+        actions: allActions,
+        searches: output.searches,
+        response: output.response,
+        resolvedSearches: Object.keys(resolvedSearches).length > 0 ? resolvedSearches : undefined,
+      };
+    }
+
+    return {
+      text: output.response,
+      ui,
+      actions,
+      cachedIntents: output.intents as AssistantIntent[],
+      cachedOutput,
+      modelName,
+      inputTokens,
+      outputTokens,
+    };
   }
 
   // ── For search-only intents, return display results ────────────────

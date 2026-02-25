@@ -161,39 +161,8 @@ export async function processMessageFinetuned(
 
   const allActions = getActions(output);
 
-  // ── Confirmation flow ─────────────────────────────────────────────
-  // If the model says this needs confirmation and it's not a confirmation turn,
-  // return the response text with confirmation buttons
-  if (output.needs_confirmation && !isConfirmation) {
-    const actions: AssistantAction[] = [
-      { label: "Go ahead", message: "go ahead", style: "primary" },
-      { label: "I need changes", message: "No, I need changes", style: "secondary" },
-    ];
-
-    // Build a preview UI if possible (confirmation kind)
-    let ui: AssistantUi | null = null;
-    if (allActions.length > 0) {
-      const firstAction = allActions[0]!;
-      ui = {
-        kind: "confirmation",
-        action: output.response,
-        entityType: firstAction.entity_type,
-        details: firstAction.params as Record<string, unknown>,
-      };
-    }
-
-    return {
-      text: output.response,
-      ui,
-      actions,
-      cachedIntents: output.intents as AssistantIntent[],
-      modelName,
-      inputTokens,
-      outputTokens,
-    };
-  }
-
-  // ── Search resolution ─────────────────────────────────────────────
+  // ── Search resolution (BEFORE confirmation) ─────────────────────
+  // Execute searches upfront so ambiguity is detected before showing confirmation
   let searchResults = new Map();
   if (output.searches.length > 0) {
     onStatus?.("Searching...");
@@ -202,11 +171,10 @@ export async function processMessageFinetuned(
     // Check for ambiguous results that need user resolution
     for (const [, search] of searchResults) {
       if (search.ambiguous && search.candidates.length > 1) {
-        // Return a selection UI
         const selectionUi: AssistantUi = {
           kind: "selection",
           prompt: `I found multiple matching ${search.entity_type}s. Please pick one.`,
-          options: search.candidates.slice(0, 5).map((c: { id: string; displayName: string }) => ({
+          options: search.candidates.slice(0, 10).map((c: { id: string; displayName: string }) => ({
             id: c.id,
             entityKind: search.entity_type as any,
             title: c.displayName,
@@ -240,6 +208,52 @@ export async function processMessageFinetuned(
         };
       }
     }
+  }
+
+  // ── Confirmation flow (now with resolved search data) ──────────────
+  if (output.needs_confirmation && !isConfirmation) {
+    const actions: AssistantAction[] = [
+      { label: "Go ahead", message: "go ahead", style: "primary" },
+      { label: "I need changes", message: "No, I need changes", style: "secondary" },
+    ];
+
+    // Build a preview UI if possible (confirmation kind)
+    let ui: AssistantUi | null = null;
+    if (allActions.length > 0) {
+      const firstAction = allActions[0]!;
+      // Enrich details with resolved display names
+      const details = { ...firstAction.params } as Record<string, unknown>;
+      if (firstAction.participant_refs && firstAction.participant_refs.length > 0) {
+        const participantNames = firstAction.participant_refs
+          .map((ref) => {
+            const searchId = ref.split(".")[0]!;
+            const resolved = searchResults.get(searchId);
+            if (resolved?.best_match?.displayName) return resolved.best_match.displayName;
+            const search = output.searches.find((s) => s.id === searchId);
+            return search?.query;
+          })
+          .filter(Boolean);
+        if (participantNames.length > 0) {
+          details.participants = participantNames.join(", ");
+        }
+      }
+      ui = {
+        kind: "confirmation",
+        action: output.response,
+        entityType: firstAction.entity_type,
+        details,
+      };
+    }
+
+    return {
+      text: output.response,
+      ui,
+      actions,
+      cachedIntents: output.intents as AssistantIntent[],
+      modelName,
+      inputTokens,
+      outputTokens,
+    };
   }
 
   // ── For search-only intents, return display results ────────────────

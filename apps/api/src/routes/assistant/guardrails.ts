@@ -68,6 +68,15 @@ export function isExplicitUserRejection(text: string): boolean {
   return REJECTION_TOKENS.has(normalized);
 }
 
+// ── Selection message parsing ──────────────────────────────────────
+
+const SELECTION_REGEX = /^Use \w+ ID (\S+) as the selected context/i;
+
+export function parseUserSelection(text: string): { entityId: string } | null {
+  const match = text.trim().match(SELECTION_REGEX);
+  return match ? { entityId: match[1]! } : null;
+}
+
 export function parseIntentFromText(rawText: string): AssistantIntent {
   const cleaned = rawText.replace(/```json|```/gi, "").trim();
   if (!cleaned) return "unknown";

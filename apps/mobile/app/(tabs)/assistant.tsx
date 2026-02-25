@@ -885,36 +885,42 @@ export default function AssistantScreen() {
       option.entityKind === "reminder";
 
     return (
-      <View
+      <Pressable
         key={`${option.entityKind}:${option.id}`}
-        className="bg-background-0 border border-border-200 rounded-xl p-4 mb-3"
+        onPress={() => sendMessage(option.selectMessage, `Selected: ${option.title}`)}
+        disabled={isLoading}
+        className={`flex-row items-center rounded-xl border border-border-200 px-4 py-3 mb-2 ${
+          isLoading ? "bg-background-50 opacity-60" : "bg-background-0 active:bg-primary-50 active:border-primary-300"
+        }`}
       >
-        <Text className="text-typography-900 font-body-semibold text-base" numberOfLines={1}>
-          {option.title}
-        </Text>
-        {option.subtitle ? (
-          <Text className="text-typography-600 text-sm mt-1" numberOfLines={1}>
-            {option.subtitle}
+        <View className="w-9 h-9 rounded-full bg-primary-100 items-center justify-center mr-3">
+          <Text className="text-primary-700 font-body-bold text-sm">
+            {(option.title || "?").charAt(0).toUpperCase()}
           </Text>
-        ) : null}
-        <View className="flex-row mt-3">
-          {canOpen ? (
-            <Pressable
-              onPress={() => openSelectionOption(option)}
-              className="rounded-xl border border-border-200 bg-background-50 px-3 py-2 mr-2 active:bg-background-100"
-            >
-              <Text className="text-typography-700 text-sm font-body-medium">Open</Text>
-            </Pressable>
-          ) : null}
-          <Pressable
-            onPress={() => sendMessage(option.selectMessage, `Selected: ${option.title}`)}
-            disabled={isLoading}
-            className={`rounded-xl px-3 py-2 ${isLoading ? "bg-primary-200" : "bg-primary-600 active:bg-primary-700"}`}
-          >
-            <Text className="text-typography-0 text-sm font-body-medium">Select</Text>
-          </Pressable>
         </View>
-      </View>
+        <View className="flex-1 mr-2">
+          <Text className="text-typography-900 font-body-semibold text-base" numberOfLines={1}>
+            {option.title}
+          </Text>
+          {option.subtitle ? (
+            <Text className="text-typography-500 text-sm" numberOfLines={1}>
+              {option.subtitle}
+            </Text>
+          ) : null}
+        </View>
+        {canOpen ? (
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              openSelectionOption(option);
+            }}
+            hitSlop={8}
+            className="rounded-lg border border-border-200 bg-background-50 px-2.5 py-1.5 active:bg-background-100"
+          >
+            <Text className="text-typography-600 text-xs font-body-medium">View</Text>
+          </Pressable>
+        ) : null}
+      </Pressable>
     );
   };
 
@@ -925,10 +931,9 @@ export default function AssistantScreen() {
       const showScrollableResults = options.length > 2;
       return (
         <View>
-          <Text className="text-typography-700 text-sm mb-2">{ui.prompt}</Text>
           {showCountLabel ? (
             <Text className="text-typography-500 text-xs mb-2">
-              Showing {options.length} of {ui.options.length} options
+              Showing {options.length} of {ui.options.length}
             </Text>
           ) : null}
           {showScrollableResults ? (

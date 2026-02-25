@@ -18,6 +18,7 @@ import type { OrbitModelOutput, ActionInstruction, SearchInstruction } from "./f
 import { executeSearches } from "./search-executor";
 import type { ResolvedSearch } from "./search-executor";
 import { executeActions } from "./action-executor";
+import { listConversationsByContacts } from "./tools/conversations";
 import { extractLastUserText } from "./error-helpers";
 import { buildStructuredSystemPrompt } from "./structured-prompt";
 import { eq, and, desc } from "drizzle-orm";
@@ -336,6 +337,36 @@ export async function processMessageStructured(
       if (isSearchOnlyIntent && cached.actions.length === 0) {
         const displaySearch = cached.searches.find((s) => s.purpose === "display_results");
         if (displaySearch) {
+          // Check if there's a resolved contact from a resolve_target search
+          // so we can re-execute the display search using the disambiguated contact.
+          const resolveSearch = cached.searches.find(
+            (s) => s.purpose === "resolve_target" && s.entity_type === "contact"
+          );
+          const resolvedContact = resolveSearch
+            ? cached.resolvedSearches[resolveSearch.id]?.best_match
+            : null;
+
+          // Re-execute the display search with the resolved contact ID.
+          // The original search ran in parallel and may have picked a
+          // different contact via findBestContactMatch, giving stale results.
+          if (resolvedContact) {
+            const freshResult = await reExecuteDisplaySearch(
+              userId,
+              displaySearch as SearchInstruction,
+              resolvedContact.id
+            );
+            if (freshResult) {
+              const ui = buildUiFromToolResults([{ output: freshResult }]);
+              const text = summarizeUiText(ui, cached.response);
+              return {
+                text,
+                ui,
+                cachedIntents: cached.intents as AssistantIntent[],
+              };
+            }
+          }
+
+          // Fall through to cached results if no contact to resolve with
           const displayResolved = cached.resolvedSearches[displaySearch.id];
           if (displayResolved) {
             const ui = buildSearchDisplayUi(
@@ -851,6 +882,31 @@ export async function processMessageStructured(
     inputTokens,
     outputTokens,
   };
+}
+
+// ── Re-execute display search after disambiguation ──────────────────
+
+/**
+ * After contact disambiguation, re-execute a display_results search using the
+ * resolved contact ID. The original search ran in parallel with the contact
+ * search and may have used findBestContactMatch to pick a different contact.
+ */
+async function reExecuteDisplaySearch(
+  userId: string,
+  search: SearchInstruction,
+  contactId: string
+): Promise<ToolResult | null> {
+  try {
+    switch (search.entity_type) {
+      case "conversation":
+        return await listConversationsByContacts(userId, [contactId], undefined, undefined, undefined, 5);
+      default:
+        return null;
+    }
+  } catch (err) {
+    console.error(`[assistant:structured] Failed to re-execute display search:`, err);
+    return null;
+  }
 }
 
 // ── Build display UI from search results ────────────────────────────

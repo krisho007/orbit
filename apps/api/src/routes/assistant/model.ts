@@ -35,7 +35,7 @@ export function getModel() {
   const modelName = getModelName();
 
   if (provider === "cerebras") {
-    return getCerebrasClient()(modelName);
+    return getCerebrasClient().chat(modelName);
   }
   return google(modelName);
 }
@@ -85,7 +85,7 @@ export function getFinetunedModelName(): string {
 export function getFinetunedModel() {
   const client = getTogetherClient();
   const modelName = getFinetunedModelName();
-  return client(modelName);
+  return client.chat(modelName);
 }
 
 export function getProviderApiKeyEnvGuard(): { configured: boolean; message: string } {

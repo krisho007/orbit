@@ -82,6 +82,8 @@ type Message = ChatMessage & {
   isLoading?: boolean;
   thumbsUp?: boolean;
   thumbsDown?: boolean;
+  /** Shown in the chat bubble instead of `content` (e.g. friendly selection text). */
+  displayContent?: string;
 };
 
 type AssistantDraftState = {
@@ -546,7 +548,7 @@ export default function AssistantScreen() {
   }, []);
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, displayText?: string) => {
       const trimmed = text.trim();
       if (!trimmed || isSendingRef.current) return;
 
@@ -562,6 +564,7 @@ export default function AssistantScreen() {
         id: nextMessageId("user"),
         role: "user",
         content: trimmed,
+        displayContent: displayText,
       };
 
       const loadingMessage: Message = {
@@ -904,7 +907,7 @@ export default function AssistantScreen() {
             </Pressable>
           ) : null}
           <Pressable
-            onPress={() => sendMessage(option.selectMessage)}
+            onPress={() => sendMessage(option.selectMessage, `Selected: ${option.title}`)}
             disabled={isLoading}
             className={`rounded-xl px-3 py-2 ${isLoading ? "bg-primary-200" : "bg-primary-600 active:bg-primary-700"}`}
           >
@@ -1343,7 +1346,7 @@ export default function AssistantScreen() {
                     : getThemeColor(colors, "typography-800"),
                 }}
               >
-                {item.content}
+                {item.displayContent || item.content}
               </Text>
             </View>
           </View>

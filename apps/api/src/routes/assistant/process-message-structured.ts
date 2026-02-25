@@ -7,7 +7,7 @@
  * (search execution, action execution, UI building) is shared with Path 2.
  */
 
-import type { ChatMessage, AssistantUi, AssistantAction, AssistantIntent, StatusCallback } from "./types";
+import type { ChatMessage, AssistantUi, AssistantAction, AssistantIntent, StatusCallback, ToolResult } from "./types";
 import { getModel, getModelName, getProviderApiKeyEnvGuard } from "./model";
 import { isExplicitUserConfirmation, isExplicitUserRejection, parseUserSelection } from "./guardrails";
 import { loadAssistantEnumConfig } from "./enums";
@@ -826,22 +826,28 @@ export async function processMessageStructured(
 // ── Build display UI from search results ────────────────────────────
 
 function buildSearchDisplayUi(
-  resolved: { entity_type: string; candidates: Array<{ id: string; displayName: string }> },
-  search: { entity_type: string }
+  resolved: ResolvedSearch,
+  search: SearchInstruction
 ): AssistantUi | null {
   if (resolved.candidates.length === 0) return null;
 
-  switch (search.entity_type) {
-    case "contact":
-      return {
-        kind: "contacts",
-        count: resolved.candidates.length,
-        contacts: resolved.candidates.map((c) => ({
-          id: c.id,
-          displayName: c.displayName,
-        })),
-      };
-    default:
-      return null;
+  // When raw ToolResult is available, delegate to buildUiFromToolResults
+  // which already handles all entity types (contacts, conversations, events, reminders)
+  if (resolved.rawResult) {
+    return buildUiFromToolResults([{ output: resolved.rawResult as ToolResult }]);
   }
+
+  // Fallback for contacts without rawResult (backward compatibility)
+  if (search.entity_type === "contact") {
+    return {
+      kind: "contacts",
+      count: resolved.candidates.length,
+      contacts: resolved.candidates.map((c) => ({
+        id: c.id,
+        displayName: c.displayName,
+      })),
+    };
+  }
+
+  return null;
 }

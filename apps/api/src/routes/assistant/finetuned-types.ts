@@ -88,6 +88,7 @@ export type ResolvedSearch = {
   best_match: { id: string; displayName: string } | null;
   candidates: Array<{ id: string; displayName: string; similarity?: number }>;
   ambiguous: boolean;
+  rawResult?: Record<string, unknown>; // Full ToolResult for display_results searches
 };
 
 // ── Parsing helper ──────────────────────────────────────────────────

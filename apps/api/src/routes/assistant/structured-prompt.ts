@@ -50,16 +50,20 @@ function loadSeedExamples(): SeedExample[] {
  *
  *  0 - create_conversation (log a call with contact)
  *  1 - create_contact (simple)
- *  2 - search_conversation (display results)
+ *  2 - search_conversation (display results, with name)
  *  3 - create_reminder (with relative time)
  *  5 - unknown / greeting
  *  6 - edit_contact (update field)
+ * 10 - search_event (display results, "upcoming events")
  * 14 - delete_entity
  * 15 - create_conversation_with_contact (multi-action, explicit "new contact")
+ * 16 - search_reminder (display results, "pending reminders")
  * 18 - multi-intent (conversation + event)
  * 20 - create_conversation with search-first (ambiguous name, no "new contact")
+ * 21 - search_conversation (display results, "latest conversations" without name)
+ * 22 - search_conversation (display results, "latest conversation with <name>")
  */
-const SELECTED_INDICES = [0, 1, 2, 3, 5, 6, 14, 15, 18, 20];
+const SELECTED_INDICES = [0, 1, 2, 3, 5, 6, 10, 14, 15, 16, 18, 20, 21, 22];
 
 function selectExamples(all: SeedExample[]): SeedExample[] {
   return SELECTED_INDICES.filter((i) => i < all.length).map((i) => all[i]!);

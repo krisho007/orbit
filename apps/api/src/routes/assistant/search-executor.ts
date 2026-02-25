@@ -124,6 +124,7 @@ async function executeContactSearch(
       best_match: bestMatch ? { id: bestMatch.id, displayName: bestMatch.displayName } : null,
       candidates,
       ambiguous,
+      rawResult: search.purpose === "display_results" ? (result as Record<string, unknown>) : undefined,
     };
   }
 
@@ -162,12 +163,13 @@ async function executeConversationSearch(
   base: ResolvedSearch
 ): Promise<ResolvedSearch> {
   let result: ToolResult;
+  const limit = search.purpose === "display_results" ? 5 : 10;
 
   if (search.search_type === "keyword" || search.search_type === "semantic") {
     // queryConversations searches by participant name — use it for name-based queries
-    result = await queryConversations(userId, search.query, undefined, 10);
+    result = await queryConversations(userId, search.query, undefined, limit);
   } else {
-    result = await listConversations(userId, undefined, search.query, undefined, 10);
+    result = await listConversations(userId, undefined, search.query, undefined, limit);
   }
 
   if (result.type === "error") return base;
@@ -189,6 +191,7 @@ async function executeConversationSearch(
       best_match: candidates[0] ? { id: candidates[0].id, displayName: candidates[0].displayName } : null,
       candidates,
       ambiguous: false,
+      rawResult: search.purpose === "display_results" ? (result as Record<string, unknown>) : undefined,
     };
   }
 
@@ -203,11 +206,12 @@ async function executeEventSearch(
   base: ResolvedSearch
 ): Promise<ResolvedSearch> {
   let result: ToolResult;
+  const limit = search.purpose === "display_results" ? 5 : 10;
 
   if (search.search_type === "keyword" || search.search_type === "semantic") {
-    result = await queryEvents(userId, search.query, 10);
+    result = await queryEvents(userId, search.query, limit);
   } else {
-    result = await listEvents(userId, undefined, search.query, undefined, 10);
+    result = await listEvents(userId, undefined, search.query, undefined, limit);
   }
 
   if (result.type === "error") return base;
@@ -228,6 +232,7 @@ async function executeEventSearch(
       best_match: candidates[0] ? { id: candidates[0].id, displayName: candidates[0].displayName } : null,
       candidates,
       ambiguous: false,
+      rawResult: search.purpose === "display_results" ? (result as Record<string, unknown>) : undefined,
     };
   }
 
@@ -261,6 +266,7 @@ async function executeReminderSearch(
       best_match: candidates[0] ? { id: candidates[0].id, displayName: candidates[0].displayName } : null,
       candidates,
       ambiguous: false,
+      rawResult: search.purpose === "display_results" ? (result as Record<string, unknown>) : undefined,
     };
   }
 

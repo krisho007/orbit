@@ -71,6 +71,22 @@ function updateSearchResultsWithCreated(
     candidates: [{ id, displayName }],
     ambiguous: false,
   });
+
+  // If this action was synthesized by the participant fallback, also register
+  // under "created_contact_<searchId>" so subsequent actions referencing
+  // "created_contact_s1.best_match" can resolve correctly.
+  const fallbackSearchId = action.params._fallbackSearchId as string | undefined;
+  if (fallbackSearchId) {
+    const fallbackKey = `created_contact_${fallbackSearchId}`;
+    searchResults.set(fallbackKey, {
+      id: fallbackKey,
+      entity_type: action.entity_type as any,
+      purpose: "resolve_target",
+      best_match: { id, displayName },
+      candidates: [{ id, displayName }],
+      ambiguous: false,
+    });
+  }
 }
 
 async function executeSingleAction(

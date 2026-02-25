@@ -14,7 +14,7 @@ import { loadAssistantEnumConfig } from "./enums";
 import { getUserContext } from "./db-helpers";
 import { buildUiFromToolResults, summarizeUiText } from "./ui-builder";
 import { parseModelOutput, getActions } from "./finetuned-types";
-import type { OrbitModelOutput } from "./finetuned-types";
+import type { OrbitModelOutput, ActionInstruction, SearchInstruction } from "./finetuned-types";
 import { executeSearches } from "./search-executor";
 import { executeActions } from "./action-executor";
 import { extractLastUserText } from "./error-helpers";
@@ -52,6 +52,134 @@ async function loadCachedIntents(assistantConversationId: string): Promise<Assis
   return null;
 }
 
+type CachedOutput = {
+  intents: string[];
+  actions: ActionInstruction[];
+  searches: SearchInstruction[];
+  response: string;
+};
+
+// ── Participant fallback: when resolve_participant searches fail ─────
+
+type ParticipantFallback = {
+  fallbackActions: ActionInstruction[];
+  fallbackSearches: SearchInstruction[];
+  fallbackIntents: string[];
+  fallbackResponse: string;
+  failedSearchQueries: string[];
+};
+
+/**
+ * When a resolve_participant search for a contact returns no match, instead of
+ * dead-ending, synthesize a create_contact action and rewrite participant_refs
+ * so the original actions can still execute.
+ *
+ * Does NOT trigger for resolve_target failures (e.g. "update Alice's phone"
+ * when Alice is not found — dead-end is appropriate there).
+ */
+function buildParticipantFallback(
+  searches: SearchInstruction[],
+  searchResults: Map<string, { best_match: { id: string; displayName: string } | null; [key: string]: unknown }>,
+  actions: ActionInstruction[],
+  intents: string[],
+  response: string
+): ParticipantFallback | null {
+  // Find failed resolve_participant contact searches
+  const failedParticipantSearches = searches.filter((s) => {
+    if (s.entity_type !== "contact" || s.purpose !== "resolve_participant") return false;
+    const resolved = searchResults.get(s.id);
+    return resolved && !resolved.best_match;
+  });
+
+  if (failedParticipantSearches.length === 0) return null;
+
+  // Build a set of names already being created by the original actions
+  const existingCreateNames = new Set(
+    actions
+      .filter((a) => a.operation === "create" && a.entity_type === "contact")
+      .map((a) => (a.params.displayName as string || "").toLowerCase())
+  );
+
+  const fallbackActions: ActionInstruction[] = [];
+  const rewriteMap = new Map<string, string>(); // "s1.best_match" -> "created_contact_s1.best_match"
+  const failedSearchQueries: string[] = [];
+
+  for (const search of failedParticipantSearches) {
+    const name = search.query;
+    failedSearchQueries.push(name);
+
+    if (existingCreateNames.has(name.toLowerCase())) {
+      // Original actions already create this contact — just rewrite refs
+      rewriteMap.set(`${search.id}.best_match`, "created_contact.best_match");
+    } else {
+      // Synthesize a create_contact action
+      fallbackActions.push({
+        operation: "create",
+        entity_type: "contact",
+        params: { displayName: name, _fallbackSearchId: search.id },
+      });
+      rewriteMap.set(`${search.id}.best_match`, `created_contact_${search.id}.best_match`);
+    }
+  }
+
+  // Rewrite participant_refs in all original actions
+  const rewrittenActions = actions.map((a) => {
+    if (!a.participant_refs || a.participant_refs.length === 0) return a;
+    const newRefs = a.participant_refs.map((ref) => rewriteMap.get(ref) ?? ref);
+    return { ...a, participant_refs: newRefs };
+  });
+
+  // Remove failed searches from the list (not needed on replay)
+  const failedIds = new Set(failedParticipantSearches.map((s) => s.id));
+  const cleanedSearches = searches.filter((s) => !failedIds.has(s.id));
+
+  // Combine: fallback create_contact actions first, then rewritten original actions
+  const allActions = [...fallbackActions, ...rewrittenActions];
+
+  // Add create_contact intent if not already present
+  const fallbackIntents = [...intents];
+  if (!fallbackIntents.includes("create_contact")) {
+    fallbackIntents.unshift("create_contact");
+  }
+
+  const nameList = failedSearchQueries.join(", ");
+  const fallbackResponse = `I couldn't find ${nameList} in your contacts. I'll create ${failedSearchQueries.length === 1 ? "a new contact" : "new contacts"} and proceed with the original request.`;
+
+  return {
+    fallbackActions: allActions,
+    fallbackSearches: cleanedSearches,
+    fallbackIntents,
+    fallbackResponse,
+    failedSearchQueries,
+  };
+}
+
+async function loadCachedOutput(assistantConversationId: string): Promise<CachedOutput | null> {
+  const [lastMsg] = await db
+    .select({ ui: assistantMessages.ui })
+    .from(assistantMessages)
+    .where(
+      and(
+        eq(assistantMessages.assistantConversationId, assistantConversationId),
+        eq(assistantMessages.role, "assistant")
+      )
+    )
+    .orderBy(desc(assistantMessages.createdAt))
+    .limit(1);
+
+  if (!lastMsg?.ui) return null;
+
+  try {
+    const parsed = JSON.parse(lastMsg.ui);
+    if (parsed?._cachedOutput?.actions?.length > 0) {
+      return parsed._cachedOutput as CachedOutput;
+    }
+  } catch {
+    // Invalid JSON, fall through
+  }
+  return null;
+}
+
 export async function processMessageStructured(
   userId: string,
   messages: ChatMessage[],
@@ -63,6 +191,7 @@ export async function processMessageStructured(
   ui: AssistantUi | null;
   actions?: AssistantAction[];
   cachedIntents?: AssistantIntent[];
+  cachedOutput?: CachedOutput;
   modelName?: string;
   inputTokens?: number;
   outputTokens?: number;
@@ -88,6 +217,104 @@ export async function processMessageStructured(
       ui: null,
       cachedIntents: rejectionCachedIntents ?? undefined,
     };
+  }
+
+  // ── Confirmation shortcut: replay cached actions without re-calling LLM ──
+  if (isConfirmation && assistantConversationId) {
+    const cached = await loadCachedOutput(assistantConversationId);
+    if (cached && cached.actions.length > 0) {
+      console.log(`[assistant:structured] Confirmation detected — executing ${cached.actions.length} cached action(s)`);
+      const tz = timezone || "UTC";
+
+      let searchResults = new Map();
+      if (cached.searches.length > 0) {
+        onStatus?.("Searching...");
+        searchResults = await executeSearches(userId, cached.searches);
+
+        // Check for ambiguous results
+        for (const [, search] of searchResults) {
+          if (search.ambiguous && search.candidates.length > 1) {
+            return {
+              text: `I found multiple matching ${search.entity_type}s. Please pick one.`,
+              ui: {
+                kind: "selection" as const,
+                prompt: `I found multiple matching ${search.entity_type}s. Please pick one.`,
+                options: search.candidates.slice(0, 5).map((c: { id: string; displayName: string }) => ({
+                  id: c.id,
+                  entityKind: search.entity_type as any,
+                  title: c.displayName,
+                  subtitle: null,
+                  selectMessage: `Use contact ID ${c.id} as the selected context for this request.`,
+                })),
+              },
+              cachedIntents: cached.intents as AssistantIntent[],
+            };
+          }
+        }
+
+        // Check for failed resolve_participant — try fallback instead of dead-ending
+        const participantFallback = buildParticipantFallback(
+          cached.searches,
+          searchResults as Map<string, { best_match: { id: string; displayName: string } | null; [key: string]: unknown }>,
+          cached.actions,
+          cached.intents,
+          cached.response
+        );
+        if (participantFallback) {
+          const fallbackCached: CachedOutput = {
+            intents: participantFallback.fallbackIntents,
+            actions: participantFallback.fallbackActions,
+            searches: participantFallback.fallbackSearches,
+            response: participantFallback.fallbackResponse,
+          };
+          return {
+            text: participantFallback.fallbackResponse,
+            ui: {
+              kind: "confirmation",
+              action: participantFallback.fallbackResponse,
+              entityType: participantFallback.fallbackActions[0]?.entity_type ?? "contact",
+              details: participantFallback.fallbackActions[0]?.params as Record<string, unknown>,
+            },
+            actions: [
+              { label: "Go ahead", message: "go ahead", style: "primary" },
+              { label: "I need changes", message: "No, I need changes", style: "secondary" },
+            ],
+            cachedIntents: participantFallback.fallbackIntents as AssistantIntent[],
+            cachedOutput: fallbackCached,
+          };
+        }
+
+        // Check for failed resolve_target — dead-end is appropriate here
+        for (const search of cached.searches) {
+          const resolved = searchResults.get(search.id);
+          if (resolved && search.purpose === "resolve_target" && !resolved.best_match) {
+            return {
+              text: `I couldn't find a ${search.entity_type} matching "${search.query}". Would you like to try a different name?`,
+              ui: null,
+              cachedIntents: cached.intents as AssistantIntent[],
+            };
+          }
+        }
+      }
+
+      onStatus?.("Executing...");
+      const actionResults = await executeActions(
+        userId,
+        cached.actions,
+        searchResults,
+        tz,
+        assistantConversationId
+      );
+      const toolResults = actionResults.map((r) => ({ output: r.result }));
+      const ui = buildUiFromToolResults(toolResults);
+      const text = summarizeUiText(ui, cached.response);
+
+      return {
+        text,
+        ui,
+        cachedIntents: cached.intents as AssistantIntent[],
+      };
+    }
   }
 
   onStatus?.("Processing...");
@@ -169,6 +396,8 @@ export async function processMessageStructured(
     ];
 
     let ui: AssistantUi | null = null;
+    let cachedOutput: CachedOutput | undefined;
+
     if (allActions.length > 0) {
       const firstAction = allActions[0]!;
       ui = {
@@ -177,6 +406,12 @@ export async function processMessageStructured(
         entityType: firstAction.entity_type,
         details: firstAction.params as Record<string, unknown>,
       };
+      cachedOutput = {
+        intents: output.intents,
+        actions: allActions,
+        searches: output.searches,
+        response: output.response,
+      };
     }
 
     return {
@@ -184,6 +419,7 @@ export async function processMessageStructured(
       ui,
       actions,
       cachedIntents: output.intents as AssistantIntent[],
+      cachedOutput,
       modelName,
       inputTokens,
       outputTokens,
@@ -222,12 +458,47 @@ export async function processMessageStructured(
       }
     }
 
-    // Check for failed resolutions (no matches found)
+    // Check for failed resolve_participant — try fallback instead of dead-ending
+    const participantFallback = buildParticipantFallback(
+      output.searches,
+      searchResults as Map<string, { best_match: { id: string; displayName: string } | null; [key: string]: unknown }>,
+      allActions,
+      output.intents,
+      output.response
+    );
+    if (participantFallback) {
+      const fallbackCached: CachedOutput = {
+        intents: participantFallback.fallbackIntents,
+        actions: participantFallback.fallbackActions,
+        searches: participantFallback.fallbackSearches,
+        response: participantFallback.fallbackResponse,
+      };
+      return {
+        text: participantFallback.fallbackResponse,
+        ui: {
+          kind: "confirmation",
+          action: participantFallback.fallbackResponse,
+          entityType: participantFallback.fallbackActions[0]?.entity_type ?? "contact",
+          details: participantFallback.fallbackActions[0]?.params as Record<string, unknown>,
+        },
+        actions: [
+          { label: "Go ahead", message: "go ahead", style: "primary" },
+          { label: "I need changes", message: "No, I need changes", style: "secondary" },
+        ],
+        cachedIntents: participantFallback.fallbackIntents as AssistantIntent[],
+        cachedOutput: fallbackCached,
+        modelName,
+        inputTokens,
+        outputTokens,
+      };
+    }
+
+    // Check for failed resolve_target — dead-end is appropriate here
     for (const search of output.searches) {
       const resolved = searchResults.get(search.id);
-      if (resolved && search.purpose === "resolve_participant" && !resolved.best_match) {
+      if (resolved && search.purpose === "resolve_target" && !resolved.best_match) {
         return {
-          text: `I couldn't find a contact matching "${search.query}". Would you like to create a new contact?`,
+          text: `I couldn't find a ${search.entity_type} matching "${search.query}". Would you like to try a different name?`,
           ui: null,
           cachedIntents: output.intents as AssistantIntent[],
           modelName,

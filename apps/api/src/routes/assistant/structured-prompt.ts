@@ -46,7 +46,7 @@ function loadSeedExamples(): SeedExample[] {
 
 /**
  * Select a representative subset of seed examples covering key patterns.
- * Indices chosen from the 20-example seed dataset:
+ * Indices chosen from the seed dataset:
  *
  *  0 - create_conversation (log a call with contact)
  *  1 - create_contact (simple)
@@ -55,10 +55,11 @@ function loadSeedExamples(): SeedExample[] {
  *  5 - unknown / greeting
  *  6 - edit_contact (update field)
  * 14 - delete_entity
- * 15 - create_conversation_with_contact (multi-action)
+ * 15 - create_conversation_with_contact (multi-action, explicit "new contact")
  * 18 - multi-intent (conversation + event)
+ * 20 - create_conversation with search-first (ambiguous name, no "new contact")
  */
-const SELECTED_INDICES = [0, 1, 2, 3, 5, 6, 14, 15, 18];
+const SELECTED_INDICES = [0, 1, 2, 3, 5, 6, 14, 15, 18, 20];
 
 function selectExamples(all: SeedExample[]): SeedExample[] {
   return SELECTED_INDICES.filter((i) => i < all.length).map((i) => all[i]!);
@@ -87,7 +88,7 @@ SearchInstruction:
 - id: "s1", "s2", etc.
 - entity_type: contact | conversation | event | reminder
 - search_type: fuzzy_name | phone | keyword | semantic
-- query: string
+- query: string (MUST be non-empty — for broad searches like "upcoming events" or "all contacts", use a descriptive keyword e.g. "upcoming", "all")
 - purpose: resolve_participant | resolve_target | display_results
 
 ActionInstruction:
@@ -102,7 +103,7 @@ ActionInstruction:
 
 const RULES = `
 Rules:
-- needs_confirmation = true for ANY create/update/complete action
+- needs_confirmation = true for ANY create/update/complete action — you MUST include the action (or actions[]) field when needs_confirmation is true
 - needs_confirmation = false for search-only and unknown intents
 - needs_resolution = true when searches[] contains purpose resolve_participant or resolve_target
 - needs_resolution = false when all searches are display_results or there are no searches
@@ -113,6 +114,7 @@ Rules:
 - For delete requests, set intents to ["delete_entity"] with NO action — explain deletion is done via UI
 - For greetings/unknown, set intents to ["unknown"] with no searches and no action
 - When creating a conversation with a new contact (not in CRM), use intents ["create_conversation_with_contact"] with actions[] containing both a contact create and a conversation create, where the conversation uses participant_refs: ["created_contact.best_match"]
+- When someone is mentioned by name and you are unsure whether they exist in the CRM, ALWAYS search first (purpose: resolve_participant). Only use create_conversation_with_contact when the user explicitly says "new contact" or "add a contact". The system will handle creating the contact if the search finds no match.
 - The response should be natural, concise, and describe what you will do
 `.trim();
 

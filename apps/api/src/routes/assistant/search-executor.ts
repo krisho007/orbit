@@ -96,18 +96,25 @@ async function executeContactSearch(
     }));
 
     const bestMatch = candidates[0] ?? null;
-    const exactMatchFound = Boolean(result.exactMatchFound);
 
-    // Ambiguous if 2+ viable candidates (similarity >= 0.4) and no exact match.
-    // This catches "Vikram" → "Vikram Patel" (0.85) + "Vikram Singh" (0.80) as ambiguous,
-    // while "Bob" → "Bob Smith" (0.85) + "Bobby Smithson" (0.30) auto-selects Bob Smith.
+    // Count how many candidates are exact matches for the query.
+    // Only suppress disambiguation when there is exactly ONE exact match —
+    // if multiple contacts share the same exact name (e.g. two "Vikram"s),
+    // the user still needs to pick.
+    const queryNorm = search.query.toLowerCase().trim();
+    const exactMatches = candidates.filter(
+      (c) => c.displayName.toLowerCase().trim() === queryNorm
+    );
+    const singleExactMatch = exactMatches.length === 1;
+
+    // Ambiguous if 2+ viable candidates (similarity >= 0.4) and no single exact match.
     const VIABLE_THRESHOLD = 0.4;
     const viableCandidates = candidates.filter(
       (c) => c.similarity === undefined || c.similarity >= VIABLE_THRESHOLD
     );
-    const ambiguous = viableCandidates.length > 1 && !exactMatchFound;
+    const ambiguous = viableCandidates.length > 1 && !singleExactMatch;
 
-    console.log(`[finetuned:search] Contact search "${search.query}" → ${candidates.length} candidate(s), ${viableCandidates.length} viable, exactMatch=${exactMatchFound}, ambiguous=${ambiguous}`);
+    console.log(`[finetuned:search] Contact search "${search.query}" → ${candidates.length} candidate(s), ${viableCandidates.length} viable, exactMatches=${exactMatches.length}, ambiguous=${ambiguous}`);
     for (const c of candidates) {
       console.log(`[finetuned:search]   - "${c.displayName}" (similarity=${c.similarity ?? "n/a"})`);
     }

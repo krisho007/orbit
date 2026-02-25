@@ -176,8 +176,12 @@ async function loadCachedOutput(assistantConversationId: string): Promise<Cached
 
   try {
     const parsed = JSON.parse(lastMsg.ui);
-    if (parsed?._cachedOutput?.actions?.length > 0) {
-      return parsed._cachedOutput as CachedOutput;
+    // Load cached output if it has actions OR searches (search-only intents
+    // like "conversations with Vikram" have actions=[] but need the cache
+    // for disambiguation flow).
+    const co = parsed?._cachedOutput;
+    if (co && (co.actions?.length > 0 || co.searches?.length > 0)) {
+      return co as CachedOutput;
     }
   } catch {
     // Invalid JSON, fall through

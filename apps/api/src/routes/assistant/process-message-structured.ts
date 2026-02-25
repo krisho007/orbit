@@ -322,6 +322,32 @@ export async function processMessageStructured(
         }
       }
 
+      // For search-only intents (no actions), show display_results UI
+      // instead of a confirmation card. This handles the case where a
+      // contact resolve_target was disambiguated before showing conversation/
+      // event/reminder display results.
+      const isSearchOnlyIntent = cached.intents.every(
+        (i) => typeof i === "string" && (i.startsWith("search_") || i === "unknown")
+      );
+      if (isSearchOnlyIntent && cached.actions.length === 0) {
+        const displaySearch = cached.searches.find((s) => s.purpose === "display_results");
+        if (displaySearch) {
+          const displayResolved = cached.resolvedSearches[displaySearch.id];
+          if (displayResolved) {
+            const ui = buildSearchDisplayUi(
+              displayResolved as ResolvedSearch,
+              displaySearch as SearchInstruction
+            );
+            const text = summarizeUiText(ui, cached.response);
+            return {
+              text,
+              ui,
+              cachedIntents: cached.intents as AssistantIntent[],
+            };
+          }
+        }
+      }
+
       // All resolved — show confirmation card with enriched names
       const firstAction = cached.actions[0];
       let details: Record<string, unknown> = {};

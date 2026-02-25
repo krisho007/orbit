@@ -1547,7 +1547,7 @@ export default function AssistantScreen() {
                     if (
                       Platform.OS === "web" &&
                       e.nativeEvent.key === "Enter" &&
-                      !e.nativeEvent.shiftKey
+                      !(e.nativeEvent as unknown as KeyboardEvent).shiftKey
                     ) {
                       e.preventDefault();
                       sendMessage(input);

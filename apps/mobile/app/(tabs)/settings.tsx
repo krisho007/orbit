@@ -26,6 +26,7 @@ import { HuskyLogo } from "../../components/HuskyLogo";
 import { resetOnboardingForTesting } from "../../lib/onboarding";
 import { useOnboarding } from "../_layout";
 import { userApi } from "../../lib/api";
+import { useConfirmDialog } from "../../components/confirm-dialog";
 
 const PRIVACY_POLICY_URL = "https://orbitcrm.app/privacy";
 const TERMS_URL = "https://orbitcrm.app/terms";
@@ -43,6 +44,7 @@ export default function SettingsScreen() {
   const [consentLoading, setConsentLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const { confirm, ConfirmDialogElement } = useConfirmDialog();
 
   useEffect(() => {
     let cancelled = false;
@@ -88,13 +90,13 @@ export default function SettingsScreen() {
         a.click();
         URL.revokeObjectURL(url);
       } else {
-        const FileSystem = await import("expo-file-system");
+        const { Paths, File } = await import("expo-file-system");
         const Sharing = await import("expo-sharing");
-        const fileUri = FileSystem.default.cacheDirectory + "orbit-data-export.json";
-        await FileSystem.default.writeAsStringAsync(fileUri, json, { encoding: FileSystem.default.EncodingType.UTF8 });
+        const file = new File(Paths.cache, "orbit-data-export.json");
+        file.write(json);
         const canShare = await Sharing.default.isAvailableAsync();
         if (canShare) {
-          await Sharing.default.shareAsync(fileUri, { mimeType: "application/json", dialogTitle: "Export Orbit Data" });
+          await Sharing.default.shareAsync(file.uri, { mimeType: "application/json", dialogTitle: "Export Orbit Data" });
         } else {
           Alert.alert("Exported", "Data saved but sharing is not available on this device.");
         }
@@ -107,75 +109,61 @@ export default function SettingsScreen() {
     }
   }, []);
 
-  const handleDeleteAccount = useCallback(() => {
-    Alert.alert(
-      "Delete Account",
-      "This will permanently delete your account and all data. This cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            setIsDeletingAccount(true);
-            try {
-              await userApi.deleteAccount();
-              await signOut();
-            } catch (error) {
-              console.error("Account deletion failed:", error);
-              Alert.alert("Error", "Failed to delete account. Please try again.");
-              setIsDeletingAccount(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [signOut]);
+  const handleDeleteAccount = useCallback(async () => {
+    const confirmed = await confirm({
+      title: "Delete Account",
+      message: "This will permanently delete your account and all data. This cannot be undone.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setIsDeletingAccount(true);
+    try {
+      await userApi.deleteAccount();
+      await signOut();
+    } catch (error) {
+      console.error("Account deletion failed:", error);
+      Alert.alert("Error", "Failed to delete account. Please try again.");
+      setIsDeletingAccount(false);
+    }
+  }, [signOut, confirm]);
 
   const handleSignOut = async () => {
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await signOut();
-          } catch (error) {
-            Alert.alert("Error", "Failed to sign out. Please try again.");
-          }
-        },
-      },
-    ]);
+    const confirmed = await confirm({
+      title: "Sign Out",
+      message: "Are you sure you want to sign out?",
+      confirmLabel: "Sign Out",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      await signOut();
+    } catch (error) {
+      Alert.alert("Error", "Failed to sign out. Please try again.");
+    }
   };
 
-  const handleResetOnboarding = () => {
+  const handleResetOnboarding = async () => {
     if (!user?.id) {
       Alert.alert("Unavailable", "You need to be signed in to reset onboarding state.");
       return;
     }
 
-    Alert.alert(
-      "Reset Onboarding",
-      "This will clear onboarding completion and assistant quick-start tip state for this account on this device.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Reset",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await resetOnboardingForTesting(user.id);
-              requireOnboarding();
-              router.replace("/welcome" as any);
-            } catch (error) {
-              console.error("Failed to reset onboarding state:", error);
-              Alert.alert("Error", "Failed to reset onboarding state.");
-            }
-          },
-        },
-      ]
-    );
+    const confirmed = await confirm({
+      title: "Reset Onboarding",
+      message: "This will clear onboarding completion and assistant quick-start tip state for this account on this device.",
+      confirmLabel: "Reset",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      await resetOnboardingForTesting(user.id);
+      requireOnboarding();
+      router.replace("/welcome" as any);
+    } catch (error) {
+      console.error("Failed to reset onboarding state:", error);
+      Alert.alert("Error", "Failed to reset onboarding state.");
+    }
   };
 
   const SettingRow = ({
@@ -412,6 +400,8 @@ export default function SettingsScreen() {
         <Text className="text-typography-400 text-sm mt-0.5">v1.0.0</Text>
       </View>
     </ScrollView>
+
+    {ConfirmDialogElement}
     </AnimatedTabScreen>
   );
 }

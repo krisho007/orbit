@@ -19,9 +19,9 @@ export const chatSchema = z.object({
     const msg = data.messages[i]!;
     if (msg.role === "user" && msg.content.length > MAX_USER_MESSAGE_LENGTH) {
       ctx.addIssue({
-        code: z.ZodIssueCode.too_big,
+        code: "too_big",
+        origin: "string",
         maximum: MAX_USER_MESSAGE_LENGTH,
-        type: "string",
         inclusive: true,
         message: "Message too long (max 2000 characters)",
         path: ["messages", i, "content"],

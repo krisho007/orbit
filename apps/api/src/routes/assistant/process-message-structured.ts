@@ -579,7 +579,7 @@ export async function processMessageStructured(
       model,
       system: systemPrompt,
       messages: modelMessages,
-      maxTokens: 1024,
+      maxOutputTokens: 1024,
     });
 
     rawOutput = result.text;

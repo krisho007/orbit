@@ -1169,11 +1169,51 @@ export default function AssistantScreen() {
         OTHER: "Other",
       };
 
+      const formatTimeToken = (token: string): string => {
+        if (token === "NOW") return "Now";
+        if (token === "TODAY") return "Today";
+        if (token === "TOMORROW") return "Tomorrow";
+        if (token === "YESTERDAY") return "Yesterday";
+        const todayMatch = token.match(/^TODAY_(\d{1,2}):(\d{2})$/);
+        if (todayMatch) return `Today at ${formatTimeParts(todayMatch[1]!, todayMatch[2]!)}`;
+        const tomorrowMatch = token.match(/^TOMORROW_(\d{1,2}):(\d{2})$/);
+        if (tomorrowMatch) return `Tomorrow at ${formatTimeParts(tomorrowMatch[1]!, tomorrowMatch[2]!)}`;
+        const yesterdayMatch = token.match(/^YESTERDAY_(\d{1,2}):(\d{2})$/);
+        if (yesterdayMatch) return `Yesterday at ${formatTimeParts(yesterdayMatch[1]!, yesterdayMatch[2]!)}`;
+        const nextWeekMatch = token.match(/^NEXT_WEEK_(\d{1,2}):(\d{2})$/);
+        if (nextWeekMatch) return `Next week at ${formatTimeParts(nextWeekMatch[1]!, nextWeekMatch[2]!)}`;
+        if (token === "NEXT_WEEK") return "Next week";
+        const plusDaysMatch = token.match(/^\+(\d+)d(?:_(\d{1,2}):(\d{2}))?$/);
+        if (plusDaysMatch) {
+          const days = plusDaysMatch[1]!;
+          if (plusDaysMatch[2]) return `In ${days} days at ${formatTimeParts(plusDaysMatch[2], plusDaysMatch[3]!)}`;
+          return `In ${days} days`;
+        }
+        const minusDaysMatch = token.match(/^-(\d+)d(?:_(\d{1,2}):(\d{2}))?$/);
+        if (minusDaysMatch) {
+          const days = minusDaysMatch[1]!;
+          if (minusDaysMatch[2]) return `${days} days ago at ${formatTimeParts(minusDaysMatch[2], minusDaysMatch[3]!)}`;
+          return `${days} days ago`;
+        }
+        return token;
+      };
+
+      const formatTimeParts = (h: string, m: string): string => {
+        const hour = parseInt(h, 10);
+        const ampm = hour >= 12 ? "PM" : "AM";
+        const h12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        return `${h12}:${m} ${ampm}`;
+      };
+
       const formatFieldValue = (key: string, value: unknown): string => {
         if (value == null) return "";
         if (key === "medium" && typeof value === "string") return MEDIUM_LABELS[value] || value;
         if (key === "eventType" && typeof value === "string") return EVENT_TYPE_LABELS[value] || value;
         if ((key === "happenedAt" || key === "startAt" || key === "endAt" || key === "dueAt") && typeof value === "string") {
+          // Try time token first (e.g. NOW, TODAY_15:00, TOMORROW, +3d)
+          const tokenResult = formatTimeToken(value);
+          if (tokenResult !== value) return tokenResult;
+          // Fall back to ISO date parsing
           return formatDateTime(value, "MMM d, yyyy 'at' h:mm a", String(value));
         }
         if (Array.isArray(value)) return value.join(", ");

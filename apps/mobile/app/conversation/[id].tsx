@@ -25,10 +25,19 @@ import {
   CalendarClock,
   StickyNote,
   Link,
+  Link2,
+  Check,
   Users,
   Calendar,
+  Briefcase,
+  Cake,
+  Heart,
+  Mic,
+  PartyPopper,
+  BookOpen,
+  Bookmark,
 } from "lucide-react-native";
-import { conversationsApi, Conversation } from "../../lib/api";
+import { conversationsApi, Conversation, Event } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
 import { useDeleteConversation } from "../../hooks/use-conversations";
 import { useConfirmDialog } from "../../components/confirm-dialog";
@@ -46,6 +55,18 @@ const MEDIUM_META: Record<
   OTHER: { label: "Other", icon: FileText },
 };
 
+const EVENT_META: Record<string, { label: string; icon: typeof Briefcase }> = {
+  MEETING: { label: "Meeting", icon: Briefcase },
+  CALL: { label: "Call", icon: Phone },
+  BIRTHDAY: { label: "Birthday", icon: Cake },
+  ANNIVERSARY: { label: "Anniversary", icon: Heart },
+  CONFERENCE: { label: "Conference", icon: Mic },
+  SOCIAL: { label: "Social", icon: PartyPopper },
+  FAMILY_EVENT: { label: "Family Event", icon: Users },
+  JOURNAL: { label: "Journal", icon: BookOpen },
+  OTHER: { label: "Other", icon: Bookmark },
+};
+
 export default function ConversationDetailScreen() {
   const router = useRouter();
   const { id, from } = useLocalSearchParams<{
@@ -56,6 +77,10 @@ export default function ConversationDetailScreen() {
   const backHref = Array.isArray(from) ? from[0] : from;
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showLinkable, setShowLinkable] = useState(false);
+  const [linkableEvents, setLinkableEvents] = useState<Event[]>([]);
+  const [isLoadingLinkable, setIsLoadingLinkable] = useState(false);
+  const [linkingId, setLinkingId] = useState<string | null>(null);
   const deleteConversation = useDeleteConversation();
   const { confirm, ConfirmDialogElement } = useConfirmDialog();
 
@@ -112,6 +137,42 @@ export default function ConversationDetailScreen() {
 
   const handleEdit = () => {
     router.push(`/conversation/${id}/edit`);
+  };
+
+  const loadLinkableEvents = async () => {
+    try {
+      setIsLoadingLinkable(true);
+      const data = await conversationsApi.listLinkableEvents(id);
+      setLinkableEvents(data.events);
+    } catch (error) {
+      console.error("Failed to load linkable events:", error);
+      setLinkableEvents([]);
+    } finally {
+      setIsLoadingLinkable(false);
+    }
+  };
+
+  const handleToggleLinkable = () => {
+    if (!showLinkable) {
+      loadLinkableEvents();
+    }
+    setShowLinkable(!showLinkable);
+  };
+
+  const handleLinkEvent = async (eventId: string) => {
+    try {
+      setLinkingId(eventId);
+      await conversationsApi.update(id, { eventId });
+      // Refresh conversation to show the linked event
+      await loadConversation();
+      setShowLinkable(false);
+      setLinkableEvents([]);
+    } catch (error) {
+      console.error("Failed to link event:", error);
+      Alert.alert("Error", "Failed to link event");
+    } finally {
+      setLinkingId(null);
+    }
   };
 
   if (isLoading) {
@@ -237,9 +298,95 @@ export default function ConversationDetailScreen() {
 
         {/* Linked Event */}
         <View className="px-4 mt-6">
-          <Text className="text-typography-900 text-base font-body-semibold mb-3">
-            Linked Event
-          </Text>
+          <View className="flex-row items-center justify-between mb-3">
+            <Text className="text-typography-900 text-base font-body-semibold">
+              Linked Event
+            </Text>
+            {!conversation.event && (
+              <Pressable
+                onPress={handleToggleLinkable}
+                className={`flex-row items-center px-3 py-1.5 rounded-lg ${
+                  showLinkable
+                    ? "bg-primary-600"
+                    : "bg-background-50 border border-border-200"
+                } active:opacity-80`}
+              >
+                <Link2 size={14} color={showLinkable ? "#fff" : getThemeColor(colors, "primary-600")} />
+                <Text className={`text-sm font-body-medium ml-1 ${showLinkable ? "text-white" : "text-primary-600"}`}>
+                  Link
+                </Text>
+              </Pressable>
+            )}
+          </View>
+
+          {/* Linkable Events Panel */}
+          {showLinkable && !conversation.event && (
+            <View className="mb-4 rounded-xl border border-primary-200 bg-primary-50 overflow-hidden">
+              <View className="px-4 py-2.5 border-b border-primary-200">
+                <Text className="text-typography-700 text-xs font-body-medium">
+                  Events from {format(happenedAt, "MMM d, yyyy")}
+                </Text>
+              </View>
+              {isLoadingLinkable ? (
+                <View className="py-6 items-center">
+                  <ActivityIndicator size="small" color={getThemeColor(colors, "primary-600")} />
+                </View>
+              ) : linkableEvents.length === 0 ? (
+                <View className="py-4 px-4">
+                  <Text className="text-typography-400 text-sm text-center">
+                    No events on this date
+                  </Text>
+                </View>
+              ) : (
+                linkableEvents.map((evt, index) => {
+                  const eventMeta = EVENT_META[evt.eventType] || EVENT_META.OTHER;
+                  const EventIcon = eventMeta.icon;
+                  const eventTime = new Date(evt.startAt);
+                  const timeLabel = Number.isNaN(eventTime.getTime())
+                    ? ""
+                    : format(eventTime, "h:mm a");
+                  const isLinking = linkingId === evt.id;
+
+                  return (
+                    <View key={evt.id}>
+                      {index > 0 && <View className="border-t border-primary-200" />}
+                      <View className="flex-row items-center px-4 py-3">
+                        <View className="w-8 h-8 rounded-lg bg-white items-center justify-center mr-3">
+                          <EventIcon size={14} color={getThemeColor(colors, "primary-600")} />
+                        </View>
+                        <View className="flex-1 mr-2">
+                          <View className="flex-row items-center">
+                            <Text className="text-typography-900 text-sm font-body-medium flex-1" numberOfLines={1}>
+                              {evt.title}
+                            </Text>
+                            {timeLabel ? (
+                              <Text className="text-typography-400 text-xs ml-2">{timeLabel}</Text>
+                            ) : null}
+                          </View>
+                          <Text className="text-typography-500 text-xs">{eventMeta.label}</Text>
+                        </View>
+                        <Pressable
+                          onPress={() => handleLinkEvent(evt.id)}
+                          disabled={isLinking}
+                          className="px-3 py-1.5 rounded-lg bg-primary-600 active:bg-primary-700"
+                        >
+                          {isLinking ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : (
+                            <View className="flex-row items-center">
+                              <Check size={12} color="#fff" />
+                              <Text className="text-white text-xs font-body-medium ml-1">Link</Text>
+                            </View>
+                          )}
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          )}
+
           {conversation.event ? (
             <Pressable
               onPress={() => router.push(`/event/${conversation.event!.id}`)}
@@ -257,12 +404,12 @@ export default function ConversationDetailScreen() {
                 </View>
               </View>
             </Pressable>
-          ) : (
+          ) : !showLinkable ? (
             <View className="flex-row items-center py-2">
               <Link size={16} color={getThemeColor(colors, "typography-400")} />
               <Text className="text-typography-400 text-sm ml-2">No linked event</Text>
             </View>
-          )}
+          ) : null}
         </View>
 
         <View className="h-8" />

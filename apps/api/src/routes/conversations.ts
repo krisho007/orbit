@@ -10,6 +10,7 @@ import {
   reminders,
   contacts,
   events,
+  eventParticipants,
 } from "../db";
 import { authMiddleware } from "../middleware/auth";
 import { formatValidationErrors, clampLimit } from "../utils/validation";
@@ -496,6 +497,70 @@ app.get("/", async (c) => {
   } catch (error) {
     console.error("Error fetching conversations:", error);
     return c.json({ error: "Failed to fetch conversations" }, 500);
+  }
+});
+
+// GET /api/conversations/:id/linkable-events - Find unlinked events on the same date
+app.get("/:id/linkable-events", async (c) => {
+  const userId = c.get("userId");
+  const conversationId = c.req.param("id");
+
+  try {
+    const [conversation] = await db
+      .select({ id: conversations.id, happenedAt: conversations.happenedAt })
+      .from(conversations)
+      .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)));
+
+    if (!conversation) {
+      return c.json({ error: "Conversation not found" }, 404);
+    }
+
+    // Find events on the same calendar date that this conversation isn't already linked to
+    const convoDate = new Date(conversation.happenedAt);
+    const dayStart = new Date(convoDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(convoDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const eventsList = await db
+      .select()
+      .from(events)
+      .where(
+        and(
+          eq(events.userId, userId),
+          sql`${events.startAt} >= ${dayStart}`,
+          sql`${events.startAt} <= ${dayEnd}`
+        )
+      )
+      .orderBy(desc(events.startAt));
+
+    const eventIds = eventsList.map((e) => e.id);
+
+    const participantsData =
+      eventIds.length > 0
+        ? await db
+            .select()
+            .from(eventParticipants)
+            .innerJoin(contacts, eq(eventParticipants.contactId, contacts.id))
+            .where(inArray(eventParticipants.eventId, eventIds))
+        : [];
+
+    const enrichedEvents = eventsList.map((evt) => ({
+      ...evt,
+      participants: participantsData
+        .filter((p: any) => p.event_participants.eventId === evt.id)
+        .map((p: any) => ({
+          ...p.event_participants,
+          contact: p.contacts,
+        })),
+    }));
+
+    return c.json({
+      events: enrichedEvents,
+    });
+  } catch (error) {
+    console.error("Error fetching linkable events:", error);
+    return c.json({ error: "Failed to fetch linkable events" }, 500);
   }
 });
 

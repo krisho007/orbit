@@ -304,6 +304,11 @@ export const conversationsApi = {
   update: (id: string, data: Partial<CreateConversationData>) =>
     api.put<Conversation>(`/api/conversations/${id}`, data),
 
+  listLinkableEvents: (id: string) =>
+    api.get<{
+      events: Event[];
+    }>(`/api/conversations/${id}/linkable-events`),
+
   delete: (id: string) => api.delete(`/api/conversations/${id}`),
 };
 

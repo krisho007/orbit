@@ -213,24 +213,58 @@ export default function NewReminderScreen() {
         <View className="mb-4">
           <Text className="text-typography-700 text-sm font-body-medium mb-2">Due At *</Text>
           <View className="flex-row">
-            <Pressable
-              onPress={() => setShowDueDatePicker(true)}
-              className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
-            >
-              <Text className="text-typography-900 text-base">
-                {format(dueDate, "MMM d, yyyy")}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setShowDueTimePicker(true)}
-              className="px-4 py-3 bg-background-50 rounded-lg border border-border-200"
-            >
-              <Text className="text-typography-900 text-base">
-                {format(dueDate, "HH:mm")}
-              </Text>
-            </Pressable>
+            {Platform.OS === "web" ? (
+              <TextInput
+                // @ts-ignore - web only
+                type="date"
+                value={format(dueDate, "yyyy-MM-dd")}
+                onChangeText={(text) => {
+                  if (text) {
+                    const [year, month, day] = text.split("-").map(Number);
+                    const d = new Date(dueDate);
+                    d.setFullYear(year, month - 1, day);
+                    if (!isNaN(d.getTime())) setDueDate(new Date(d));
+                  }
+                }}
+                className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200 text-typography-900 text-base"
+              />
+            ) : (
+              <Pressable
+                onPress={() => setShowDueDatePicker(true)}
+                className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+              >
+                <Text className="text-typography-900 text-base">
+                  {format(dueDate, "MMM d, yyyy")}
+                </Text>
+              </Pressable>
+            )}
+            {Platform.OS === "web" ? (
+              <TextInput
+                // @ts-ignore - web only
+                type="time"
+                value={format(dueDate, "HH:mm")}
+                onChangeText={(text) => {
+                  if (text) {
+                    const [hours, minutes] = text.split(":").map(Number);
+                    const d = new Date(dueDate);
+                    d.setHours(hours, minutes);
+                    if (!isNaN(d.getTime())) setDueDate(new Date(d));
+                  }
+                }}
+                className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 text-typography-900 text-base"
+              />
+            ) : (
+              <Pressable
+                onPress={() => setShowDueTimePicker(true)}
+                className="px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+              >
+                <Text className="text-typography-900 text-base">
+                  {format(dueDate, "HH:mm")}
+                </Text>
+              </Pressable>
+            )}
           </View>
-          {showDueDatePicker && (
+          {Platform.OS !== "web" && showDueDatePicker && (
             <DateTimePicker
               value={dueDate}
               mode="date"
@@ -238,7 +272,7 @@ export default function NewReminderScreen() {
               onChange={onDueDateChange}
             />
           )}
-          {showDueTimePicker && (
+          {Platform.OS !== "web" && showDueTimePicker && (
             <DateTimePicker
               value={dueDate}
               mode="time"
@@ -325,22 +359,56 @@ export default function NewReminderScreen() {
               <Text className="text-typography-700 text-sm font-body-medium mb-2">Repeat Until</Text>
               {recurrenceEndsAt ? (
                 <View className="flex-row items-center">
-                  <Pressable
-                    onPress={() => setShowRecEndDatePicker(true)}
-                    className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
-                  >
-                    <Text className="text-typography-900 text-base">
-                      {format(recurrenceEndsAt, "MMM d, yyyy")}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setShowRecEndTimePicker(true)}
-                    className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 mr-2"
-                  >
-                    <Text className="text-typography-900 text-base">
-                      {format(recurrenceEndsAt, "HH:mm")}
-                    </Text>
-                  </Pressable>
+                  {Platform.OS === "web" ? (
+                    <TextInput
+                      // @ts-ignore - web only
+                      type="date"
+                      value={format(recurrenceEndsAt, "yyyy-MM-dd")}
+                      onChangeText={(text) => {
+                        if (text) {
+                          const [year, month, day] = text.split("-").map(Number);
+                          const d = new Date(recurrenceEndsAt);
+                          d.setFullYear(year, month - 1, day);
+                          if (!isNaN(d.getTime())) setRecurrenceEndsAt(new Date(d));
+                        }
+                      }}
+                      className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200 text-typography-900 text-base"
+                    />
+                  ) : (
+                    <Pressable
+                      onPress={() => setShowRecEndDatePicker(true)}
+                      className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+                    >
+                      <Text className="text-typography-900 text-base">
+                        {format(recurrenceEndsAt, "MMM d, yyyy")}
+                      </Text>
+                    </Pressable>
+                  )}
+                  {Platform.OS === "web" ? (
+                    <TextInput
+                      // @ts-ignore - web only
+                      type="time"
+                      value={format(recurrenceEndsAt, "HH:mm")}
+                      onChangeText={(text) => {
+                        if (text) {
+                          const [hours, minutes] = text.split(":").map(Number);
+                          const d = new Date(recurrenceEndsAt);
+                          d.setHours(hours, minutes);
+                          if (!isNaN(d.getTime())) setRecurrenceEndsAt(new Date(d));
+                        }
+                      }}
+                      className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 mr-2 text-typography-900 text-base"
+                    />
+                  ) : (
+                    <Pressable
+                      onPress={() => setShowRecEndTimePicker(true)}
+                      className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 mr-2"
+                    >
+                      <Text className="text-typography-900 text-base">
+                        {format(recurrenceEndsAt, "HH:mm")}
+                      </Text>
+                    </Pressable>
+                  )}
                   <Pressable onPress={() => setRecurrenceEndsAt(null)} className="p-2">
                     <Text className="text-error-600 text-sm font-body-medium">Clear</Text>
                   </Pressable>
@@ -349,14 +417,14 @@ export default function NewReminderScreen() {
                 <Pressable
                   onPress={() => {
                     setRecurrenceEndsAt(new Date(dueDate.getTime() + 30 * 24 * 60 * 60 * 1000));
-                    setShowRecEndDatePicker(true);
+                    if (Platform.OS !== "web") setShowRecEndDatePicker(true);
                   }}
                   className="px-4 py-3 bg-background-50 rounded-lg border border-border-200"
                 >
                   <Text className="text-typography-500 text-base">Set end date (optional)</Text>
                 </Pressable>
               )}
-              {showRecEndDatePicker && recurrenceEndsAt && (
+              {Platform.OS !== "web" && showRecEndDatePicker && recurrenceEndsAt && (
                 <DateTimePicker
                   value={recurrenceEndsAt}
                   mode="date"
@@ -364,7 +432,7 @@ export default function NewReminderScreen() {
                   onChange={onRecEndDateChange}
                 />
               )}
-              {showRecEndTimePicker && recurrenceEndsAt && (
+              {Platform.OS !== "web" && showRecEndTimePicker && recurrenceEndsAt && (
                 <DateTimePicker
                   value={recurrenceEndsAt}
                   mode="time"

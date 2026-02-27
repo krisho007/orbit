@@ -7,10 +7,13 @@ import {
   Pressable,
   Alert,
   ActivityIndicator,
+  Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { format } from "date-fns";
+import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import {
   conversationsApi,
   Conversation,
@@ -29,20 +32,6 @@ const MEDIUM_OPTIONS: { value: ConversationMedium; label: string }[] = [
   { value: "OTHER", label: "Other" },
 ];
 
-function formatDateInput(value?: string | null): string {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return format(date, "yyyy-MM-dd HH:mm");
-}
-
-function parseDateInput(value: string): string | null {
-  const normalized = value.trim().replace(" ", "T");
-  const date = new Date(normalized);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString();
-}
-
 export default function EditConversationScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -51,11 +40,17 @@ export default function EditConversationScreen() {
   const updateConversation = useUpdateConversation();
   const [isLoading, setIsLoading] = useState(true);
   const [conversation, setConversation] = useState<Conversation | null>(null);
+
+  const [happenedAt, setHappenedAt] = useState(new Date());
+  const [showHappenedAtDatePicker, setShowHappenedAtDatePicker] = useState(false);
+  const [showHappenedAtTimePicker, setShowHappenedAtTimePicker] = useState(false);
+  const [followUpAt, setFollowUpAt] = useState<Date | null>(null);
+  const [showFollowUpAtDatePicker, setShowFollowUpAtDatePicker] = useState(false);
+  const [showFollowUpAtTimePicker, setShowFollowUpAtTimePicker] = useState(false);
+
   const [formData, setFormData] = useState({
     content: "",
     medium: "OTHER" as ConversationMedium,
-    happenedAt: "",
-    followUpAt: "",
     eventId: "",
   });
 
@@ -71,10 +66,16 @@ export default function EditConversationScreen() {
       setFormData({
         content: data.content || "",
         medium: data.medium,
-        happenedAt: formatDateInput(data.happenedAt),
-        followUpAt: formatDateInput(data.followUpAt),
         eventId: data.event?.id || data.eventId || "",
       });
+      if (data.happenedAt) {
+        const d = new Date(data.happenedAt);
+        if (!isNaN(d.getTime())) setHappenedAt(d);
+      }
+      if (data.followUpAt) {
+        const d = new Date(data.followUpAt);
+        if (!isNaN(d.getTime())) setFollowUpAt(d);
+      }
     } catch (error) {
       console.error("Failed to load conversation:", error);
       Alert.alert("Error", "Failed to load conversation");
@@ -84,29 +85,35 @@ export default function EditConversationScreen() {
     }
   };
 
+  const onHappenedAtDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setShowHappenedAtDatePicker(false);
+    if (selected) setHappenedAt(selected);
+  };
+
+  const onHappenedAtTimeChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setShowHappenedAtTimePicker(false);
+    if (selected) setHappenedAt(selected);
+  };
+
+  const onFollowUpAtDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setShowFollowUpAtDatePicker(false);
+    if (selected) setFollowUpAt(selected);
+  };
+
+  const onFollowUpAtTimeChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setShowFollowUpAtTimePicker(false);
+    if (selected) setFollowUpAt(selected);
+  };
+
   const handleSubmit = async () => {
-    const happenedAt = parseDateInput(formData.happenedAt);
-    if (!happenedAt) {
-      Alert.alert("Error", "Enter a valid happened-at date/time");
-      return;
-    }
-
-    const followUpAtParsed = formData.followUpAt.trim()
-      ? parseDateInput(formData.followUpAt)
-      : undefined;
-    if (formData.followUpAt.trim() && !followUpAtParsed) {
-      Alert.alert("Error", "Enter a valid follow-up date/time");
-      return;
-    }
-
     try {
       await updateConversation.mutateAsync({
         id,
         data: {
           content: formData.content.trim(),
           medium: formData.medium,
-          happenedAt,
-          followUpAt: followUpAtParsed || undefined,
+          happenedAt: happenedAt.toISOString(),
+          followUpAt: followUpAt?.toISOString() || undefined,
           eventId: formData.eventId.trim() || undefined,
         },
       });
@@ -145,7 +152,11 @@ export default function EditConversationScreen() {
         </Pressable>
       </View>
 
-      <ScrollView className="flex-1 px-4 py-6">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        className="flex-1"
+      >
+      <ScrollView className="flex-1 px-4 py-6" keyboardShouldPersistTaps="handled">
         <View className="mb-4">
           <Text className="text-typography-700 text-sm font-body-medium mb-2">Medium</Text>
           <View className="flex-row flex-wrap">
@@ -176,24 +187,161 @@ export default function EditConversationScreen() {
 
         <View className="mb-4">
           <Text className="text-typography-700 text-sm font-body-medium mb-2">Happened At *</Text>
-          <TextInput
-            className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
-            placeholder="YYYY-MM-DD HH:mm"
-            placeholderTextColor={placeholderColor}
-            value={formData.happenedAt}
-            onChangeText={(text) => setFormData({ ...formData, happenedAt: text })}
-          />
+          <View className="flex-row">
+            {Platform.OS === "web" ? (
+              <TextInput
+                // @ts-ignore - web only
+                type="date"
+                value={format(happenedAt, "yyyy-MM-dd")}
+                onChangeText={(text) => {
+                  if (text) {
+                    const [year, month, day] = text.split("-").map(Number);
+                    const d = new Date(happenedAt);
+                    d.setFullYear(year, month - 1, day);
+                    if (!isNaN(d.getTime())) setHappenedAt(new Date(d));
+                  }
+                }}
+                className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200 text-typography-900 text-base"
+              />
+            ) : (
+              <Pressable
+                onPress={() => setShowHappenedAtDatePicker(true)}
+                className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+              >
+                <Text className="text-typography-900 text-base">
+                  {format(happenedAt, "MMM d, yyyy")}
+                </Text>
+              </Pressable>
+            )}
+            {Platform.OS === "web" ? (
+              <TextInput
+                // @ts-ignore - web only
+                type="time"
+                value={format(happenedAt, "HH:mm")}
+                onChangeText={(text) => {
+                  if (text) {
+                    const [hours, minutes] = text.split(":").map(Number);
+                    const d = new Date(happenedAt);
+                    d.setHours(hours, minutes);
+                    if (!isNaN(d.getTime())) setHappenedAt(new Date(d));
+                  }
+                }}
+                className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 text-typography-900 text-base"
+              />
+            ) : (
+              <Pressable
+                onPress={() => setShowHappenedAtTimePicker(true)}
+                className="px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+              >
+                <Text className="text-typography-900 text-base">
+                  {format(happenedAt, "HH:mm")}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+          {Platform.OS !== "web" && showHappenedAtDatePicker && (
+            <DateTimePicker
+              value={happenedAt}
+              mode="date"
+              display={Platform.OS === "ios" ? "inline" : "default"}
+              onChange={onHappenedAtDateChange}
+            />
+          )}
+          {Platform.OS !== "web" && showHappenedAtTimePicker && (
+            <DateTimePicker
+              value={happenedAt}
+              mode="time"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={onHappenedAtTimeChange}
+            />
+          )}
         </View>
 
         <View className="mb-4">
           <Text className="text-typography-700 text-sm font-body-medium mb-2">Follow-up At</Text>
-          <TextInput
-            className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
-            placeholder="YYYY-MM-DD HH:mm"
-            placeholderTextColor={placeholderColor}
-            value={formData.followUpAt}
-            onChangeText={(text) => setFormData({ ...formData, followUpAt: text })}
-          />
+          {followUpAt ? (
+            <View className="flex-row items-center">
+              {Platform.OS === "web" ? (
+                <TextInput
+                  // @ts-ignore - web only
+                  type="date"
+                  value={format(followUpAt, "yyyy-MM-dd")}
+                  onChangeText={(text) => {
+                    if (text) {
+                      const [year, month, day] = text.split("-").map(Number);
+                      const d = new Date(followUpAt);
+                      d.setFullYear(year, month - 1, day);
+                      if (!isNaN(d.getTime())) setFollowUpAt(new Date(d));
+                    }
+                  }}
+                  className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200 text-typography-900 text-base"
+                />
+              ) : (
+                <Pressable
+                  onPress={() => setShowFollowUpAtDatePicker(true)}
+                  className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+                >
+                  <Text className="text-typography-900 text-base">
+                    {format(followUpAt, "MMM d, yyyy")}
+                  </Text>
+                </Pressable>
+              )}
+              {Platform.OS === "web" ? (
+                <TextInput
+                  // @ts-ignore - web only
+                  type="time"
+                  value={format(followUpAt, "HH:mm")}
+                  onChangeText={(text) => {
+                    if (text) {
+                      const [hours, minutes] = text.split(":").map(Number);
+                      const d = new Date(followUpAt);
+                      d.setHours(hours, minutes);
+                      if (!isNaN(d.getTime())) setFollowUpAt(new Date(d));
+                    }
+                  }}
+                  className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 mr-2 text-typography-900 text-base"
+                />
+              ) : (
+                <Pressable
+                  onPress={() => setShowFollowUpAtTimePicker(true)}
+                  className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 mr-2"
+                >
+                  <Text className="text-typography-900 text-base">
+                    {format(followUpAt, "HH:mm")}
+                  </Text>
+                </Pressable>
+              )}
+              <Pressable onPress={() => setFollowUpAt(null)} className="p-2">
+                <Text className="text-error-600 text-sm font-body-medium">Clear</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => {
+                setFollowUpAt(new Date(happenedAt.getTime() + 24 * 60 * 60 * 1000));
+                if (Platform.OS !== "web") setShowFollowUpAtDatePicker(true);
+              }}
+              className="px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+            >
+              <Text className="text-typography-500 text-base">Set follow-up date (optional)</Text>
+            </Pressable>
+          )}
+          {Platform.OS !== "web" && showFollowUpAtDatePicker && followUpAt && (
+            <DateTimePicker
+              value={followUpAt}
+              mode="date"
+              display={Platform.OS === "ios" ? "inline" : "default"}
+              onChange={onFollowUpAtDateChange}
+            />
+          )}
+          {Platform.OS !== "web" && showFollowUpAtTimePicker && followUpAt && (
+            <DateTimePicker
+              value={followUpAt}
+              mode="time"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={onFollowUpAtTimeChange}
+            />
+          )}
         </View>
 
         <View className="mb-4">
@@ -231,6 +379,7 @@ export default function EditConversationScreen() {
           </View>
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

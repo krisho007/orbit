@@ -7,10 +7,13 @@ import {
   Pressable,
   Alert,
   ActivityIndicator,
+  Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { format } from "date-fns";
+import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { eventsApi, Event, EventType } from "../../../lib/api";
 import { getThemeColor, useThemeColors } from "../../../lib/theme";
 import { useUpdateEvent } from "../../../hooks/use-events";
@@ -27,20 +30,6 @@ const EVENT_TYPE_OPTIONS: { value: EventType; label: string }[] = [
   { value: "OTHER", label: "Other" },
 ];
 
-function formatDateInput(value?: string | null): string {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return format(date, "yyyy-MM-dd HH:mm");
-}
-
-function parseDateInput(value: string): string | null {
-  const normalized = value.trim().replace(" ", "T");
-  const date = new Date(normalized);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString();
-}
-
 export default function EditEventScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -49,12 +38,18 @@ export default function EditEventScreen() {
   const updateEvent = useUpdateEvent();
   const [isLoading, setIsLoading] = useState(true);
   const [event, setEvent] = useState<Event | null>(null);
+
+  const [startAt, setStartAt] = useState(new Date());
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [endAt, setEndAt] = useState<Date | null>(null);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     eventType: "OTHER" as EventType,
-    startAt: "",
-    endAt: "",
     location: "",
   });
 
@@ -71,10 +66,16 @@ export default function EditEventScreen() {
         title: data.title || "",
         description: data.description || "",
         eventType: data.eventType,
-        startAt: formatDateInput(data.startAt),
-        endAt: formatDateInput(data.endAt),
         location: data.location || "",
       });
+      if (data.startAt) {
+        const d = new Date(data.startAt);
+        if (!isNaN(d.getTime())) setStartAt(d);
+      }
+      if (data.endAt) {
+        const d = new Date(data.endAt);
+        if (!isNaN(d.getTime())) setEndAt(d);
+      }
     } catch (error) {
       console.error("Failed to load event:", error);
       Alert.alert("Error", "Failed to load event");
@@ -84,21 +85,29 @@ export default function EditEventScreen() {
     }
   };
 
+  const onStartDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setShowStartDatePicker(false);
+    if (selected) setStartAt(selected);
+  };
+
+  const onStartTimeChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setShowStartTimePicker(false);
+    if (selected) setStartAt(selected);
+  };
+
+  const onEndDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setShowEndDatePicker(false);
+    if (selected) setEndAt(selected);
+  };
+
+  const onEndTimeChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setShowEndTimePicker(false);
+    if (selected) setEndAt(selected);
+  };
+
   const handleSubmit = async () => {
     if (!formData.title.trim()) {
       Alert.alert("Error", "Title is required");
-      return;
-    }
-
-    const startAt = parseDateInput(formData.startAt);
-    if (!startAt) {
-      Alert.alert("Error", "Enter a valid start date/time");
-      return;
-    }
-
-    const endAtParsed = formData.endAt.trim() ? parseDateInput(formData.endAt) : undefined;
-    if (formData.endAt.trim() && !endAtParsed) {
-      Alert.alert("Error", "Enter a valid end date/time");
       return;
     }
 
@@ -109,8 +118,8 @@ export default function EditEventScreen() {
           title: formData.title.trim(),
           description: formData.description.trim(),
           eventType: formData.eventType,
-          startAt,
-          endAt: endAtParsed || undefined,
+          startAt: startAt.toISOString(),
+          endAt: endAt?.toISOString() || undefined,
           location: formData.location.trim() || undefined,
         },
       });
@@ -149,7 +158,11 @@ export default function EditEventScreen() {
         </Pressable>
       </View>
 
-      <ScrollView className="flex-1 px-4 py-6">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        className="flex-1"
+      >
+      <ScrollView className="flex-1 px-4 py-6" keyboardShouldPersistTaps="handled">
         <View className="mb-4">
           <Text className="text-typography-700 text-sm font-body-medium mb-2">Title *</Text>
           <TextInput
@@ -190,25 +203,162 @@ export default function EditEventScreen() {
         </View>
 
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-body-medium mb-2">Start At *</Text>
-          <TextInput
-            className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
-            placeholder="YYYY-MM-DD HH:mm"
-            placeholderTextColor={placeholderColor}
-            value={formData.startAt}
-            onChangeText={(text) => setFormData({ ...formData, startAt: text })}
-          />
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">Start *</Text>
+          <View className="flex-row">
+            {Platform.OS === "web" ? (
+              <TextInput
+                // @ts-ignore - web only
+                type="date"
+                value={format(startAt, "yyyy-MM-dd")}
+                onChangeText={(text) => {
+                  if (text) {
+                    const [year, month, day] = text.split("-").map(Number);
+                    const d = new Date(startAt);
+                    d.setFullYear(year, month - 1, day);
+                    if (!isNaN(d.getTime())) setStartAt(new Date(d));
+                  }
+                }}
+                className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200 text-typography-900 text-base"
+              />
+            ) : (
+              <Pressable
+                onPress={() => setShowStartDatePicker(true)}
+                className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+              >
+                <Text className="text-typography-900 text-base">
+                  {format(startAt, "MMM d, yyyy")}
+                </Text>
+              </Pressable>
+            )}
+            {Platform.OS === "web" ? (
+              <TextInput
+                // @ts-ignore - web only
+                type="time"
+                value={format(startAt, "HH:mm")}
+                onChangeText={(text) => {
+                  if (text) {
+                    const [hours, minutes] = text.split(":").map(Number);
+                    const d = new Date(startAt);
+                    d.setHours(hours, minutes);
+                    if (!isNaN(d.getTime())) setStartAt(new Date(d));
+                  }
+                }}
+                className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 text-typography-900 text-base"
+              />
+            ) : (
+              <Pressable
+                onPress={() => setShowStartTimePicker(true)}
+                className="px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+              >
+                <Text className="text-typography-900 text-base">
+                  {format(startAt, "HH:mm")}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+          {Platform.OS !== "web" && showStartDatePicker && (
+            <DateTimePicker
+              value={startAt}
+              mode="date"
+              display={Platform.OS === "ios" ? "inline" : "default"}
+              onChange={onStartDateChange}
+            />
+          )}
+          {Platform.OS !== "web" && showStartTimePicker && (
+            <DateTimePicker
+              value={startAt}
+              mode="time"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={onStartTimeChange}
+            />
+          )}
         </View>
 
         <View className="mb-4">
-          <Text className="text-typography-700 text-sm font-body-medium mb-2">End At</Text>
-          <TextInput
-            className="px-4 py-3 bg-background-50 rounded-lg text-typography-900 text-base border border-border-200"
-            placeholder="YYYY-MM-DD HH:mm"
-            placeholderTextColor={placeholderColor}
-            value={formData.endAt}
-            onChangeText={(text) => setFormData({ ...formData, endAt: text })}
-          />
+          <Text className="text-typography-700 text-sm font-body-medium mb-2">End</Text>
+          {endAt ? (
+            <View className="flex-row items-center">
+              {Platform.OS === "web" ? (
+                <TextInput
+                  // @ts-ignore - web only
+                  type="date"
+                  value={format(endAt, "yyyy-MM-dd")}
+                  onChangeText={(text) => {
+                    if (text) {
+                      const [year, month, day] = text.split("-").map(Number);
+                      const d = new Date(endAt);
+                      d.setFullYear(year, month - 1, day);
+                      if (!isNaN(d.getTime())) setEndAt(new Date(d));
+                    }
+                  }}
+                  className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200 text-typography-900 text-base"
+                />
+              ) : (
+                <Pressable
+                  onPress={() => setShowEndDatePicker(true)}
+                  className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+                >
+                  <Text className="text-typography-900 text-base">
+                    {format(endAt, "MMM d, yyyy")}
+                  </Text>
+                </Pressable>
+              )}
+              {Platform.OS === "web" ? (
+                <TextInput
+                  // @ts-ignore - web only
+                  type="time"
+                  value={format(endAt, "HH:mm")}
+                  onChangeText={(text) => {
+                    if (text) {
+                      const [hours, minutes] = text.split(":").map(Number);
+                      const d = new Date(endAt);
+                      d.setHours(hours, minutes);
+                      if (!isNaN(d.getTime())) setEndAt(new Date(d));
+                    }
+                  }}
+                  className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 mr-2 text-typography-900 text-base"
+                />
+              ) : (
+                <Pressable
+                  onPress={() => setShowEndTimePicker(true)}
+                  className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 mr-2"
+                >
+                  <Text className="text-typography-900 text-base">
+                    {format(endAt, "HH:mm")}
+                  </Text>
+                </Pressable>
+              )}
+              <Pressable onPress={() => setEndAt(null)} className="p-2">
+                <Text className="text-error-600 text-sm font-body-medium">Clear</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => {
+                setEndAt(new Date(startAt.getTime() + 60 * 60 * 1000));
+                if (Platform.OS !== "web") setShowEndDatePicker(true);
+              }}
+              className="px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+            >
+              <Text className="text-typography-500 text-base">Set end time (optional)</Text>
+            </Pressable>
+          )}
+          {Platform.OS !== "web" && showEndDatePicker && endAt && (
+            <DateTimePicker
+              value={endAt}
+              mode="date"
+              display={Platform.OS === "ios" ? "inline" : "default"}
+              onChange={onEndDateChange}
+            />
+          )}
+          {Platform.OS !== "web" && showEndTimePicker && endAt && (
+            <DateTimePicker
+              value={endAt}
+              mode="time"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={onEndTimeChange}
+            />
+          )}
         </View>
 
         <View className="mb-4">
@@ -245,6 +395,7 @@ export default function EditEventScreen() {
           </View>
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

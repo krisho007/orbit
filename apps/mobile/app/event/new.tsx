@@ -12,8 +12,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { format } from "date-fns";
-import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import {
   Contact,
   EventType,
@@ -21,6 +19,7 @@ import {
 } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
 import { useCreateEvent } from "../../hooks/use-events";
+import { DateField, TimeField } from "../../components/date-time-field";
 
 const EVENT_TYPE_OPTIONS: { value: EventType; label: string }[] = [
   { value: "MEETING", label: "Meeting" },
@@ -46,11 +45,7 @@ export default function NewEventScreen() {
   const [selectedParticipants, setSelectedParticipants] = useState<Contact[]>([]);
 
   const [startAt, setStartAt] = useState(new Date(Date.now() + 60 * 60 * 1000));
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [endAt, setEndAt] = useState<Date | null>(null);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -130,26 +125,6 @@ export default function NewEventScreen() {
 
   const removeParticipant = (contactId: string) => {
     setSelectedParticipants((prev) => prev.filter((p) => p.id !== contactId));
-  };
-
-  const onStartDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
-    if (Platform.OS === "android") setShowStartDatePicker(false);
-    if (selected) setStartAt(selected);
-  };
-
-  const onStartTimeChange = (_event: DateTimePickerEvent, selected?: Date) => {
-    if (Platform.OS === "android") setShowStartTimePicker(false);
-    if (selected) setStartAt(selected);
-  };
-
-  const onEndDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
-    if (Platform.OS === "android") setShowEndDatePicker(false);
-    if (selected) setEndAt(selected);
-  };
-
-  const onEndTimeChange = (_event: DateTimePickerEvent, selected?: Date) => {
-    if (Platform.OS === "android") setShowEndTimePicker(false);
-    if (selected) setEndAt(selected);
   };
 
   const handleSubmit = async () => {
@@ -240,159 +215,29 @@ export default function NewEventScreen() {
         <View className="mb-4">
           <Text className="text-typography-700 text-sm font-body-medium mb-2">Start *</Text>
           <View className="flex-row">
-            {Platform.OS === "web" ? (
-              <TextInput
-                // @ts-ignore - web only
-                type="date"
-                value={format(startAt, "yyyy-MM-dd")}
-                onChangeText={(text) => {
-                  if (text) {
-                    const [year, month, day] = text.split("-").map(Number);
-                    const d = new Date(startAt);
-                    d.setFullYear(year, month - 1, day);
-                    if (!isNaN(d.getTime())) setStartAt(new Date(d));
-                  }
-                }}
-                className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200 text-typography-900 text-base"
-              />
-            ) : (
-              <Pressable
-                onPress={() => setShowStartDatePicker(true)}
-                className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
-              >
-                <Text className="text-typography-900 text-base">
-                  {format(startAt, "MMM d, yyyy")}
-                </Text>
-              </Pressable>
-            )}
-            {Platform.OS === "web" ? (
-              <TextInput
-                // @ts-ignore - web only
-                type="time"
-                value={format(startAt, "HH:mm")}
-                onChangeText={(text) => {
-                  if (text) {
-                    const [hours, minutes] = text.split(":").map(Number);
-                    const d = new Date(startAt);
-                    d.setHours(hours, minutes);
-                    if (!isNaN(d.getTime())) setStartAt(new Date(d));
-                  }
-                }}
-                className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 text-typography-900 text-base"
-              />
-            ) : (
-              <Pressable
-                onPress={() => setShowStartTimePicker(true)}
-                className="px-4 py-3 bg-background-50 rounded-lg border border-border-200"
-              >
-                <Text className="text-typography-900 text-base">
-                  {format(startAt, "HH:mm")}
-                </Text>
-              </Pressable>
-            )}
+            <DateField value={startAt} onChange={setStartAt} grow />
+            <TimeField value={startAt} onChange={setStartAt} />
           </View>
-          {Platform.OS !== "web" && showStartDatePicker && (
-            <DateTimePicker
-              value={startAt}
-              mode="date"
-              display={Platform.OS === "ios" ? "inline" : "default"}
-              onChange={onStartDateChange}
-            />
-          )}
-          {Platform.OS !== "web" && showStartTimePicker && (
-            <DateTimePicker
-              value={startAt}
-              mode="time"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={onStartTimeChange}
-            />
-          )}
         </View>
 
         <View className="mb-4">
           <Text className="text-typography-700 text-sm font-body-medium mb-2">End</Text>
           {endAt ? (
             <View className="flex-row items-center">
-              {Platform.OS === "web" ? (
-                <TextInput
-                  // @ts-ignore - web only
-                  type="date"
-                  value={format(endAt, "yyyy-MM-dd")}
-                  onChangeText={(text) => {
-                    if (text) {
-                      const [year, month, day] = text.split("-").map(Number);
-                      const d = new Date(endAt);
-                      d.setFullYear(year, month - 1, day);
-                      if (!isNaN(d.getTime())) setEndAt(new Date(d));
-                    }
-                  }}
-                  className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200 text-typography-900 text-base"
-                />
-              ) : (
-                <Pressable
-                  onPress={() => setShowEndDatePicker(true)}
-                  className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
-                >
-                  <Text className="text-typography-900 text-base">
-                    {format(endAt, "MMM d, yyyy")}
-                  </Text>
-                </Pressable>
-              )}
-              {Platform.OS === "web" ? (
-                <TextInput
-                  // @ts-ignore - web only
-                  type="time"
-                  value={format(endAt, "HH:mm")}
-                  onChangeText={(text) => {
-                    if (text) {
-                      const [hours, minutes] = text.split(":").map(Number);
-                      const d = new Date(endAt);
-                      d.setHours(hours, minutes);
-                      if (!isNaN(d.getTime())) setEndAt(new Date(d));
-                    }
-                  }}
-                  className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 mr-2 text-typography-900 text-base"
-                />
-              ) : (
-                <Pressable
-                  onPress={() => setShowEndTimePicker(true)}
-                  className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 mr-2"
-                >
-                  <Text className="text-typography-900 text-base">
-                    {format(endAt, "HH:mm")}
-                  </Text>
-                </Pressable>
-              )}
-              <Pressable onPress={() => setEndAt(null)} className="p-2">
+              <DateField value={endAt} onChange={setEndAt} grow />
+              <View className="mx-2" />
+              <TimeField value={endAt} onChange={setEndAt} />
+              <Pressable onPress={() => setEndAt(null)} className="p-2 ml-2">
                 <Text className="text-error-600 text-sm font-body-medium">Clear</Text>
               </Pressable>
             </View>
           ) : (
             <Pressable
-              onPress={() => {
-                setEndAt(new Date(startAt.getTime() + 60 * 60 * 1000));
-                if (Platform.OS !== "web") setShowEndDatePicker(true);
-              }}
+              onPress={() => setEndAt(new Date(startAt.getTime() + 60 * 60 * 1000))}
               className="px-4 py-3 bg-background-50 rounded-lg border border-border-200"
             >
               <Text className="text-typography-500 text-base">Set end time (optional)</Text>
             </Pressable>
-          )}
-          {Platform.OS !== "web" && showEndDatePicker && endAt && (
-            <DateTimePicker
-              value={endAt}
-              mode="date"
-              display={Platform.OS === "ios" ? "inline" : "default"}
-              onChange={onEndDateChange}
-            />
-          )}
-          {Platform.OS !== "web" && showEndTimePicker && endAt && (
-            <DateTimePicker
-              value={endAt}
-              mode="time"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={onEndTimeChange}
-            />
           )}
         </View>
 

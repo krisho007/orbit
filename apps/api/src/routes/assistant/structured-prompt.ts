@@ -52,6 +52,7 @@ function loadSeedExamples(): SeedExample[] {
  *  1 - create_contact (simple)
  *  2 - search_conversation (contact resolve_target + display results, "conversations with Bob")
  *  3 - create_reminder (with relative time)
+ *  4 - create_event (standalone, single participant)
  *  5 - unknown / greeting
  *  6 - edit_contact (update field)
  * 10 - search_event (display results, "upcoming events")
@@ -63,7 +64,7 @@ function loadSeedExamples(): SeedExample[] {
  * 21 - search_conversation (display results, "latest conversations" without name)
  * 22 - search_conversation (contact resolve_target + display results, "conversations with Vikram")
  */
-const SELECTED_INDICES = [0, 1, 2, 3, 5, 6, 10, 14, 15, 16, 18, 20, 21, 22];
+const SELECTED_INDICES = [0, 1, 2, 3, 4, 5, 6, 10, 14, 15, 16, 18, 20, 21, 22];
 
 function selectExamples(all: SeedExample[]): SeedExample[] {
   return SELECTED_INDICES.filter((i) => i < all.length).map((i) => all[i]!);
@@ -98,7 +99,11 @@ SearchInstruction:
 ActionInstruction:
 - operation: create | update | complete
 - entity_type: contact | conversation | event | reminder | relationship
-- params: { field-specific parameters }
+- params: field-specific params (use camelCase keys):
+    contact:      displayName, primaryPhone, primaryEmail, company, jobTitle, location, dateOfBirth, gender, notes
+    conversation: medium (required), content, happenedAt, followUpAt
+    event:        title (required), startAt (required), endAt, location, description, eventType (required)
+    reminder:     title (required), dueAt (required), notes, status
 - participant_refs: ["s1.best_match"] (optional — for linking to search results)
 - target_ref: "s1.best_match" (optional — for updates/completions)
 `.trim();

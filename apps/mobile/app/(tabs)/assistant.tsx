@@ -1146,6 +1146,7 @@ export default function AssistantScreen() {
         dueAt: "Due",
         participants: "With",
         participantNames: "With",
+        description: "Description",
       };
 
       const ENTITY_TYPE_LABELS: Record<string, string> = {

@@ -19,6 +19,7 @@ import { executeSearches } from "./search-executor";
 import { executeActions } from "./action-executor";
 import type { ActionResult } from "./action-executor";
 import { formatToday } from "./types";
+import { resolveParamsTime } from "./time-resolver";
 import { extractLastUserText } from "./error-helpers";
 import { eq, and, desc } from "drizzle-orm";
 import { db, assistantMessages } from "../../db";
@@ -221,8 +222,8 @@ export async function processMessageFinetuned(
     let ui: AssistantUi | null = null;
     if (allActions.length > 0) {
       const firstAction = allActions[0]!;
-      // Enrich details with resolved display names
-      const details = { ...firstAction.params } as Record<string, unknown>;
+      // Enrich details with resolved display names and resolved time tokens
+      const details = resolveParamsTime(firstAction.params, tz) as Record<string, unknown>;
       if (firstAction.participant_refs && firstAction.participant_refs.length > 0) {
         const participantNames = firstAction.participant_refs
           .map((ref) => {

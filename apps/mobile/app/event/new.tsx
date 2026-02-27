@@ -240,24 +240,58 @@ export default function NewEventScreen() {
         <View className="mb-4">
           <Text className="text-typography-700 text-sm font-body-medium mb-2">Start *</Text>
           <View className="flex-row">
-            <Pressable
-              onPress={() => setShowStartDatePicker(true)}
-              className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
-            >
-              <Text className="text-typography-900 text-base">
-                {format(startAt, "MMM d, yyyy")}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setShowStartTimePicker(true)}
-              className="px-4 py-3 bg-background-50 rounded-lg border border-border-200"
-            >
-              <Text className="text-typography-900 text-base">
-                {format(startAt, "HH:mm")}
-              </Text>
-            </Pressable>
+            {Platform.OS === "web" ? (
+              <TextInput
+                // @ts-ignore - web only
+                type="date"
+                value={format(startAt, "yyyy-MM-dd")}
+                onChangeText={(text) => {
+                  if (text) {
+                    const [year, month, day] = text.split("-").map(Number);
+                    const d = new Date(startAt);
+                    d.setFullYear(year, month - 1, day);
+                    if (!isNaN(d.getTime())) setStartAt(new Date(d));
+                  }
+                }}
+                className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200 text-typography-900 text-base"
+              />
+            ) : (
+              <Pressable
+                onPress={() => setShowStartDatePicker(true)}
+                className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+              >
+                <Text className="text-typography-900 text-base">
+                  {format(startAt, "MMM d, yyyy")}
+                </Text>
+              </Pressable>
+            )}
+            {Platform.OS === "web" ? (
+              <TextInput
+                // @ts-ignore - web only
+                type="time"
+                value={format(startAt, "HH:mm")}
+                onChangeText={(text) => {
+                  if (text) {
+                    const [hours, minutes] = text.split(":").map(Number);
+                    const d = new Date(startAt);
+                    d.setHours(hours, minutes);
+                    if (!isNaN(d.getTime())) setStartAt(new Date(d));
+                  }
+                }}
+                className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 text-typography-900 text-base"
+              />
+            ) : (
+              <Pressable
+                onPress={() => setShowStartTimePicker(true)}
+                className="px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+              >
+                <Text className="text-typography-900 text-base">
+                  {format(startAt, "HH:mm")}
+                </Text>
+              </Pressable>
+            )}
           </View>
-          {showStartDatePicker && (
+          {Platform.OS !== "web" && showStartDatePicker && (
             <DateTimePicker
               value={startAt}
               mode="date"
@@ -265,7 +299,7 @@ export default function NewEventScreen() {
               onChange={onStartDateChange}
             />
           )}
-          {showStartTimePicker && (
+          {Platform.OS !== "web" && showStartTimePicker && (
             <DateTimePicker
               value={startAt}
               mode="time"
@@ -279,22 +313,56 @@ export default function NewEventScreen() {
           <Text className="text-typography-700 text-sm font-body-medium mb-2">End</Text>
           {endAt ? (
             <View className="flex-row items-center">
-              <Pressable
-                onPress={() => setShowEndDatePicker(true)}
-                className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
-              >
-                <Text className="text-typography-900 text-base">
-                  {format(endAt, "MMM d, yyyy")}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setShowEndTimePicker(true)}
-                className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 mr-2"
-              >
-                <Text className="text-typography-900 text-base">
-                  {format(endAt, "HH:mm")}
-                </Text>
-              </Pressable>
+              {Platform.OS === "web" ? (
+                <TextInput
+                  // @ts-ignore - web only
+                  type="date"
+                  value={format(endAt, "yyyy-MM-dd")}
+                  onChangeText={(text) => {
+                    if (text) {
+                      const [year, month, day] = text.split("-").map(Number);
+                      const d = new Date(endAt);
+                      d.setFullYear(year, month - 1, day);
+                      if (!isNaN(d.getTime())) setEndAt(new Date(d));
+                    }
+                  }}
+                  className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200 text-typography-900 text-base"
+                />
+              ) : (
+                <Pressable
+                  onPress={() => setShowEndDatePicker(true)}
+                  className="flex-1 mr-2 px-4 py-3 bg-background-50 rounded-lg border border-border-200"
+                >
+                  <Text className="text-typography-900 text-base">
+                    {format(endAt, "MMM d, yyyy")}
+                  </Text>
+                </Pressable>
+              )}
+              {Platform.OS === "web" ? (
+                <TextInput
+                  // @ts-ignore - web only
+                  type="time"
+                  value={format(endAt, "HH:mm")}
+                  onChangeText={(text) => {
+                    if (text) {
+                      const [hours, minutes] = text.split(":").map(Number);
+                      const d = new Date(endAt);
+                      d.setHours(hours, minutes);
+                      if (!isNaN(d.getTime())) setEndAt(new Date(d));
+                    }
+                  }}
+                  className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 mr-2 text-typography-900 text-base"
+                />
+              ) : (
+                <Pressable
+                  onPress={() => setShowEndTimePicker(true)}
+                  className="px-4 py-3 bg-background-50 rounded-lg border border-border-200 mr-2"
+                >
+                  <Text className="text-typography-900 text-base">
+                    {format(endAt, "HH:mm")}
+                  </Text>
+                </Pressable>
+              )}
               <Pressable onPress={() => setEndAt(null)} className="p-2">
                 <Text className="text-error-600 text-sm font-body-medium">Clear</Text>
               </Pressable>
@@ -303,14 +371,14 @@ export default function NewEventScreen() {
             <Pressable
               onPress={() => {
                 setEndAt(new Date(startAt.getTime() + 60 * 60 * 1000));
-                setShowEndDatePicker(true);
+                if (Platform.OS !== "web") setShowEndDatePicker(true);
               }}
               className="px-4 py-3 bg-background-50 rounded-lg border border-border-200"
             >
               <Text className="text-typography-500 text-base">Set end time (optional)</Text>
             </Pressable>
           )}
-          {showEndDatePicker && endAt && (
+          {Platform.OS !== "web" && showEndDatePicker && endAt && (
             <DateTimePicker
               value={endAt}
               mode="date"
@@ -318,7 +386,7 @@ export default function NewEventScreen() {
               onChange={onEndDateChange}
             />
           )}
-          {showEndTimePicker && endAt && (
+          {Platform.OS !== "web" && showEndTimePicker && endAt && (
             <DateTimePicker
               value={endAt}
               mode="time"

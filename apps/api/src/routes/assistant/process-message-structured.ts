@@ -21,6 +21,7 @@ import { executeActions } from "./action-executor";
 import { listConversationsByContacts } from "./tools/conversations";
 import { extractLastUserText } from "./error-helpers";
 import { buildStructuredSystemPrompt } from "./structured-prompt";
+import { resolveParamsTime } from "./time-resolver";
 import { eq, and, desc } from "drizzle-orm";
 import { db, assistantMessages } from "../../db";
 import { ASSISTANT_INTENTS } from "./constants";
@@ -749,8 +750,8 @@ export async function processMessageStructured(
 
     if (allActions.length > 0) {
       const firstAction = allActions[0]!;
-      // Enrich details with resolved display names (not just search queries)
-      const details = { ...firstAction.params } as Record<string, unknown>;
+      // Enrich details with resolved display names and resolved time tokens
+      const details = resolveParamsTime(firstAction.params, tz) as Record<string, unknown>;
       if (firstAction.participant_refs && firstAction.participant_refs.length > 0) {
         const participantNames = firstAction.participant_refs
           .map((ref) => {

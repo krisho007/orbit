@@ -9,7 +9,7 @@
 
 import type { ChatMessage, AssistantUi, AssistantAction, AssistantIntent, StatusCallback, ToolResult } from "./types";
 import { getModel, getModelName, getProviderApiKeyEnvGuard } from "./model";
-import { isExplicitUserConfirmation, isExplicitUserRejection, parseUserSelection } from "./guardrails";
+import { isExplicitUserConfirmation, isExplicitUserRejection, parseUserSelection, isSkipContactSelection, isCreateNewContactSelection } from "./guardrails";
 import { loadAssistantEnumConfig } from "./enums";
 import { getUserContext } from "./db-helpers";
 import { buildUiFromToolResults, summarizeUiText } from "./ui-builder";
@@ -160,6 +160,21 @@ function buildParticipantFallback(
   };
 }
 
+// ── Selection action buttons: skip / create new ─────────────────────
+
+function buildSelectionActions(
+  search: SearchInstruction,
+): AssistantAction[] | undefined {
+  // Only show skip/create for participant resolution, not target resolution
+  if (search.purpose !== "resolve_participant" || search.entity_type !== "contact") {
+    return undefined;
+  }
+  return [
+    { label: "None of these", message: "None of these — skip contact", style: "secondary" },
+    { label: `Create "${search.query}"`, message: `Create a new contact named "${search.query}"`, style: "secondary" },
+  ];
+}
+
 async function loadCachedOutput(assistantConversationId: string): Promise<CachedOutput | null> {
   const [lastMsg] = await db
     .select({ ui: assistantMessages.ui })
@@ -230,22 +245,42 @@ export async function processMessageStructured(
   }
 
   // ── Selection shortcut: user picked from disambiguation list ──────
+  // Also handles "None of these" (skip) and "Create new contact" actions
   const selection = parseUserSelection(lastUserText);
-  if (selection && assistantConversationId) {
+  const isSkip = isSkipContactSelection(lastUserText);
+  const isCreateNew = isCreateNewContactSelection(lastUserText);
+
+  if ((selection || isSkip || isCreateNew) && assistantConversationId) {
     const cached = await loadCachedOutput(assistantConversationId);
     if (cached && cached.resolvedSearches && cached.pendingAmbiguous && cached.pendingAmbiguous.length > 0) {
-      console.log(`[assistant:structured] Selection detected — entity ${selection.entityId}`);
-
       const currentSearchId = cached.pendingAmbiguous[0]!;
       const currentResolved = cached.resolvedSearches[currentSearchId];
 
-      if (currentResolved) {
-        // Find the selected candidate and update best_match
-        const selectedCandidate = currentResolved.candidates.find((c) => c.id === selection.entityId);
-        if (selectedCandidate) {
-          currentResolved.best_match = { id: selectedCandidate.id, displayName: selectedCandidate.displayName };
+      if (selection) {
+        // Regular selection — update best_match to the chosen candidate
+        console.log(`[assistant:structured] Selection detected — entity ${selection.entityId}`);
+        if (currentResolved) {
+          const selectedCandidate = currentResolved.candidates.find((c) => c.id === selection.entityId);
+          if (selectedCandidate) {
+            currentResolved.best_match = { id: selectedCandidate.id, displayName: selectedCandidate.displayName };
+            currentResolved.ambiguous = false;
+          }
+        }
+      } else {
+        // Skip or Create New — clear best_match, no contact selected
+        console.log(`[assistant:structured] ${isSkip ? "Skip" : "Create new"} detected for search ${currentSearchId}`);
+        if (currentResolved) {
+          currentResolved.best_match = null;
           currentResolved.ambiguous = false;
         }
+        if (isSkip) {
+          // Mark purpose as "skipped" so buildParticipantFallback won't
+          // try to create a contact for it
+          const searchInstruction = cached.searches.find((s) => s.id === currentSearchId);
+          if (searchInstruction) searchInstruction.purpose = "skipped";
+        }
+        // For isCreateNew: leave purpose as "resolve_participant" so
+        // buildParticipantFallback will synthesize a create_contact action
       }
 
       // Remove from pending
@@ -257,6 +292,7 @@ export async function processMessageStructured(
         const nextResolved = cached.resolvedSearches[nextSearchId];
 
         if (nextResolved && nextResolved.candidates.length > 0) {
+          const nextSearch = cached.searches.find((s) => s.id === nextSearchId);
           const updatedCached: CachedOutput = {
             ...cached,
             resolvedSearches: cached.resolvedSearches,
@@ -275,6 +311,7 @@ export async function processMessageStructured(
                 selectMessage: `Use ${nextResolved.entity_type} ID ${c.id} as the selected context for this request.`,
               })),
             },
+            actions: nextSearch ? buildSelectionActions(nextSearch) : undefined,
             cachedIntents: cached.intents as AssistantIntent[],
             cachedOutput: updatedCached,
           };
@@ -444,8 +481,9 @@ export async function processMessageStructured(
         searchResults = await executeSearches(userId, cached.searches);
 
         // Check for ambiguous results
-        for (const [, search] of searchResults) {
+        for (const [searchId, search] of searchResults) {
           if (search.ambiguous && search.candidates.length > 1) {
+            const searchInstruction = cached.searches.find((s) => s.id === searchId);
             return {
               text: `I found multiple matching ${search.entity_type}s. Please pick one.`,
               ui: {
@@ -459,6 +497,7 @@ export async function processMessageStructured(
                   selectMessage: `Use contact ID ${c.id} as the selected context for this request.`,
                 })),
               },
+              actions: searchInstruction ? buildSelectionActions(searchInstruction) : undefined,
               cachedIntents: cached.intents as AssistantIntent[],
             };
           }
@@ -676,6 +715,7 @@ export async function processMessageStructured(
     if (ambiguousSearchIds.length > 0) {
       const firstAmbiguousId = ambiguousSearchIds[0]!;
       const firstAmbiguous = searchResults.get(firstAmbiguousId)!;
+      const ambiguousSearch = output.searches.find((s) => s.id === firstAmbiguousId);
 
       // Build resolvedSearches record from the Map
       const resolvedSearches: Record<string, ResolvedSearch> = {};
@@ -705,6 +745,7 @@ export async function processMessageStructured(
             selectMessage: `Use ${firstAmbiguous.entity_type} ID ${c.id} as the selected context for this request.`,
           })),
         },
+        actions: ambiguousSearch ? buildSelectionActions(ambiguousSearch) : undefined,
         cachedIntents: output.intents as AssistantIntent[],
         cachedOutput,
         modelName,

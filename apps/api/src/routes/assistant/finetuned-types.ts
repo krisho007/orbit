@@ -10,7 +10,9 @@ export const searchTypes = ["fuzzy_name", "phone", "keyword", "semantic"] as con
 export type SearchType = (typeof searchTypes)[number];
 
 export const searchPurposes = ["resolve_participant", "resolve_target", "display_results"] as const;
-export type SearchPurpose = (typeof searchPurposes)[number];
+// "skipped" is a runtime-only purpose set when user clicks "None of these" during disambiguation.
+// It's not in the Zod schema because the model should never generate it.
+export type SearchPurpose = (typeof searchPurposes)[number] | "skipped";
 
 export const searchInstructionSchema = z.object({
   id: z.string().regex(/^s\d+$/, "Search ID must be like s1, s2, etc."),
@@ -20,7 +22,7 @@ export const searchInstructionSchema = z.object({
   purpose: z.enum(searchPurposes),
 });
 
-export type SearchInstruction = z.infer<typeof searchInstructionSchema>;
+export type SearchInstruction = Omit<z.infer<typeof searchInstructionSchema>, "purpose"> & { purpose: SearchPurpose };
 
 // ── Action instruction ──────────────────────────────────────────────
 

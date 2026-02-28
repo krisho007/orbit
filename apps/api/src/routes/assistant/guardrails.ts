@@ -77,6 +77,14 @@ export function parseUserSelection(text: string): { entityId: string } | null {
   return match ? { entityId: match[1]! } : null;
 }
 
+export function isSkipContactSelection(text: string): boolean {
+  return /none of these|skip contact/i.test(text.trim());
+}
+
+export function isCreateNewContactSelection(text: string): boolean {
+  return /create.*new.*contact|create\s*"/i.test(text.trim());
+}
+
 export function parseIntentFromText(rawText: string): AssistantIntent {
   const cleaned = rawText.replace(/```json|```/gi, "").trim();
   if (!cleaned) return "unknown";

@@ -1,6 +1,4 @@
-import { generateText } from "ai";
-import { getClassificationModel } from "./model";
-import type { AssistantIntent, ChatMessage } from "./types";
+import type { AssistantIntent } from "./types";
 import { ASSISTANT_INTENTS, MUTATING_INTENTS } from "./constants";
 
 export function isIntentRequiringConfirmation(intent: AssistantIntent): boolean {
@@ -147,27 +145,6 @@ export function parseIntentsFromText(rawText: string): AssistantIntent[] {
   }
 
   return ["unknown"];
-}
-
-export async function identifyIntents(
-  messages: ChatMessage[],
-  generate: typeof generateText
-): Promise<AssistantIntent[]> {
-  const result = await generate({
-    model: getClassificationModel(),
-    system: `Classify ALL of the user's intents from their message.
-A single message may contain multiple distinct actions (e.g. creating an event AND logging a conversation AND updating a contact).
-Return ONLY valid JSON in this shape: {"intents":["<intent1>","<intent2>",...]}.
-Allowed intents: ${ASSISTANT_INTENTS.join(", ")}.
-Be thorough — extract every distinct action the user wants performed.
-Pick ["unknown"] if none apply.`,
-    messages: messages.map((message) => ({
-      role: message.role,
-      content: message.content,
-    })),
-  });
-
-  return parseIntentsFromText(result.text);
 }
 
 export function anyIntentRequiresConfirmation(intents: AssistantIntent[]): boolean {

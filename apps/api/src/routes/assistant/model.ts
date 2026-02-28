@@ -1,20 +1,19 @@
 import { google } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 
-export type AIProvider = "google" | "finetuned" | "google_structured" | "cerebras";
+export type AIProvider = "finetuned" | "google_structured" | "cerebras";
 
 const DEFAULT_MODELS: Record<AIProvider, string> = {
-  google: "gemini-flash-lite-latest",
   finetuned: "your-org/orbit-assistant-v1",
   google_structured: "gemini-flash-lite-latest",
   cerebras: "llama3.1-8b",
 };
 
 export function getProvider(): AIProvider {
-  const raw = process.env.AI_PROVIDER || "google";
-  if (raw === "google" || raw === "finetuned" || raw === "google_structured" || raw === "cerebras") return raw;
-  console.warn(`[assistant:model] Unknown AI_PROVIDER "${raw}", falling back to google`);
-  return "google";
+  const raw = process.env.AI_PROVIDER || "cerebras";
+  if (raw === "finetuned" || raw === "google_structured" || raw === "cerebras") return raw;
+  console.warn(`[assistant:model] Unknown AI_PROVIDER "${raw}", falling back to cerebras`);
+  return "cerebras";
 }
 
 export function isFinetunedProvider(): boolean {
@@ -37,16 +36,6 @@ export function getModel() {
   if (provider === "cerebras") {
     return getCerebrasClient().chat(modelName);
   }
-  return google(modelName);
-}
-
-export function getClassificationModel() {
-  const provider = getProvider();
-  const modelName =
-    process.env.AI_CLASSIFICATION_MODEL ||
-    process.env.AI_MODEL ||
-    DEFAULT_MODELS[provider];
-
   return google(modelName);
 }
 
@@ -110,13 +99,6 @@ export function getProviderApiKeyEnvGuard(): { configured: boolean; message: str
       return {
         configured: false,
         message: "Assistant is not configured. Set CEREBRAS_API_KEY in apps/api/.env to enable the Cerebras model.",
-      };
-    }
-  } else {
-    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-      return {
-        configured: false,
-        message: "Assistant is not configured. Set GOOGLE_GENERATIVE_AI_API_KEY in apps/api/.env to enable LLM features.",
       };
     }
   }

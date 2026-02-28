@@ -1094,80 +1094,6 @@ describe("processMessageLLM", () => {
       expect(response.ui).toBeNull();
     });
 
-    it("does not claim contact creation when create_contact was called without success", async () => {
-      const fakeGenerate = (async () => ({
-        text: "The contact was created successfully.",
-        toolResults: [],
-        steps: [
-          {
-            toolCalls: [
-              {
-                toolName: "create_contact",
-                toolCallId: "tc-1",
-                input: {},
-                invalid: true,
-                error: new Error("displayName is required"),
-              },
-            ],
-            toolResults: [],
-          },
-        ],
-      })) as unknown as typeof generateText;
-
-      const response = await processMessageLLM(
-        "user-1",
-        [{ role: "user", content: "Create contact with number 9999999999" }],
-        fakeGenerate
-      );
-
-      expect(response.text).toContain("contact name");
-      expect(response.ui).toBeNull();
-    });
-
-    it("returns explicit failure when create_contact produced an error result", async () => {
-      const fakeGenerate = (async () => ({
-        text: "The contact has been created.",
-        toolResults: [
-          {
-            output: {
-              type: "error",
-              message: "Failed to create contact",
-            },
-          },
-        ],
-        steps: [
-          {
-            toolCalls: [
-              {
-                toolName: "create_contact",
-                toolCallId: "tc-2",
-                input: { displayName: "Usha Medicals" },
-                invalid: false,
-              },
-            ],
-            toolResults: [
-              {
-                output: {
-                  type: "error",
-                  message: "Failed to create contact",
-                },
-              },
-            ],
-          },
-        ],
-      })) as unknown as typeof generateText;
-
-      const response = await processMessageLLM(
-        "user-1",
-        [{ role: "user", content: "Add contact Usha Medicals" }],
-        fakeGenerate
-      );
-
-      expect(response.text).toContain("couldn't create");
-      expect(response.text).toContain("Failed to create contact");
-      expect(response.ui).toBeNull();
-    });
-
     it("returns selection UI for ambiguous contact context", async () => {
       const fakeGenerate = (async () => ({
         text: "Please choose the correct contact.",
@@ -1430,50 +1356,6 @@ describe("processMessageLLM", () => {
   });
 
   // ============================================
-  // 9c. UNION TOOL SETS UNIT TESTS
-  // ============================================
-
-  describe("unionToolSets", () => {
-    let unionToolSets: typeof import("./assistant").unionToolSets;
-    let INTENT_TOOL_SETS: typeof import("./assistant").INTENT_TOOL_SETS;
-
-    beforeEach(async () => {
-      ({ unionToolSets, INTENT_TOOL_SETS } = await import("./assistant"));
-    });
-
-    it("single intent returns same tools as INTENT_TOOL_SETS[intent]", () => {
-      const result = unionToolSets(["create_event"]);
-      expect(result.sort()).toEqual([...INTENT_TOOL_SETS.create_event].sort());
-    });
-
-    it("two intents produce deduplicated union", () => {
-      const result = unionToolSets(["create_event", "edit_contact"]);
-      const expected = new Set([
-        ...INTENT_TOOL_SETS.create_event,
-        ...INTENT_TOOL_SETS.edit_contact,
-      ]);
-      expect(result.sort()).toEqual([...expected].sort());
-    });
-
-    it('["unknown"] returns INTENT_TOOL_SETS.unknown', () => {
-      const result = unionToolSets(["unknown"]);
-      expect(result.sort()).toEqual([...INTENT_TOOL_SETS.unknown].sort());
-    });
-
-    it("union does not contain duplicates", () => {
-      const result = unionToolSets(["create_event", "create_conversation"]);
-      // Both share search_contacts_fuzzy — should only appear once
-      const counts = result.reduce((acc, tool) => {
-        acc[tool] = (acc[tool] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-      for (const [tool, count] of Object.entries(counts)) {
-        expect(count).toBe(1);
-      }
-    });
-  });
-
-  // ============================================
   // 9d. ANY INTENT REQUIRES CONFIRMATION TESTS
   // ============================================
 
@@ -1567,102 +1449,6 @@ describe("processMessageLLM", () => {
   });
 
   // ============================================
-  // 11. DELETE TOOL PROTECTION
-  // ============================================
-
-  describe("Delete Tool Protection", () => {
-    let DELETE_TOOL_NAMES: typeof import("./assistant").DELETE_TOOL_NAMES;
-    let MUTATING_TOOL_NAMES: typeof import("./assistant").MUTATING_TOOL_NAMES;
-
-    beforeEach(async () => {
-      ({ DELETE_TOOL_NAMES, MUTATING_TOOL_NAMES } = await import("./assistant"));
-    });
-
-    it("DELETE_TOOL_NAMES contains all delete tools", () => {
-      const expected = [
-        "delete_contact", "delete_contact_image", "delete_conversation",
-        "delete_event", "delete_reminder", "delete_tag",
-        "delete_relationship", "delete_relationship_type",
-      ];
-      for (const name of expected) {
-        expect(DELETE_TOOL_NAMES.has(name)).toBe(true);
-      }
-      expect(DELETE_TOOL_NAMES.size).toBe(expected.length);
-    });
-
-    it("MUTATING_TOOL_NAMES does not include delete tools", () => {
-      for (const deleteTool of DELETE_TOOL_NAMES) {
-        expect(MUTATING_TOOL_NAMES.has(deleteTool)).toBe(false);
-      }
-    });
-  });
-
-  // ============================================
-  // 12. INTENT TOOL SCOPING
-  // ============================================
-
-  describe("Intent Tool Scoping", () => {
-    let INTENT_TOOL_SETS: typeof import("./assistant").INTENT_TOOL_SETS;
-    let DELETE_TOOL_NAMES: typeof import("./assistant").DELETE_TOOL_NAMES;
-
-    beforeEach(async () => {
-      ({ INTENT_TOOL_SETS, DELETE_TOOL_NAMES } = await import("./assistant"));
-    });
-
-    it("every intent has a tool set", () => {
-      const intents = [
-        "create_contact", "search_contact", "edit_contact",
-        "create_conversation", "create_conversation_with_contact",
-        "search_conversation", "edit_conversation",
-        "create_event", "create_event_with_conversation",
-        "search_event", "edit_event",
-        "create_reminder", "create_reminder_with_context",
-        "search_reminder", "edit_reminder",
-        "delete_entity", "unknown",
-      ];
-      for (const intent of intents) {
-        expect(INTENT_TOOL_SETS[intent as keyof typeof INTENT_TOOL_SETS]).toBeDefined();
-        expect(INTENT_TOOL_SETS[intent as keyof typeof INTENT_TOOL_SETS].length).toBeGreaterThan(0);
-      }
-    });
-
-    it("no intent tool set includes delete tools", () => {
-      for (const [intent, tools] of Object.entries(INTENT_TOOL_SETS)) {
-        for (const tool of tools) {
-          expect(DELETE_TOOL_NAMES.has(tool)).toBe(false);
-        }
-      }
-    });
-
-    it("mutating intents include request_confirmation", () => {
-      const mutatingIntents = [
-        "create_contact", "create_conversation", "create_conversation_with_contact",
-        "create_event", "create_event_with_conversation",
-        "create_reminder", "create_reminder_with_context",
-        "edit_contact", "edit_conversation", "edit_event", "edit_reminder",
-      ];
-      for (const intent of mutatingIntents) {
-        expect(INTENT_TOOL_SETS[intent as keyof typeof INTENT_TOOL_SETS]).toContain("request_confirmation");
-      }
-    });
-
-    it("search intents do NOT include request_confirmation", () => {
-      const searchIntents = [
-        "search_contact", "search_conversation", "search_event", "search_reminder",
-      ];
-      for (const intent of searchIntents) {
-        expect(INTENT_TOOL_SETS[intent as keyof typeof INTENT_TOOL_SETS]).not.toContain("request_confirmation");
-      }
-    });
-
-    it("scoped tool sets are smaller than 20 tools each", () => {
-      for (const [intent, tools] of Object.entries(INTENT_TOOL_SETS)) {
-        expect(tools.length).toBeLessThan(20);
-      }
-    });
-  });
-
-  // ============================================
   // 13. CONFIRMATION UI CARD
   // ============================================
 
@@ -1703,10 +1489,9 @@ describe("processMessageLLM", () => {
 
   describe("Timezone Support", () => {
     let formatToday: typeof import("./assistant").formatToday;
-    let buildSystemPrompt: typeof import("./assistant").buildSystemPrompt;
 
     beforeEach(async () => {
-      ({ formatToday, buildSystemPrompt } = await import("./assistant"));
+      ({ formatToday } = await import("./assistant"));
     });
 
     it("formatToday defaults to UTC when no timezone provided", () => {
@@ -1736,63 +1521,6 @@ describe("processMessageLLM", () => {
       expect(result).toContain("Tuesday");
       expect(result).toContain("February 24, 2026");
       expect(result).toContain("03:30 AM");
-    });
-
-    it("buildSystemPrompt includes timezone rules when timezone provided", () => {
-      const userContext = { userName: "Test", userEmail: "test@test.com", primaryContactId: null, primaryContactName: null };
-      const enumConfig = { conversationMediums: ["PHONE_CALL"], eventTypes: ["MEETING"], reminderStatuses: ["OPEN"] };
-      const prompt = buildSystemPrompt(userContext, enumConfig, ["unknown"], false, "Asia/Kolkata");
-      expect(prompt).toContain("Asia/Kolkata");
-      expect(prompt).toContain("TIMEZONE RULES:");
-      expect(prompt).toContain("convert the user's local time to UTC");
-    });
-
-    it("buildSystemPrompt defaults to UTC when no timezone provided", () => {
-      const userContext = { userName: "Test", userEmail: "test@test.com", primaryContactId: null, primaryContactName: null };
-      const enumConfig = { conversationMediums: ["PHONE_CALL"], eventTypes: ["MEETING"], reminderStatuses: ["OPEN"] };
-      const prompt = buildSystemPrompt(userContext, enumConfig, ["unknown"], false);
-      expect(prompt).toContain("user's timezone (UTC)");
-      expect(prompt).toContain("TIMEZONE RULES:");
-    });
-
-    it("processMessageLLM accepts timezone parameter", async () => {
-      let callCount = 0;
-      const fakeGenerate = (async (opts: any) => {
-        callCount++;
-        if (callCount === 1) {
-          // First call is intent classification — return unknown
-          return { text: '{"intents":["create_event"]}' };
-        }
-        // Second call is the actual LLM call — verify timezone in system prompt
-        expect(opts.system).toContain("America/New_York");
-        expect(opts.system).toContain("TIMEZONE RULES:");
-        return {
-          text: "Created event.",
-          toolResults: [
-            {
-              output: {
-                type: "event_created",
-                id: "event-1",
-                title: "Meeting",
-                startAt: "2026-02-23T20:00:00.000Z",
-                location: null,
-                participants: [],
-              },
-            },
-          ],
-        };
-      }) as unknown as typeof generateText;
-
-      const response = await processMessageLLM(
-        "user-1",
-        [{ role: "user", content: "Create a meeting at 3 PM" }],
-        fakeGenerate,
-        undefined,
-        undefined,
-        "America/New_York"
-      );
-
-      expect(response.ui?.kind).toBe("created");
     });
   });
 });

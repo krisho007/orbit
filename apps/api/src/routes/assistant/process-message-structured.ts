@@ -21,7 +21,6 @@ import { executeActions } from "./action-executor";
 import { listConversationsByContacts } from "./tools/conversations";
 import { extractLastUserText } from "./error-helpers";
 import { buildStructuredSystemPrompt } from "./structured-prompt";
-import { resolveParamsTime } from "./time-resolver";
 import { eq, and, desc } from "drizzle-orm";
 import { db, assistantMessages } from "../../db";
 import { ASSISTANT_INTENTS } from "./constants";
@@ -523,12 +522,27 @@ export async function processMessageStructured(
 
       // Check for execution failures
       const failedActions = actionResults.filter((r) => !r.success);
-      if (failedActions.length > 0 && failedActions.length === actionResults.length) {
-        const errorMsg = failedActions[0]?.result?.message || "Unknown error";
-        console.error(`[assistant:structured] All actions failed:`, errorMsg);
+      if (failedActions.length > 0) {
+        if (failedActions.length === actionResults.length) {
+          // All failed
+          const errorMsg = failedActions[0]?.result?.message || "Unknown error";
+          console.error(`[assistant:structured] All actions failed:`, errorMsg);
+          return {
+            text: `Something went wrong: ${errorMsg}. Please try again.`,
+            ui: null,
+            cachedIntents: cached.intents as AssistantIntent[],
+          };
+        }
+        // Partial failure — show successes + report failures
+        const toolResults = actionResults.filter((r) => r.success).map((r) => ({ output: r.result }));
+        const ui = buildUiFromToolResults(toolResults);
+        const failureNotes = failedActions.map((f) =>
+          `Failed to ${f.action.operation} ${f.action.entity_type}: ${f.result?.message || "Unknown error"}`
+        ).join(". ");
+        const text = `${summarizeUiText(ui, cached.response)} However, ${failureNotes}.`;
         return {
-          text: `Something went wrong: ${errorMsg}. Please try again.`,
-          ui: null,
+          text,
+          ui,
           cachedIntents: cached.intents as AssistantIntent[],
         };
       }
@@ -750,8 +764,9 @@ export async function processMessageStructured(
 
     if (allActions.length > 0) {
       const firstAction = allActions[0]!;
-      // Enrich details with resolved display names and resolved time tokens
-      const details = resolveParamsTime(firstAction.params, tz) as Record<string, unknown>;
+      // Use raw params for display — they're already in the user's local time (ISO without Z)
+      // Time conversion to UTC happens during action execution, not display
+      const details = { ...firstAction.params } as Record<string, unknown>;
       if (firstAction.participant_refs && firstAction.participant_refs.length > 0) {
         const participantNames = firstAction.participant_refs
           .map((ref) => {
@@ -847,12 +862,30 @@ export async function processMessageStructured(
 
     // Check for execution failures
     const failedActions = actionResults.filter((r) => !r.success);
-    if (failedActions.length > 0 && failedActions.length === actionResults.length) {
-      const errorMsg = failedActions[0]?.result?.message || "Unknown error";
-      console.error(`[assistant:structured] All actions failed:`, errorMsg);
+    if (failedActions.length > 0) {
+      if (failedActions.length === actionResults.length) {
+        // All failed
+        const errorMsg = failedActions[0]?.result?.message || "Unknown error";
+        console.error(`[assistant:structured] All actions failed:`, errorMsg);
+        return {
+          text: `Something went wrong: ${errorMsg}. Please try again.`,
+          ui: null,
+          cachedIntents: output.intents as AssistantIntent[],
+          modelName,
+          inputTokens,
+          outputTokens,
+        };
+      }
+      // Partial failure — show successes + report failures
+      const toolResults = actionResults.filter((r) => r.success).map((r) => ({ output: r.result }));
+      const ui = buildUiFromToolResults(toolResults);
+      const failureNotes = failedActions.map((f) =>
+        `Failed to ${f.action.operation} ${f.action.entity_type}: ${f.result?.message || "Unknown error"}`
+      ).join(". ");
+      const text = `${summarizeUiText(ui, output.response)} However, ${failureNotes}.`;
       return {
-        text: `Something went wrong: ${errorMsg}. Please try again.`,
-        ui: null,
+        text,
+        ui,
         cachedIntents: output.intents as AssistantIntent[],
         modelName,
         inputTokens,

@@ -1,21 +1,59 @@
 import { describe, expect, it } from "bun:test";
-import { resolveRelativeTime, resolveParamsTime } from "./time-resolver";
+import { resolveRelativeTime, resolveParamsTime, convertLocalToUtc } from "./time-resolver";
 
 // Fixed reference time: 2024-06-15 14:30:00 UTC (Saturday)
 const NOW = new Date("2024-06-15T14:30:00.000Z");
 
 describe("resolveRelativeTime", () => {
-  describe("passthrough", () => {
-    it("returns ISO date string as-is", () => {
-      expect(resolveRelativeTime("2024-06-15T10:00:00.000Z", "UTC", NOW)).toBe(
-        "2024-06-15T10:00:00.000Z"
+  describe("ISO local-time conversion", () => {
+    it("converts local time with Asia/Kolkata to UTC", () => {
+      // IST is UTC+5:30. 15:00 IST = 09:30 UTC
+      expect(resolveRelativeTime("2026-03-04T15:00:00", "Asia/Kolkata", NOW)).toBe(
+        "2026-03-04T09:30:00.000Z"
       );
     });
 
-    it("returns date-only string as-is", () => {
-      expect(resolveRelativeTime("2024-06-15", "UTC", NOW)).toBe("2024-06-15");
+    it("converts local time with America/New_York to UTC", () => {
+      // EST is UTC-5. 15:00 EST = 20:00 UTC (March 4 is before DST switch)
+      expect(resolveRelativeTime("2026-03-04T15:00:00", "America/New_York", NOW)).toBe(
+        "2026-03-04T20:00:00.000Z"
+      );
     });
 
+    it("normalizes underscore separator and converts", () => {
+      // "2026-03-04_15:00" → "2026-03-04T15:00:00" → convert
+      expect(resolveRelativeTime("2026-03-04_15:00", "Asia/Kolkata", NOW)).toBe(
+        "2026-03-04T09:30:00.000Z"
+      );
+    });
+
+    it("returns already-UTC string as-is", () => {
+      expect(resolveRelativeTime("2026-03-04T15:00:00.000Z", "Asia/Kolkata", NOW)).toBe(
+        "2026-03-04T15:00:00.000Z"
+      );
+    });
+
+    it("returns string with timezone offset as-is", () => {
+      expect(resolveRelativeTime("2026-03-04T15:00:00+05:30", "UTC", NOW)).toBe(
+        "2026-03-04T15:00:00+05:30"
+      );
+    });
+
+    it("handles date-only string (no time) as midnight local", () => {
+      // midnight EST = 05:00 UTC (March is before DST)
+      expect(resolveRelativeTime("2026-03-04", "America/New_York", NOW)).toBe(
+        "2026-03-04T05:00:00.000Z"
+      );
+    });
+
+    it("converts local time in UTC timezone (no-op offset)", () => {
+      expect(resolveRelativeTime("2026-03-04T15:00:00", "UTC", NOW)).toBe(
+        "2026-03-04T15:00:00.000Z"
+      );
+    });
+  });
+
+  describe("passthrough", () => {
     it("returns unrecognized token as-is", () => {
       expect(resolveRelativeTime("some random text", "UTC", NOW)).toBe("some random text");
     });
@@ -136,6 +174,51 @@ describe("resolveRelativeTime", () => {
       expect(date.getUTCDate()).toBe(13);
       expect(date.getUTCHours()).toBe(18);
     });
+
+    it("resolves +2_16:30 (without d suffix) to 2 days from now at 4:30pm", () => {
+      const result = resolveRelativeTime("+2_16:30", "UTC", NOW);
+      const date = new Date(result);
+      expect(date.getUTCDate()).toBe(17);
+      expect(date.getUTCHours()).toBe(16);
+      expect(date.getUTCMinutes()).toBe(30);
+    });
+
+    it("resolves +2 (without d suffix) to 2 days from now", () => {
+      const result = resolveRelativeTime("+2", "UTC", NOW);
+      const date = new Date(result);
+      expect(date.getUTCDate()).toBe(17);
+    });
+
+    it("resolves -1_09:00 (without d suffix) to yesterday at 9am", () => {
+      const result = resolveRelativeTime("-1_09:00", "UTC", NOW);
+      const date = new Date(result);
+      expect(date.getUTCDate()).toBe(14);
+      expect(date.getUTCHours()).toBe(9);
+    });
+  });
+});
+
+describe("convertLocalToUtc", () => {
+  it("converts IST to UTC", () => {
+    expect(convertLocalToUtc("2026-03-04T15:00:00", "Asia/Kolkata")).toBe(
+      "2026-03-04T09:30:00.000Z"
+    );
+  });
+
+  it("converts EST to UTC", () => {
+    expect(convertLocalToUtc("2026-03-04T15:00:00", "America/New_York")).toBe(
+      "2026-03-04T20:00:00.000Z"
+    );
+  });
+
+  it("handles date-only input as midnight", () => {
+    expect(convertLocalToUtc("2026-03-04", "Asia/Kolkata")).toBe(
+      "2026-03-03T18:30:00.000Z"
+    );
+  });
+
+  it("returns unparseable input as-is", () => {
+    expect(convertLocalToUtc("not-a-date", "UTC")).toBe("not-a-date");
   });
 });
 
@@ -169,10 +252,21 @@ describe("resolveParamsTime", () => {
     expect(resolved.happenedAt).toBe("2024-06-15T14:30:00.000Z");
   });
 
-  it("passes through ISO dates in time fields", () => {
+  it("passes through already-UTC ISO dates in time fields", () => {
     const params = { startAt: "2024-07-01T10:00:00Z" };
     const resolved = resolveParamsTime(params, "UTC", NOW);
     expect(resolved.startAt).toBe("2024-07-01T10:00:00Z");
+  });
+
+  it("converts local ISO times to UTC in time fields", () => {
+    const params = {
+      startAt: "2026-03-04T15:00:00",
+      endAt: "2026-03-04T16:00:00",
+    };
+    // IST is UTC+5:30
+    const resolved = resolveParamsTime(params, "Asia/Kolkata", NOW);
+    expect(resolved.startAt).toBe("2026-03-04T09:30:00.000Z");
+    expect(resolved.endAt).toBe("2026-03-04T10:30:00.000Z");
   });
 
   it("handles snake_case time field names", () => {

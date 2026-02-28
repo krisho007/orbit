@@ -74,7 +74,25 @@ function formatExample(ex: SeedExample): string {
   const userMsg =
     ex.input.messages.find((m) => m.role === "user")?.content ?? "";
   const outputJson = JSON.stringify(ex.output);
-  return `User: "${userMsg}"\nOutput: ${outputJson}`;
+
+  // Include date context so the LLM sees the date→output mapping
+  const utc = new Date(ex.input.current_datetime_utc);
+  const tz = ex.input.user_context.timezone;
+  const dateStr = utc.toLocaleDateString("en-US", {
+    timeZone: tz,
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const timeStr = utc.toLocaleTimeString("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  return `Context: ${dateStr}, ${timeStr} (${tz})\nUser: "${userMsg}"\nOutput: ${outputJson}`;
 }
 
 // ── Schema documentation ─────────────────────────────────────────────
@@ -116,7 +134,10 @@ Rules:
 - needs_confirmation = false for search-only and unknown intents
 - needs_resolution = true when searches[] contains purpose resolve_participant or resolve_target
 - needs_resolution = false when all searches are display_results or there are no searches
-- For time fields use relative tokens: NOW, TODAY_HH:MM, TOMORROW_HH:MM, YESTERDAY_HH:MM, YESTERDAY, +Nd_HH:MM, +Nd, -Nd_HH:MM, -Nd, NEXT_WEEK_HH:MM
+- For time fields, output ISO 8601 datetime in the user's LOCAL timezone (no Z suffix), e.g. "2026-03-04T15:00:00"
+- Compute the actual date from the user's current date/time shown above (e.g., "tomorrow" = current date + 1 day)
+- For "now" or "just now", use the current datetime shown above
+- NEVER output relative tokens like "TOMORROW" or "+3d" — always resolve to a concrete datetime
 - NEVER include database IDs in the response text
 - For multi-action messages, use the actions[] array (not the singular action field)
 - For single actions, use the action field (not actions[])

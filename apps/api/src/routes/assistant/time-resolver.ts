@@ -1,26 +1,16 @@
 /**
- * Resolves relative time tokens from the fine-tuned model output into UTC ISO strings.
+ * Resolves time values from the model output into UTC ISO strings.
  *
- * Supported tokens:
- *   NOW                    → current UTC time
- *   TODAY                  → start of today in user's timezone
- *   TODAY_HH:MM            → today at HH:MM in user's timezone
- *   TOMORROW               → start of tomorrow in user's timezone
- *   TOMORROW_HH:MM         → tomorrow at HH:MM in user's timezone
- *   YESTERDAY              → start of yesterday in user's timezone
- *   YESTERDAY_HH:MM        → yesterday at HH:MM in user's timezone
- *   NEXT_WEEK              → start of next Monday in user's timezone
- *   NEXT_WEEK_HH:MM        → next Monday at HH:MM in user's timezone
- *   +Nd                    → N days from now (start of that day)
- *   +Nd_HH:MM              → N days from now at HH:MM
- *   -Nd                    → N days ago (start of that day)
- *   -Nd_HH:MM              → N days ago at HH:MM
+ * The model outputs ISO 8601 local-time strings (no Z suffix) in the user's timezone.
+ * This function converts them to UTC for storage.
  *
- * If the value is already an ISO 8601 string, it is returned as-is.
+ * Also supports legacy relative tokens (NOW, TOMORROW_HH:MM, etc.) as a backward-compat fallback.
+ *
+ * If the value already has a Z suffix or timezone offset, it is returned as-is.
  * If the value is unrecognized, it is returned as-is (the DB layer will handle or reject it).
  */
 
-const RELATIVE_TOKEN_RE = /^(NOW|TODAY|TOMORROW|YESTERDAY|NEXT_WEEK|[+-]\d+d)(?:_(\d{1,2}):(\d{2}))?$/;
+const RELATIVE_TOKEN_RE = /^(NOW|TODAY|TOMORROW|YESTERDAY|NEXT_WEEK|[+-]\d+d?)(?:_(\d{1,2}):(\d{2}))?$/;
 
 export function resolveRelativeTime(
   token: string,
@@ -29,9 +19,18 @@ export function resolveRelativeTime(
 ): string {
   const trimmed = token.trim();
 
-  // Already an ISO date/datetime — return as-is
+  // Already has ISO date prefix — handle conversion
   if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
-    return trimmed;
+    // Normalize underscore separator (model may output "2026-03-04_15:00")
+    let normalized = trimmed.replace(/^(\d{4}-\d{2}-\d{2})_(\d{2}:\d{2})/, '$1T$2:00');
+
+    // If already UTC (has Z or +/- offset), return as-is
+    if (/[Z]/.test(normalized) || /[+-]\d{2}:\d{2}$/.test(normalized)) {
+      return normalized;
+    }
+
+    // Local time (no Z, no offset) → convert to UTC using user's timezone
+    return convertLocalToUtc(normalized, timezone);
   }
 
   const match = trimmed.match(RELATIVE_TOKEN_RE);
@@ -97,7 +96,7 @@ export function resolveRelativeTime(
 
     default: {
       // +Nd or -Nd pattern
-      const daysMatch = base!.match(/^([+-])(\d+)d$/);
+      const daysMatch = base!.match(/^([+-])(\d+)d?$/);
       if (!daysMatch) return trimmed;
       const sign = daysMatch[1] === "+" ? 1 : -1;
       const days = parseInt(daysMatch[2]!, 10) * sign;
@@ -183,6 +182,37 @@ function getDayOfWeekInTimezone(date: Date, timezone: string): number {
     Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
   };
   return dayMap[weekday] ?? 0;
+}
+
+/**
+ * Converts an ISO local-time string (no Z suffix) to a UTC ISO string
+ * using the user's timezone.
+ *
+ * Examples:
+ *   convertLocalToUtc("2026-03-04T15:00:00", "Asia/Kolkata") → "2026-03-04T09:30:00.000Z"
+ *   convertLocalToUtc("2026-03-04", "America/New_York") → "2026-03-04T05:00:00.000Z"
+ */
+export function convertLocalToUtc(localIso: string, timezone: string): string {
+  // Parse the local time components
+  const match = localIso.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (!match) {
+    // Can't parse — return as-is
+    return localIso;
+  }
+
+  const year = parseInt(match[1]!, 10);
+  const month = parseInt(match[2]!, 10);
+  const day = parseInt(match[3]!, 10);
+  const hours = match[4] !== undefined ? parseInt(match[4], 10) : 0;
+  const minutes = match[5] !== undefined ? parseInt(match[5], 10) : 0;
+  const seconds = match[6] !== undefined ? parseInt(match[6], 10) : 0;
+
+  const utcDate = buildDateInTimezone(year, month, day, hours, minutes, timezone);
+  // Preserve seconds if provided
+  if (seconds > 0) {
+    utcDate.setUTCSeconds(seconds);
+  }
+  return utcDate.toISOString();
 }
 
 /**

@@ -1,7 +1,7 @@
 // Users API Routes
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, gte, sql } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
 import {
   db,
@@ -19,7 +19,10 @@ import {
   eventParticipants,
   relationships,
   relationshipTypes,
+  assistantConversations,
+  assistantMessages,
 } from "../db";
+import { PLAN_LIMITS, getMonthStart, type PlanName } from "../lib/plan-limits";
 import { authMiddleware } from "../middleware/auth";
 import { formatValidationErrors } from "../utils/validation";
 
@@ -39,6 +42,66 @@ function getAdminClient() {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
+
+// GET /api/users/me/plan - Get plan info and usage
+app.get("/me/plan", async (c) => {
+  const userId = c.get("userId");
+
+  try {
+    const [user] = await db
+      .select({ plan: users.plan })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    const plan = (user?.plan || "free") as PlanName;
+    const limits = PLAN_LIMITS[plan];
+    const monthStart = getMonthStart();
+
+    const [convCountResult, tokenResult] = await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(assistantConversations)
+        .where(
+          and(
+            eq(assistantConversations.userId, userId),
+            gte(assistantConversations.createdAt, monthStart)
+          )
+        ),
+      db
+        .select({
+          total: sql<number>`coalesce(sum(coalesce(${assistantMessages.inputTokens}, 0) + coalesce(${assistantMessages.outputTokens}, 0)), 0)`,
+        })
+        .from(assistantMessages)
+        .innerJoin(
+          assistantConversations,
+          eq(assistantMessages.assistantConversationId, assistantConversations.id)
+        )
+        .where(
+          and(
+            eq(assistantConversations.userId, userId),
+            gte(assistantMessages.createdAt, monthStart)
+          )
+        ),
+    ]);
+
+    return c.json({
+      plan,
+      billingPeriodStart: monthStart.toISOString(),
+      usage: {
+        conversations: Number(convCountResult[0]?.count || 0),
+        totalTokens: Number(tokenResult[0]?.total || 0),
+      },
+      limits: {
+        maxConversationsPerMonth: limits.maxConversationsPerMonth,
+        maxTokensPerMonth: limits.maxTokensPerMonth,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching plan info:", error);
+    return c.json({ error: "Failed to fetch plan info" }, 500);
+  }
+});
 
 // GET /api/users/me/contact - Get the current user's linked contact
 app.get("/me/contact", async (c) => {

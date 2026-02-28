@@ -66,6 +66,7 @@ import {
   AssistantReminderCard,
   AssistantSelectionOption,
   AssistantConversationSummary,
+  type PlanInfo,
 } from "../../lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { contactKeys, conversationKeys, eventKeys, reminderKeys } from "../../lib/query-keys";
@@ -171,6 +172,7 @@ export default function AssistantScreen() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [consent, setConsent] = useState<boolean | null>(null);
   const [showConsentDialog, setShowConsentDialog] = useState(false);
+  const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [historyItems, setHistoryItems] = useState<AssistantConversationSummary[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -201,7 +203,7 @@ export default function AssistantScreen() {
     })();
   }, []);
 
-  // Load consent state on mount
+  // Load consent state and plan on mount
   useEffect(() => {
     let cancelled = false;
     const loadConsent = async () => {
@@ -214,7 +216,16 @@ export default function AssistantScreen() {
         console.error("Failed to load consent:", error);
       }
     };
+    const loadPlan = async () => {
+      try {
+        const data = await userApi.getPlan();
+        if (!cancelled) setPlanInfo(data);
+      } catch (error) {
+        console.error("Failed to load plan:", error);
+      }
+    };
     loadConsent();
+    loadPlan();
     return () => { cancelled = true; };
   }, []);
 
@@ -624,6 +635,11 @@ export default function AssistantScreen() {
         }
       } catch (error) {
         console.error("Assistant error:", error);
+        const errorMessage = error instanceof Error ? error.message : "";
+        const isLimitError =
+          errorMessage.includes("Monthly token limit") ||
+          errorMessage.includes("Monthly conversation limit");
+
         setMessages((prev) => {
           const filtered = prev.filter((m) => !m.isLoading);
           return [
@@ -631,10 +647,17 @@ export default function AssistantScreen() {
             {
               id: nextMessageId("error"),
               role: "assistant",
-              content: "Sorry, I encountered an error. Please try again.",
+              content: isLimitError
+                ? errorMessage
+                : "Sorry, I encountered an error. Please try again.",
             },
           ];
         });
+
+        // Refresh plan info so the UI reflects the limit state
+        if (isLimitError) {
+          userApi.getPlan().then(setPlanInfo).catch(() => {});
+        }
       } finally {
         isSendingRef.current = false;
         setIsLoading(false);
@@ -1490,6 +1513,45 @@ export default function AssistantScreen() {
           }
         />
       )}
+
+      {/* Usage warning banner */}
+      {planInfo && (() => {
+        const convPct = planInfo.limits.maxConversationsPerMonth
+          ? planInfo.usage.conversations / planInfo.limits.maxConversationsPerMonth
+          : 0;
+        const tokenPct = planInfo.limits.maxTokensPerMonth
+          ? planInfo.usage.totalTokens / planInfo.limits.maxTokensPerMonth
+          : 0;
+        const atLimit = convPct >= 1 || tokenPct >= 1;
+        const nearLimit = !atLimit && (convPct > 0.8 || tokenPct > 0.8);
+
+        if (atLimit) {
+          return (
+            <View className="bg-error-50 px-4 py-2.5 border-t border-error-200">
+              <Text className="text-error-700 text-sm text-center">
+                Monthly limit reached.{" "}
+                <Text
+                  className="text-primary-600 font-body-semibold"
+                  onPress={() => Linking.openURL("https://orbitcrm.app/upgrade")}
+                >
+                  Upgrade
+                </Text>
+              </Text>
+            </View>
+          );
+        }
+        if (nearLimit) {
+          const pct = Math.round(Math.max(convPct, tokenPct) * 100);
+          return (
+            <View className="bg-warning-50 px-4 py-2 border-t border-warning-200">
+              <Text className="text-warning-700 text-xs text-center">
+                {pct}% of monthly usage reached
+              </Text>
+            </View>
+          );
+        }
+        return null;
+      })()}
 
       <View
         className="border-t border-border-200 px-4 pt-3 bg-background-0"

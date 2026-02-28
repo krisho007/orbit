@@ -25,7 +25,7 @@ import { useGluestackUI } from "../../components/ui/gluestack-ui-provider";
 import { HuskyLogo } from "../../components/HuskyLogo";
 import { resetOnboardingForTesting } from "../../lib/onboarding";
 import { useOnboarding } from "../_layout";
-import { userApi } from "../../lib/api";
+import { userApi, type PlanInfo } from "../../lib/api";
 import { useConfirmDialog } from "../../components/confirm-dialog";
 
 const PRIVACY_POLICY_URL = "https://orbitcrm.app/privacy";
@@ -42,6 +42,7 @@ export default function SettingsScreen() {
 
   const [thirdPartyConsent, setThirdPartyConsent] = useState(false);
   const [consentLoading, setConsentLoading] = useState(true);
+  const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const { confirm, ConfirmDialogElement } = useConfirmDialog();
@@ -61,6 +62,20 @@ export default function SettingsScreen() {
       }
     };
     loadConsent();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadPlan = async () => {
+      try {
+        const data = await userApi.getPlan();
+        if (!cancelled) setPlanInfo(data);
+      } catch (error) {
+        console.error("Failed to load plan:", error);
+      }
+    };
+    loadPlan();
     return () => { cancelled = true; };
   }, []);
 
@@ -258,6 +273,85 @@ export default function SettingsScreen() {
         </Text>
         <Text className="text-typography-500">{user?.email}</Text>
       </View>
+
+      {planInfo && (
+        <View className="mt-6">
+          <Text className="text-typography-500 text-sm font-body-medium px-4 pb-2 uppercase">
+            Plan
+          </Text>
+          <View className="bg-background-0 p-4 border-b border-border-100">
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-typography-900 text-base font-body-semibold">
+                {planInfo.plan === "paid" ? "Pro" : "Free"}
+              </Text>
+              {planInfo.plan === "free" && (
+                <Pressable
+                  onPress={() => Linking.openURL("https://orbitcrm.app/upgrade")}
+                  className="bg-primary-500 px-4 py-1.5 rounded-full"
+                >
+                  <Text className="text-white text-sm font-body-medium">Upgrade</Text>
+                </Pressable>
+              )}
+            </View>
+
+            {planInfo.limits.maxConversationsPerMonth !== null && (
+              <View className="mb-3">
+                <View className="flex-row justify-between mb-1">
+                  <Text className="text-typography-500 text-sm">Conversations</Text>
+                  <Text className="text-typography-500 text-sm">
+                    {planInfo.usage.conversations}/{planInfo.limits.maxConversationsPerMonth}
+                  </Text>
+                </View>
+                <View className="h-2 bg-background-100 rounded-full overflow-hidden">
+                  <View
+                    className={`h-full rounded-full ${
+                      planInfo.usage.conversations / planInfo.limits.maxConversationsPerMonth > 0.8
+                        ? "bg-warning-500"
+                        : "bg-primary-500"
+                    }`}
+                    style={{
+                      width: `${Math.min(100, (planInfo.usage.conversations / planInfo.limits.maxConversationsPerMonth) * 100)}%`,
+                    }}
+                  />
+                </View>
+              </View>
+            )}
+
+            {planInfo.limits.maxTokensPerMonth !== null && (
+              <View>
+                <View className="flex-row justify-between mb-1">
+                  <Text className="text-typography-500 text-sm">Tokens</Text>
+                  <Text className="text-typography-500 text-sm">
+                    {planInfo.usage.totalTokens >= 1000
+                      ? `${Math.round(planInfo.usage.totalTokens / 1000)}K`
+                      : planInfo.usage.totalTokens}
+                    /
+                    {planInfo.limits.maxTokensPerMonth >= 1000
+                      ? `${Math.round(planInfo.limits.maxTokensPerMonth / 1000)}K`
+                      : planInfo.limits.maxTokensPerMonth}
+                  </Text>
+                </View>
+                <View className="h-2 bg-background-100 rounded-full overflow-hidden">
+                  <View
+                    className={`h-full rounded-full ${
+                      planInfo.usage.totalTokens / planInfo.limits.maxTokensPerMonth > 0.8
+                        ? "bg-warning-500"
+                        : "bg-primary-500"
+                    }`}
+                    style={{
+                      width: `${Math.min(100, (planInfo.usage.totalTokens / planInfo.limits.maxTokensPerMonth) * 100)}%`,
+                    }}
+                  />
+                </View>
+              </View>
+            )}
+
+            <Text className="text-typography-400 text-xs mt-2">
+              Resets monthly on the 1st
+            </Text>
+          </View>
+        </View>
+      )}
 
       <View className="mt-6">
         <Text className="text-typography-500 text-sm font-body-medium px-4 pb-2 uppercase">

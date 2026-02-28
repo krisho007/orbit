@@ -59,6 +59,8 @@ export const reminderRecurrenceEnum = pgEnum("ReminderRecurrence", [
 
 export const assistantMessageRoleEnum = pgEnum("AssistantMessageRole", ["user", "assistant"]);
 
+export const userPlanEnum = pgEnum("UserPlan", ["free", "paid"]);
+
 // ============================================
 // Users (Supabase Auth - reference only)
 // ============================================
@@ -74,6 +76,7 @@ export const users = pgTable("users", {
   // Links the user to their own contact record in the CRM.
   // When set, the assistant knows who "I" / "me" / "my" refers to.
   primaryContactId: text("primaryContactId"),
+  plan: userPlanEnum("plan").default("free").notNull(),
   thirdPartyConsentGranted: boolean("thirdPartyConsentGranted").default(false).notNull(),
   googleProviderToken: text("googleProviderToken"),
   googleProviderRefreshToken: text("googleProviderRefreshToken"),

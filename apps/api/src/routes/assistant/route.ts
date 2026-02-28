@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, and, desc, asc, lt, sql } from "drizzle-orm";
+import { eq, and, desc, asc, lt, sql, gte } from "drizzle-orm";
 import { authMiddleware } from "../../middleware/auth";
 import { formatValidationErrors } from "../../utils/validation";
 import type { ChatMessage } from "./types";
@@ -15,6 +15,7 @@ import {
   events,
   reminders,
 } from "../../db";
+import { PLAN_LIMITS, getMonthStart, type PlanName } from "../../lib/plan-limits";
 
 const app = new Hono();
 
@@ -44,56 +45,115 @@ async function validateAndSetup(c: any) {
   console.log(`[assistant] Chat history: ${messages.length} message(s)`);
   console.log(`${"=".repeat(70)}`);
 
-  const resolveConversation = async (): Promise<string> => {
-    if (conversationId) {
-      const [existing] = await db
-        .select({ id: assistantConversations.id })
-        .from(assistantConversations)
-        .where(
-          and(
-            eq(assistantConversations.id, conversationId),
-            eq(assistantConversations.userId, userId)
-          )
-        )
-        .limit(1);
+  // ── Step 1: Load user (consent + plan) ──────────────────────────
+  const [userRow] = await db
+    .select({
+      thirdPartyConsentGranted: users.thirdPartyConsentGranted,
+      plan: users.plan,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
 
-      if (!existing) throw new Error("CONVERSATION_NOT_FOUND");
-      db.update(assistantConversations)
-        .set({ updatedAt: new Date() })
-        .where(eq(assistantConversations.id, existing.id))
-        .then(() => {}, () => {});
-      return existing.id;
-    } else {
-      const title = lastUserMessage.content.substring(0, 100);
-      const [newConv] = await db
-        .insert(assistantConversations)
-        .values({ userId, title })
-        .returning();
-      return newConv!.id;
-    }
-  };
-
-  const [consentResult, assistantConvId] = await Promise.all([
-    db.select({ thirdPartyConsentGranted: users.thirdPartyConsentGranted })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1),
-    resolveConversation().catch((err) => err as Error),
-  ]);
-
-  const user = consentResult[0];
-  if (!user?.thirdPartyConsentGranted) {
+  if (!userRow?.thirdPartyConsentGranted) {
     return { error: c.json({ error: "AI consent required", code: "CONSENT_REQUIRED" }, 403) };
   }
 
-  if (assistantConvId instanceof Error) {
-    if (assistantConvId.message === "CONVERSATION_NOT_FOUND") {
-      return { error: c.json({ error: "Conversation not found" }, 404) };
+  const plan = (userRow.plan || "free") as PlanName;
+  const limits = PLAN_LIMITS[plan];
+  const monthStart = getMonthStart();
+
+  // ── Step 2: Check monthly token budget ──────────────────────────
+  if (limits.maxTokensPerMonth !== null) {
+    const [tokenResult] = await db
+      .select({
+        total: sql<number>`coalesce(sum(coalesce(${assistantMessages.inputTokens}, 0) + coalesce(${assistantMessages.outputTokens}, 0)), 0)`,
+      })
+      .from(assistantMessages)
+      .innerJoin(
+        assistantConversations,
+        eq(assistantMessages.assistantConversationId, assistantConversations.id)
+      )
+      .where(
+        and(
+          eq(assistantConversations.userId, userId),
+          gte(assistantMessages.createdAt, monthStart)
+        )
+      );
+
+    const totalTokens = Number(tokenResult?.total || 0);
+    if (totalTokens >= limits.maxTokensPerMonth) {
+      console.log(`[assistant] Token limit reached: ${totalTokens}/${limits.maxTokensPerMonth} (${plan})`);
+      return {
+        error: c.json({
+          error: "Monthly token limit reached. Please upgrade your plan or wait until next month.",
+          code: "TOKEN_LIMIT_REACHED",
+          limit: limits.maxTokensPerMonth,
+          usage: totalTokens,
+        }, 403),
+      };
     }
-    throw assistantConvId;
   }
 
-  // Enforce per-conversation user message limit
+  // ── Step 3: Resolve or create conversation ──────────────────────
+  let assistantConvId: string;
+
+  if (conversationId) {
+    const [existing] = await db
+      .select({ id: assistantConversations.id })
+      .from(assistantConversations)
+      .where(
+        and(
+          eq(assistantConversations.id, conversationId),
+          eq(assistantConversations.userId, userId)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      return { error: c.json({ error: "Conversation not found" }, 404) };
+    }
+    db.update(assistantConversations)
+      .set({ updatedAt: new Date() })
+      .where(eq(assistantConversations.id, existing.id))
+      .then(() => {}, () => {});
+    assistantConvId = existing.id;
+  } else {
+    // New conversation — check monthly conversation limit first
+    if (limits.maxConversationsPerMonth !== null) {
+      const [convCountResult] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(assistantConversations)
+        .where(
+          and(
+            eq(assistantConversations.userId, userId),
+            gte(assistantConversations.createdAt, monthStart)
+          )
+        );
+
+      const convCount = Number(convCountResult?.count || 0);
+      if (convCount >= limits.maxConversationsPerMonth) {
+        console.log(`[assistant] Conversation limit reached: ${convCount}/${limits.maxConversationsPerMonth} (${plan})`);
+        return {
+          error: c.json({
+            error: "Monthly conversation limit reached. Please upgrade your plan or wait until next month.",
+            code: "CONVERSATION_LIMIT_REACHED",
+            limit: limits.maxConversationsPerMonth,
+            usage: convCount,
+          }, 403),
+        };
+      }
+    }
+
+    const title = lastUserMessage.content.substring(0, 100);
+    const [newConv] = await db
+      .insert(assistantConversations)
+      .values({ userId, title })
+      .returning();
+    assistantConvId = newConv!.id;
+  }
+
+  // ── Step 4: Per-conversation user message limit ─────────────────
   if (conversationId) {
     const [countResult] = await db
       .select({ count: sql<number>`count(*)` })

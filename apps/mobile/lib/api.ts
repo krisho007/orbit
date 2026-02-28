@@ -445,6 +445,8 @@ export const userApi = {
     providerToken: string;
     providerRefreshToken?: string;
   }) => api.put<{ success: true }>("/api/users/me/google-tokens", data),
+
+  getPlan: () => api.get<PlanInfo>("/api/users/me/plan"),
 };
 
 // Assistant
@@ -887,4 +889,17 @@ export type CreateRelationshipTypeData = {
   maleReverseTypeId?: string;
   femaleReverseTypeId?: string;
   isSymmetric?: boolean;
+};
+
+export type PlanInfo = {
+  plan: "free" | "paid";
+  billingPeriodStart: string;
+  usage: {
+    conversations: number;
+    totalTokens: number;
+  };
+  limits: {
+    maxConversationsPerMonth: number | null;
+    maxTokensPerMonth: number | null;
+  };
 };

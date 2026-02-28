@@ -5,6 +5,7 @@ import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import * as AuthSession from "expo-auth-session";
 import Constants from "expo-constants";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./supabase";
 import { userApi } from "./api";
 
@@ -33,6 +34,25 @@ const getRedirectUrl = () => {
 const redirectTo = getRedirectUrl();
 const googleContactsScope =
   "openid email profile https://www.googleapis.com/auth/contacts.readonly";
+
+const GOOGLE_CONSENT_GRANTED_KEY = "@orbit/google-consent-granted";
+
+async function getGooglePrompt(): Promise<"consent" | "select_account"> {
+  try {
+    const flag = await AsyncStorage.getItem(GOOGLE_CONSENT_GRANTED_KEY);
+    return flag === "1" ? "select_account" : "consent";
+  } catch {
+    return "consent";
+  }
+}
+
+async function markGoogleConsentGranted(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(GOOGLE_CONSENT_GRANTED_KEY, "1");
+  } catch (err) {
+    console.error("[Auth] Failed to persist Google consent flag:", err);
+  }
+}
 
 type AuthContextType = {
   user: User | null;
@@ -197,6 +217,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               console.error("[Auth] Failed to store Google tokens:", err)
             );
         }
+
+        markGoogleConsentGranted();
       }
     });
 
@@ -209,6 +231,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = async () => {
     try {
+      const prompt = await getGooglePrompt();
+
       if (Platform.OS === "web") {
         // For web, use standard OAuth redirect flow
         const redirectTo =
@@ -223,7 +247,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             scopes: googleContactsScope,
             queryParams: {
               access_type: "offline",
-              prompt: "consent",
+              prompt,
             },
           },
         });
@@ -253,7 +277,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             scopes: googleContactsScope,
             queryParams: {
               access_type: "offline",
-              prompt: "consent",
+              prompt,
             },
           },
         });

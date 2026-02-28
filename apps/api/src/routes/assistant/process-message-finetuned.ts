@@ -221,28 +221,29 @@ export async function processMessageFinetuned(
     // Build a preview UI if possible (confirmation kind)
     let ui: AssistantUi | null = null;
     if (allActions.length > 0) {
-      const firstAction = allActions[0]!;
-      // Enrich details with resolved display names and resolved time tokens
-      const details = resolveParamsTime(firstAction.params, tz) as Record<string, unknown>;
-      if (firstAction.participant_refs && firstAction.participant_refs.length > 0) {
-        const participantNames = firstAction.participant_refs
-          .map((ref) => {
-            const searchId = ref.split(".")[0]!;
-            const resolved = searchResults.get(searchId);
-            if (resolved?.best_match?.displayName) return resolved.best_match.displayName;
-            const search = output.searches.find((s) => s.id === searchId);
-            return search?.query;
-          })
-          .filter(Boolean);
-        if (participantNames.length > 0) {
-          details.participants = participantNames.join(", ");
+      // Build confirmation items for all actions (not just the first)
+      const confirmationItems = allActions.map((action) => {
+        const details = resolveParamsTime(action.params, tz) as Record<string, unknown>;
+        if (action.participant_refs && action.participant_refs.length > 0) {
+          const names = action.participant_refs
+            .map((ref) => {
+              const searchId = ref.split(".")[0]!;
+              const resolved = searchResults.get(searchId);
+              if (resolved?.best_match?.displayName) return resolved.best_match.displayName;
+              return output.searches.find((s) => s.id === searchId)?.query;
+            })
+            .filter(Boolean);
+          if (names.length > 0) details.participants = names.join(", ");
         }
-      }
+        return { entityType: action.entity_type, details };
+      });
+
       ui = {
         kind: "confirmation",
         action: output.response,
-        entityType: firstAction.entity_type,
-        details,
+        entityType: confirmationItems[0]!.entityType,
+        details: confirmationItems[0]!.details,
+        items: confirmationItems.length > 1 ? confirmationItems : undefined,
       };
     }
 

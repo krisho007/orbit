@@ -291,6 +291,11 @@ export async function processMessageStructured(
         cached.response
       );
       if (participantFallback) {
+        const fbItems = buildConfirmationItems(
+          participantFallback.fallbackActions,
+          searchResultsMap as Map<string, ResolvedSearch>,
+          cached.searches
+        );
         const fallbackCached: CachedOutput = {
           intents: participantFallback.fallbackIntents,
           actions: participantFallback.fallbackActions,
@@ -303,8 +308,9 @@ export async function processMessageStructured(
           ui: {
             kind: "confirmation",
             action: participantFallback.fallbackResponse,
-            entityType: participantFallback.fallbackActions[0]?.entity_type ?? "contact",
-            details: participantFallback.fallbackActions[0]?.params as Record<string, unknown>,
+            entityType: fbItems[0]?.entityType ?? "contact",
+            details: fbItems[0]?.details ?? {},
+            items: fbItems.length > 1 ? fbItems : undefined,
           },
           actions: [
             { label: "Go ahead", message: "go ahead", style: "primary" },
@@ -384,22 +390,21 @@ export async function processMessageStructured(
       }
 
       // All resolved — show confirmation card with enriched names
-      const firstAction = cached.actions[0];
-      let details: Record<string, unknown> = {};
-      if (firstAction) {
-        details = { ...firstAction.params } as Record<string, unknown>;
-        if (firstAction.participant_refs && firstAction.participant_refs.length > 0) {
-          const participantNames = firstAction.participant_refs
-            .map((ref) => {
-              const searchId = ref.split(".")[0]!;
-              const resolved = cached.resolvedSearches![searchId];
-              return resolved?.best_match?.displayName;
-            })
-            .filter(Boolean);
-          if (participantNames.length > 0) {
-            details.participants = participantNames.join(", ");
-          }
-        }
+      const cachedSearchMap = new Map(Object.entries(cached.resolvedSearches));
+      let disambiguatedUi: AssistantUi | null = null;
+      if (cached.actions.length > 0) {
+        const items = buildConfirmationItems(
+          cached.actions,
+          cachedSearchMap as Map<string, ResolvedSearch>,
+          cached.searches
+        );
+        disambiguatedUi = {
+          kind: "confirmation",
+          action: cached.response,
+          entityType: items[0]!.entityType,
+          details: items[0]!.details,
+          items: items.length > 1 ? items : undefined,
+        };
       }
 
       const updatedCached: CachedOutput = {
@@ -409,14 +414,7 @@ export async function processMessageStructured(
       };
       return {
         text: cached.response,
-        ui: firstAction
-          ? {
-              kind: "confirmation",
-              action: cached.response,
-              entityType: firstAction.entity_type,
-              details,
-            }
-          : null,
+        ui: disambiguatedUi,
         actions: [
           { label: "Go ahead", message: "go ahead", style: "primary" },
           { label: "I need changes", message: "No, I need changes", style: "secondary" },
@@ -475,6 +473,11 @@ export async function processMessageStructured(
           cached.response
         );
         if (participantFallback) {
+          const fbItems2 = buildConfirmationItems(
+            participantFallback.fallbackActions,
+            searchResults as Map<string, ResolvedSearch>,
+            cached.searches
+          );
           const fallbackCached: CachedOutput = {
             intents: participantFallback.fallbackIntents,
             actions: participantFallback.fallbackActions,
@@ -486,8 +489,9 @@ export async function processMessageStructured(
             ui: {
               kind: "confirmation",
               action: participantFallback.fallbackResponse,
-              entityType: participantFallback.fallbackActions[0]?.entity_type ?? "contact",
-              details: participantFallback.fallbackActions[0]?.params as Record<string, unknown>,
+              entityType: fbItems2[0]?.entityType ?? "contact",
+              details: fbItems2[0]?.details ?? {},
+              items: fbItems2.length > 1 ? fbItems2 : undefined,
             },
             actions: [
               { label: "Go ahead", message: "go ahead", style: "primary" },
@@ -580,46 +584,59 @@ export async function processMessageStructured(
   console.log(`[assistant:structured] Starting single-pass inference (Gemini few-shot)`);
   console.log(`[assistant:structured] User: ${userContext.userName || "(no name)"}, timezone: ${tz}`);
 
-  // Call the Gemini model with the few-shot prompt
+  // Call the Gemini model with the few-shot prompt (retry up to 3 times on parse failures)
   const model = getModel();
   const modelName = getModelName();
 
-  let rawOutput: string;
+  let rawOutput: string = "";
   let inputTokens: number | undefined;
   let outputTokens: number | undefined;
+  let output: OrbitModelOutput | undefined;
 
-  try {
-    const { generateText } = await import("ai");
-    const result = await generateText({
-      model,
-      system: systemPrompt,
-      messages: modelMessages,
-      maxOutputTokens: 1024,
-    });
+  const MAX_RETRIES = 3;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const { generateText } = await import("ai");
+      const result = await generateText({
+        model,
+        system: systemPrompt,
+        messages: modelMessages,
+        maxOutputTokens: 2048,
+      });
 
-    rawOutput = result.text;
-    inputTokens = result.usage?.inputTokens;
-    outputTokens = result.usage?.outputTokens;
-  } catch (err) {
-    console.error(`[assistant:structured] Model call failed:`, err);
-    return {
-      text: "I'm having trouble processing your request right now. Please try again.",
-      ui: null,
-    };
+      rawOutput = result.text;
+      inputTokens = result.usage?.inputTokens;
+      outputTokens = result.usage?.outputTokens;
+    } catch (err) {
+      console.error(`[assistant:structured] Model call failed (attempt ${attempt}/${MAX_RETRIES}):`, err);
+      if (attempt === MAX_RETRIES) {
+        return {
+          text: "I'm having trouble processing your request right now. Please try again.",
+          ui: null,
+        };
+      }
+      continue;
+    }
+
+    console.log(`[assistant:structured] Raw output (${rawOutput.length} chars): ${rawOutput.substring(0, 300)}`);
+    console.log(`[assistant:structured] Usage — model: ${modelName}, input: ${inputTokens ?? "n/a"}, output: ${outputTokens ?? "n/a"}`);
+
+    // Parse the structured output
+    try {
+      output = parseModelOutput(rawOutput);
+      break; // Success — exit retry loop
+    } catch (err) {
+      console.warn(`[assistant:structured] Failed to parse model output (attempt ${attempt}/${MAX_RETRIES}):`, err);
+      if (attempt < MAX_RETRIES) {
+        console.log(`[assistant:structured] Retrying LLM call...`);
+      }
+    }
   }
 
-  console.log(`[assistant:structured] Raw output (${rawOutput.length} chars): ${rawOutput.substring(0, 300)}`);
-  console.log(`[assistant:structured] Usage — model: ${modelName}, input: ${inputTokens ?? "n/a"}, output: ${outputTokens ?? "n/a"}`);
-
-  // Parse the structured output
-  let output: OrbitModelOutput;
-  try {
-    output = parseModelOutput(rawOutput);
-  } catch (err) {
-    console.error(`[assistant:structured] Failed to parse model output:`, err);
-    // Fallback: return raw text as a response (the model might have generated free text)
+  if (!output) {
+    console.error(`[assistant:structured] All ${MAX_RETRIES} attempts failed to produce valid JSON`);
     return {
-      text: rawOutput || "I couldn't process that request. Could you rephrase?",
+      text: "I had trouble understanding how to process that. Could you try rephrasing your request?",
       ui: null,
       modelName,
       inputTokens,
@@ -704,6 +721,11 @@ export async function processMessageStructured(
       output.response
     );
     if (participantFallback) {
+      const fbItems3 = buildConfirmationItems(
+        participantFallback.fallbackActions,
+        searchResults as Map<string, ResolvedSearch>,
+        output.searches
+      );
       // Build resolvedSearches record for cache
       const resolvedSearches: Record<string, ResolvedSearch> = {};
       for (const [id, resolved] of searchResults) {
@@ -721,8 +743,9 @@ export async function processMessageStructured(
         ui: {
           kind: "confirmation",
           action: participantFallback.fallbackResponse,
-          entityType: participantFallback.fallbackActions[0]?.entity_type ?? "contact",
-          details: participantFallback.fallbackActions[0]?.params as Record<string, unknown>,
+          entityType: fbItems3[0]?.entityType ?? "contact",
+          details: fbItems3[0]?.details ?? {},
+          items: fbItems3.length > 1 ? fbItems3 : undefined,
         },
         actions: [
           { label: "Go ahead", message: "go ahead", style: "primary" },
@@ -763,30 +786,15 @@ export async function processMessageStructured(
     let cachedOutput: CachedOutput | undefined;
 
     if (allActions.length > 0) {
-      const firstAction = allActions[0]!;
-      // Use raw params for display — they're already in the user's local time (ISO without Z)
-      // Time conversion to UTC happens during action execution, not display
-      const details = { ...firstAction.params } as Record<string, unknown>;
-      if (firstAction.participant_refs && firstAction.participant_refs.length > 0) {
-        const participantNames = firstAction.participant_refs
-          .map((ref) => {
-            const searchId = ref.split(".")[0]!;
-            const resolved = searchResults.get(searchId);
-            // Use resolved display name if available, fall back to search query
-            if (resolved?.best_match?.displayName) return resolved.best_match.displayName;
-            const search = output.searches.find((s) => s.id === searchId);
-            return search?.query;
-          })
-          .filter(Boolean);
-        if (participantNames.length > 0) {
-          details.participants = participantNames.join(", ");
-        }
-      }
+      // Build confirmation items for all actions (not just the first)
+      const confirmationItems = buildConfirmationItems(allActions, searchResults, output.searches);
+
       ui = {
         kind: "confirmation",
         action: output.response,
-        entityType: firstAction.entity_type,
-        details,
+        entityType: confirmationItems[0]!.entityType,
+        details: confirmationItems[0]!.details,
+        items: confirmationItems.length > 1 ? confirmationItems : undefined,
       };
 
       // Build resolvedSearches record for cache so confirmation shortcut
@@ -916,6 +924,30 @@ export async function processMessageStructured(
     inputTokens,
     outputTokens,
   };
+}
+
+// ── Build confirmation items from actions ────────────────────────────
+
+function buildConfirmationItems(
+  actions: ActionInstruction[],
+  searchResults: Map<string, ResolvedSearch>,
+  searches: SearchInstruction[]
+): Array<{ entityType: string; details: Record<string, unknown> }> {
+  return actions.map((action) => {
+    const details = { ...action.params } as Record<string, unknown>;
+    if (action.participant_refs && action.participant_refs.length > 0) {
+      const names = action.participant_refs
+        .map((ref) => {
+          const searchId = ref.split(".")[0]!;
+          const resolved = searchResults.get(searchId);
+          if (resolved?.best_match?.displayName) return resolved.best_match.displayName;
+          return searches.find((s) => s.id === searchId)?.query;
+        })
+        .filter(Boolean);
+      if (names.length > 0) details.participants = names.join(", ");
+    }
+    return { entityType: action.entity_type, details };
+  });
 }
 
 // ── Re-execute display search after disambiguation ──────────────────

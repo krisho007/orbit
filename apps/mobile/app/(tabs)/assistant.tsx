@@ -1127,7 +1127,7 @@ export default function AssistantScreen() {
       );
     }
 
-    if (ui.kind === "confirmation" && ui.details && Object.keys(ui.details).length > 0) {
+    if (ui.kind === "confirmation") {
       const FIELD_LABELS: Record<string, string> = {
         displayName: "Name",
         company: "Company",
@@ -1219,62 +1219,77 @@ export default function AssistantScreen() {
         if (key === "medium" && typeof value === "string") return MEDIUM_LABELS[value] || value;
         if (key === "eventType" && typeof value === "string") return EVENT_TYPE_LABELS[value] || value;
         if ((key === "happenedAt" || key === "startAt" || key === "endAt" || key === "dueAt") && typeof value === "string") {
-          // Try time token first (e.g. NOW, TODAY_15:00, TOMORROW, +3d)
           const tokenResult = formatTimeToken(value);
           if (tokenResult !== value) return tokenResult;
-          // Fall back to ISO date parsing
           return formatDateTime(value, "MMM d, yyyy 'at' h:mm a", String(value));
         }
         if (Array.isArray(value)) return value.join(", ");
         return String(value);
       };
 
-      const entries = Object.entries(ui.details).filter(
-        ([key, v]) => v != null && String(v).trim().length > 0 && !key.startsWith("_")
-      );
+      const renderConfirmationItem = (entityType: string, details: Record<string, unknown>, index: number) => {
+        const entries = Object.entries(details).filter(
+          ([key, v]) => v != null && String(v).trim().length > 0 && !key.startsWith("_")
+        );
+        if (entries.length === 0) return null;
 
-      const canEdit = ui.entityType === "contact" || ui.entityType === "conversation" || ui.entityType === "event" || ui.entityType === "reminder";
+        const canEdit = entityType === "contact" || entityType === "conversation" || entityType === "event" || entityType === "reminder";
 
-      const handleEdit = () => {
-        Keyboard.dismiss();
-        const prefill = JSON.stringify(ui.details);
-        const routes: Record<string, string> = {
-          contact: "/contact/new",
-          conversation: "/conversation/new",
-          event: "/event/new",
-          reminder: "/reminder/new",
+        const handleEdit = () => {
+          Keyboard.dismiss();
+          const prefill = JSON.stringify(details);
+          const routes: Record<string, string> = {
+            contact: "/contact/new",
+            conversation: "/conversation/new",
+            event: "/event/new",
+            reminder: "/reminder/new",
+          };
+          const pathname = routes[entityType];
+          if (pathname) {
+            router.push({ pathname: pathname as any, params: { prefill } });
+          }
         };
-        const pathname = routes[ui.entityType!];
-        if (pathname) {
-          router.push({ pathname: pathname as any, params: { prefill } });
-        }
+
+        return (
+          <View key={index} className={`bg-background-0 border border-border-200 rounded-xl p-4${index > 0 ? " mt-3" : ""}`}>
+            <View className="flex-row items-center mb-3">
+              <View className="w-8 h-8 rounded-lg bg-primary-100 items-center justify-center mr-2">
+                <ClipboardCheck size={16} color={getThemeColor(colors, "primary-600")} />
+              </View>
+              <Text className="text-typography-800 font-body-semibold text-sm flex-1">{ENTITY_TYPE_LABELS[entityType] || "Proposed Details"}</Text>
+              {canEdit && (
+                <Pressable
+                  onPress={handleEdit}
+                  className="flex-row items-center px-3 py-1.5 rounded-lg bg-background-50 border border-border-200 active:bg-background-100"
+                >
+                  <Pencil size={14} color={getThemeColor(colors, "typography-600")} />
+                  <Text className="text-typography-600 text-sm font-body-medium ml-1.5">Edit</Text>
+                </Pressable>
+              )}
+            </View>
+            {entries.map(([key, value]) => (
+              <View key={key} className="flex-row py-1.5">
+                <Text className="text-typography-500 text-sm w-28">{FIELD_LABELS[key] || key}</Text>
+                <Text className="text-typography-900 text-sm flex-1 flex-shrink">{formatFieldValue(key, value)}</Text>
+              </View>
+            ))}
+          </View>
+        );
       };
 
-      return (
-        <View className="bg-background-0 border border-border-200 rounded-xl p-4">
-          <View className="flex-row items-center mb-3">
-            <View className="w-8 h-8 rounded-lg bg-primary-100 items-center justify-center mr-2">
-              <ClipboardCheck size={16} color={getThemeColor(colors, "primary-600")} />
-            </View>
-            <Text className="text-typography-800 font-body-semibold text-sm flex-1">{(ui.entityType && ENTITY_TYPE_LABELS[ui.entityType]) || "Proposed Details"}</Text>
-            {canEdit && (
-              <Pressable
-                onPress={handleEdit}
-                className="flex-row items-center px-3 py-1.5 rounded-lg bg-background-50 border border-border-200 active:bg-background-100"
-              >
-                <Pencil size={14} color={getThemeColor(colors, "typography-600")} />
-                <Text className="text-typography-600 text-sm font-body-medium ml-1.5">Edit</Text>
-              </Pressable>
-            )}
+      // Multi-action: render one card per item
+      if (ui.items && ui.items.length > 0) {
+        return (
+          <View>
+            {ui.items.map((item, i) => renderConfirmationItem(item.entityType, item.details, i))}
           </View>
-          {entries.map(([key, value]) => (
-            <View key={key} className="flex-row py-1.5">
-              <Text className="text-typography-500 text-sm w-28">{FIELD_LABELS[key] || key}</Text>
-              <Text className="text-typography-900 text-sm flex-1 flex-shrink">{formatFieldValue(key, value)}</Text>
-            </View>
-          ))}
-        </View>
-      );
+        );
+      }
+
+      // Single action (backward compat)
+      if (ui.details && Object.keys(ui.details).length > 0) {
+        return renderConfirmationItem(ui.entityType || "contact", ui.details, 0);
+      }
     }
 
     return null;

@@ -101,7 +101,7 @@ export type AssistantUi =
   | { kind: "reminders"; count: number; reminders: AssistantReminderCard[] }
   | { kind: "created"; cards: AssistantCreatedCard[] }
   | { kind: "selection"; prompt: string; options: AssistantSelectionOption[] }
-  | { kind: "confirmation"; action: string; entityType?: string; details?: Record<string, unknown> };
+  | { kind: "confirmation"; action: string; entityType?: string; details?: Record<string, unknown>; items?: Array<{ entityType: string; details: Record<string, unknown> }> };
 
 // ── Action buttons ──────────────────────────────────────────────────
 export type AssistantAction = {

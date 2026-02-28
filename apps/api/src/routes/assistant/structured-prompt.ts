@@ -63,8 +63,12 @@ function loadSeedExamples(): SeedExample[] {
  * 20 - create_conversation with search-first (ambiguous name, no "new contact")
  * 21 - search_conversation (display results, "latest conversations" without name)
  * 22 - search_conversation (contact resolve_target + display results, "conversations with Vikram")
+ * 23 - multi-intent (contact + event, "create contact and schedule a call")
+ * 24 - multi-intent (contact + conversation + event, "met someone, log it, schedule follow-up")
+ * 25 - multi-intent (contact + reminder, IST timezone)
+ * 26 - multi-intent (contact + conversation + reminder, "met someone, log it, remind me")
  */
-const SELECTED_INDICES = [0, 1, 2, 3, 4, 5, 6, 10, 14, 15, 16, 18, 20, 21, 22];
+const SELECTED_INDICES = [0, 1, 2, 3, 4, 5, 6, 10, 14, 15, 16, 18, 20, 21, 22, 23, 24, 25, 26];
 
 function selectExamples(all: SeedExample[]): SeedExample[] {
   return SELECTED_INDICES.filter((i) => i < all.length).map((i) => all[i]!);

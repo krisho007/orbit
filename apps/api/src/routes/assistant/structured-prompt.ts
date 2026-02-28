@@ -67,8 +67,11 @@ function loadSeedExamples(): SeedExample[] {
  * 24 - multi-intent (contact + conversation + event, "met someone, log it, schedule follow-up")
  * 25 - multi-intent (contact + reminder, IST timezone)
  * 26 - multi-intent (contact + conversation + reminder, "met someone, log it, remind me")
+ * 27 - journaling (personal note → JOURNAL event — "sowed bendekai seeds")
+ * 28 - journaling (personal note → JOURNAL event — "went for a walk")
+ * 29 - journaling (personal note → JOURNAL event — "feeling stressed")
  */
-const SELECTED_INDICES = [0, 1, 2, 3, 4, 5, 6, 10, 14, 15, 16, 18, 20, 21, 22, 23, 24, 25, 26];
+const SELECTED_INDICES = [0, 1, 2, 3, 4, 5, 6, 10, 14, 15, 16, 18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29];
 
 function selectExamples(all: SeedExample[]): SeedExample[] {
   return SELECTED_INDICES.filter((i) => i < all.length).map((i) => all[i]!);
@@ -146,7 +149,8 @@ Rules:
 - For multi-action messages, use the actions[] array (not the singular action field)
 - For single actions, use the action field (not actions[])
 - For delete requests, set intents to ["delete_entity"] with NO action — explain deletion is done via UI
-- For greetings/unknown, set intents to ["unknown"] with no searches and no action
+- For greetings or unrelated chitchat, set intents to ["unknown"] with no searches and no action
+- For personal journal entries (e.g. "I went for a walk", "planted some seeds today", "feeling stressed"), create an event with eventType "JOURNAL" — use the message as the description, derive a short title, and respond with a brief casual acknowledgment (1 sentence max, like a friend would)
 - When creating a conversation with a new contact (not in CRM), use intents ["create_conversation_with_contact"] with actions[] containing both a contact create and a conversation create, where the conversation uses participant_refs: ["created_contact.best_match"]
 - When someone is mentioned by name and you are unsure whether they exist in the CRM, ALWAYS search first (purpose: resolve_participant). Only use create_conversation_with_contact when the user explicitly says "new contact" or "add a contact". The system will handle creating the contact if the search finds no match.
 - The response should be natural, concise, and describe what you will do

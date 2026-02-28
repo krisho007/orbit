@@ -581,18 +581,19 @@ export async function processMessageStructured(
     content: m.content,
   }));
 
-  console.log(`[assistant:structured] Starting single-pass inference (Gemini few-shot)`);
-  console.log(`[assistant:structured] User: ${userContext.userName || "(no name)"}, timezone: ${tz}`);
-
-  // Call the Gemini model with the few-shot prompt (retry up to 3 times on parse failures)
+  // Call the model with the few-shot prompt (retry up to 3 times on parse failures)
   const model = getModel();
   const modelName = getModelName();
+
+  console.log(`[assistant:structured] Starting single-pass inference (${modelName})`);
+  console.log(`[assistant:structured] User: ${userContext.userName || "(no name)"}, timezone: ${tz}`);
 
   let rawOutput: string = "";
   let inputTokens: number | undefined;
   let outputTokens: number | undefined;
   let output: OrbitModelOutput | undefined;
 
+  const inferenceStart = Date.now();
   const MAX_RETRIES = 3;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -619,7 +620,7 @@ export async function processMessageStructured(
     }
 
     console.log(`[assistant:structured] Raw output (${rawOutput.length} chars): ${rawOutput.substring(0, 300)}`);
-    console.log(`[assistant:structured] Usage — model: ${modelName}, input: ${inputTokens ?? "n/a"}, output: ${outputTokens ?? "n/a"}`);
+    console.log(`[assistant:structured] Usage — model: ${modelName}, time: ${((Date.now() - inferenceStart) / 1000).toFixed(1)}s, input: ${inputTokens ?? "n/a"}, output: ${outputTokens ?? "n/a"}`);
 
     // Parse the structured output
     try {

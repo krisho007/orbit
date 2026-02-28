@@ -110,17 +110,18 @@ export async function processMessageFinetuned(
     content: m.content,
   }));
 
-  console.log(`[assistant:finetuned] Starting single-pass inference`);
-  console.log(`[assistant:finetuned] User: ${userContext.userName || "(no name)"}, timezone: ${tz}`);
-
   // Call the fine-tuned model
   const model = getFinetunedModel();
   const modelName = getFinetunedModelName();
+
+  console.log(`[assistant:finetuned] Starting single-pass inference (${modelName})`);
+  console.log(`[assistant:finetuned] User: ${userContext.userName || "(no name)"}, timezone: ${tz}`);
 
   let rawOutput: string;
   let inputTokens: number | undefined;
   let outputTokens: number | undefined;
 
+  const inferenceStart = Date.now();
   try {
     const { generateText } = await import("ai");
     const result = await generateText({
@@ -141,6 +142,7 @@ export async function processMessageFinetuned(
   }
 
   console.log(`[assistant:finetuned] Raw output (${rawOutput.length} chars): ${rawOutput.substring(0, 300)}`);
+  console.log(`[assistant:finetuned] Usage — model: ${modelName}, time: ${((Date.now() - inferenceStart) / 1000).toFixed(1)}s, input: ${inputTokens ?? "n/a"}, output: ${outputTokens ?? "n/a"}`);
 
   // Parse the structured output
   let output: OrbitModelOutput;

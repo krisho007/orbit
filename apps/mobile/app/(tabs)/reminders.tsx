@@ -10,11 +10,11 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Bell, CheckCircle2, XCircle, Plus, Search, X } from "lucide-react-native";
+import { Bell, CheckCircle2, XCircle, Circle, Plus, Search, X } from "lucide-react-native";
 import { format } from "date-fns";
 import { Reminder, ReminderStatus } from "../../lib/api";
 import { getThemeColor, useThemeColors } from "../../lib/theme";
-import { useReminders } from "../../hooks/use-reminders";
+import { useReminders, useUpdateReminder } from "../../hooks/use-reminders";
 import { HuskyLogo } from "../../components/HuskyLogo";
 
 const STATUS_META: Record<
@@ -128,6 +128,8 @@ export default function RemindersScreen() {
     setDebouncedSearch("");
   }, []);
 
+  const updateReminder = useUpdateReminder();
+
   const {
     data,
     isLoading,
@@ -147,18 +149,17 @@ export default function RemindersScreen() {
   const totalCount = data?.pages[0]?.stats?.totalCount ?? 0;
 
   const renderReminder = ({ item }: { item: Reminder }) => {
-    const statusMeta = STATUS_META[item.status] || STATUS_META.OPEN;
-    const StatusIcon = statusMeta.icon;
     const dueDate = new Date(item.dueAt);
     const dueLabel = Number.isNaN(dueDate.getTime())
       ? "Due date unknown"
       : format(dueDate, "MMM d, yyyy");
-    const iconColor =
-      item.status === "DONE"
-        ? getThemeColor(colors, "success-600")
-        : item.status === "CANCELED"
-          ? getThemeColor(colors, "error-500")
-          : getThemeColor(colors, "primary-600");
+    const isDone = item.status === "DONE";
+    const isCanceled = item.status === "CANCELED";
+    const checkColor = isDone
+      ? getThemeColor(colors, "success-600")
+      : isCanceled
+        ? getThemeColor(colors, "error-500")
+        : getThemeColor(colors, "typography-400");
     const participants =
       item.participants?.map((p) => p.contact.displayName).filter(Boolean).join(", ") ||
       "No participants";
@@ -174,13 +175,33 @@ export default function RemindersScreen() {
         className="p-4 bg-background-0 border-b border-border-200 active:bg-background-50"
       >
         <View className="flex-row items-start">
-          <View className="w-10 h-10 rounded-xl bg-primary-100 items-center justify-center mr-3">
-            <StatusIcon size={18} color={iconColor} />
-          </View>
+          <Pressable
+            onPress={() => {
+              if (!isCanceled) {
+                updateReminder.mutate({
+                  id: item.id,
+                  data: { status: isDone ? "OPEN" : "DONE" },
+                });
+              }
+            }}
+            hitSlop={8}
+            className="w-10 h-10 items-center justify-center mr-3"
+          >
+            {isCanceled ? (
+              <XCircle size={22} color={checkColor} />
+            ) : isDone ? (
+              <CheckCircle2 size={22} color={checkColor} />
+            ) : (
+              <Circle size={22} color={checkColor} />
+            )}
+          </Pressable>
 
           <View className="flex-1">
             <View className="flex-row items-center justify-between mb-1">
-              <Text className="text-typography-900 font-body-semibold flex-1" numberOfLines={1}>
+              <Text
+                className={`font-body-semibold flex-1 ${isDone ? "text-typography-400 line-through" : "text-typography-900"}`}
+                numberOfLines={1}
+              >
                 {item.title}
               </Text>
               <Text className="text-typography-400 text-xs ml-2">{dueLabel}</Text>

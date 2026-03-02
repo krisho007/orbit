@@ -29,6 +29,7 @@
       "permissions": [
         "POST_NOTIFICATIONS",
         "READ_CALL_LOG",
+        "READ_CONTACTS",
         "READ_PHONE_STATE"
       ]
     },
@@ -39,6 +40,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withContactViewerIntent",
       [
         "expo-image-picker",
         {

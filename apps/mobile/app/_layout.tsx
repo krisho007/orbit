@@ -113,6 +113,7 @@ function RootLayoutNav() {
     const inOnboardingWelcome = firstSegment === "welcome";
     const inGoogleImportScreen = firstSegment === "google-import";
     const inIncomingCallScreen = firstSegment === "incoming-call";
+    const inViewContactScreen = firstSegment === "view-contact";
     const inOnboardingFlow =
       inOnboardingGroup || inOnboardingWelcome || inGoogleImportScreen;
 
@@ -127,7 +128,8 @@ function RootLayoutNav() {
       user?.id &&
       onboardingState === "required" &&
       !inOnboardingFlow &&
-      !inIncomingCallScreen
+      !inIncomingCallScreen &&
+      !inViewContactScreen
     ) {
       redirectTarget = "/welcome";
     } else if (

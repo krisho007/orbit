@@ -56,6 +56,16 @@ android/
 !apps/mobile/android/app/src/main/java/com/orbit/app/MainActivity.kt
 !apps/mobile/android/app/src/main/java/com/orbit/app/PhoneStateReceiver.kt
 
+# Keep Expo module native sources under version control
+!apps/mobile/modules/**/android/
+!apps/mobile/modules/**/android/src/
+!apps/mobile/modules/**/android/src/main/
+!apps/mobile/modules/**/android/src/main/java/
+!apps/mobile/modules/**/android/src/main/java/expo/
+!apps/mobile/modules/**/android/src/main/java/expo/modules/
+!apps/mobile/modules/**/android/src/main/java/expo/modules/**/
+!apps/mobile/modules/**/android/src/main/java/expo/modules/**/*.kt
+
 # Allow Claude Code commands to be tracked
 !.claude/
 .claude/*

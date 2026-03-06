@@ -17,11 +17,16 @@ const noop = {
   clearIntent: () => {},
 };
 
-// Only load the native module on Android — it doesn't exist on other platforms
-const ContactIntent =
-  Platform.OS === "android"
-    ? require("expo-modules-core").requireNativeModule("ContactIntent")
-    : noop;
+// Only load the native module on Android dev builds — falls back to noop in Expo Go
+let ContactIntent = noop;
+if (Platform.OS === "android") {
+  try {
+    ContactIntent =
+      require("expo-modules-core").requireNativeModule("ContactIntent");
+  } catch {
+    // Native module not available (e.g. running in Expo Go)
+  }
+}
 
 export function getContactFromIntent(): ContactIntentResult {
   return ContactIntent.getContactFromIntent();

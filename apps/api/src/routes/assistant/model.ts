@@ -24,6 +24,11 @@ export function isStructuredProvider(): boolean {
   return getProvider() === "google_structured" || getProvider() === "cerebras";
 }
 
+/** Whether the current provider supports generateObject (JSON schema mode). */
+export function supportsStructuredOutput(): boolean {
+  return getProvider() === "google_structured";
+}
+
 export function getModelName(): string {
   const provider = getProvider();
   return process.env.AI_MODEL || DEFAULT_MODELS[provider];

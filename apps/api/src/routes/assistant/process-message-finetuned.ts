@@ -117,9 +117,9 @@ export async function processMessageFinetuned(
   console.log(`[assistant:finetuned] Starting single-pass inference (${modelName})`);
   console.log(`[assistant:finetuned] User: ${userContext.userName || "(no name)"}, timezone: ${tz}`);
 
-  let rawOutput: string;
   let inputTokens: number | undefined;
   let outputTokens: number | undefined;
+  let output: OrbitModelOutput;
 
   const inferenceStart = Date.now();
   try {
@@ -130,35 +130,19 @@ export async function processMessageFinetuned(
       messages: modelMessages,
     });
 
-    rawOutput = result.text;
     inputTokens = result.usage?.inputTokens;
     outputTokens = result.usage?.outputTokens;
+    output = parseModelOutput(result.text);
   } catch (err) {
-    console.error(`[assistant:finetuned] Model call failed:`, err);
+    console.error(`[assistant:finetuned] generateText/parse failed:`, err);
     return {
-      text: "I'm having trouble processing your request right now. Please try again.",
-      ui: null,
-    };
-  }
-
-  console.log(`[assistant:finetuned] Raw output (${rawOutput.length} chars): ${rawOutput.substring(0, 300)}`);
-  console.log(`[assistant:finetuned] Usage — model: ${modelName}, time: ${((Date.now() - inferenceStart) / 1000).toFixed(1)}s, input: ${inputTokens ?? "n/a"}, output: ${outputTokens ?? "n/a"}`);
-
-  // Parse the structured output
-  let output: OrbitModelOutput;
-  try {
-    output = parseModelOutput(rawOutput);
-  } catch (err) {
-    console.error(`[assistant:finetuned] Failed to parse model output:`, err);
-    // Fallback: return raw text as a response (the model might have generated free text)
-    return {
-      text: rawOutput || "I couldn't process that request. Could you rephrase?",
+      text: "I couldn't process that request. Could you rephrase?",
       ui: null,
       modelName,
-      inputTokens,
-      outputTokens,
     };
   }
+
+  console.log(`[assistant:finetuned] Usage — model: ${modelName}, time: ${((Date.now() - inferenceStart) / 1000).toFixed(1)}s, input: ${inputTokens ?? "n/a"}, output: ${outputTokens ?? "n/a"}`);
 
   console.log(`[assistant:finetuned] Parsed — intents: [${output.intents.join(", ")}], searches: ${output.searches.length}, needs_confirmation: ${output.needs_confirmation}, needs_resolution: ${output.needs_resolution}`);
 

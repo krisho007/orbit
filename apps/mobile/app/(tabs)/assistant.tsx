@@ -949,14 +949,15 @@ export default function AssistantScreen() {
 
   const renderAssistantUi = (ui: AssistantUi) => {
     if (ui.kind === "selection") {
-      const options = ui.options.slice(0, RESULT_CARD_LIMIT);
-      const showCountLabel = ui.options.length > options.length;
+      const options = ui.options;
+      const totalCount = 'totalCount' in ui ? ui.totalCount : undefined;
+      const showCountLabel = totalCount != null && totalCount > options.length;
       const showScrollableResults = options.length > 2;
       return (
         <View>
           {showCountLabel ? (
             <Text className="text-typography-500 text-xs mb-2">
-              Showing {options.length} of {ui.options.length}
+              Showing {options.length} of {totalCount}
             </Text>
           ) : null}
           {showScrollableResults ? (

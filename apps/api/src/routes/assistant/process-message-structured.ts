@@ -8,12 +8,12 @@
  */
 
 import type { ChatMessage, AssistantUi, AssistantAction, AssistantIntent, StatusCallback, ToolResult } from "./types";
-import { getModel, getModelName, getProviderApiKeyEnvGuard } from "./model";
-import { isExplicitUserConfirmation, isExplicitUserRejection, parseUserSelection, isSkipContactSelection, isCreateNewContactSelection } from "./guardrails";
+import { getModel, getModelName, getProviderApiKeyEnvGuard, supportsStructuredOutput } from "./model";
+import { isExplicitUserConfirmation, isExplicitUserRejection, parseUserSelection, isSkipContactSelection, isCreateNewContactSelection, isShowMoreDisambiguation } from "./guardrails";
 import { loadAssistantEnumConfig } from "./enums";
 import { getUserContext } from "./db-helpers";
 import { buildUiFromToolResults, summarizeUiText } from "./ui-builder";
-import { parseModelOutput, getActions } from "./finetuned-types";
+import { orbitModelOutputSchema, parseModelOutput, getActions } from "./finetuned-types";
 import type { OrbitModelOutput, ActionInstruction, SearchInstruction } from "./finetuned-types";
 import { executeSearches } from "./search-executor";
 import type { ResolvedSearch } from "./search-executor";
@@ -54,6 +54,8 @@ async function loadCachedIntents(assistantConversationId: string): Promise<Assis
   return null;
 }
 
+const DISAMBIGUATION_PAGE_SIZE = 5;
+
 type CachedOutput = {
   intents: string[];
   actions: ActionInstruction[];
@@ -63,6 +65,8 @@ type CachedOutput = {
   resolvedSearches?: Record<string, ResolvedSearch>;
   // Search IDs still needing user selection
   pendingAmbiguous?: string[];
+  // Current offset into candidates for "Show more" pagination
+  disambiguationOffset?: number;
 };
 
 // ── Participant fallback: when resolve_participant searches fail ─────
@@ -160,19 +164,23 @@ function buildParticipantFallback(
   };
 }
 
-// ── Selection action buttons: skip / create new ─────────────────────
+// ── Disambiguation action buttons: show more / skip / create new ────
 
-function buildSelectionActions(
+function buildDisambiguationActions(
   search: SearchInstruction,
+  hasMore: boolean,
 ): AssistantAction[] | undefined {
-  // Only show skip/create for participant resolution, not target resolution
-  if (search.purpose !== "resolve_participant" || search.entity_type !== "contact") {
-    return undefined;
+  const actions: AssistantAction[] = [];
+  if (hasMore) {
+    actions.push({ label: "Show more", message: "Show more", style: "secondary" });
   }
-  return [
-    { label: "None of these", message: "None of these — skip contact", style: "secondary" },
-    { label: `Create "${search.query}"`, message: `Create a new contact named "${search.query}"`, style: "secondary" },
-  ];
+  if (search.purpose === "resolve_participant" && search.entity_type === "contact") {
+    actions.push(
+      { label: "None of these", message: "None of these — skip contact", style: "secondary" },
+      { label: `Create "${search.query}"`, message: `Create a new contact named "${search.query}"`, style: "secondary" },
+    );
+  }
+  return actions.length > 0 ? actions : undefined;
 }
 
 async function loadCachedOutput(assistantConversationId: string): Promise<CachedOutput | null> {
@@ -249,12 +257,43 @@ export async function processMessageStructured(
   const selection = parseUserSelection(lastUserText);
   const isSkip = isSkipContactSelection(lastUserText);
   const isCreateNew = isCreateNewContactSelection(lastUserText);
+  const isShowMore = isShowMoreDisambiguation(lastUserText);
 
-  if ((selection || isSkip || isCreateNew) && assistantConversationId) {
+  if ((selection || isSkip || isCreateNew || isShowMore) && assistantConversationId) {
     const cached = await loadCachedOutput(assistantConversationId);
     if (cached && cached.resolvedSearches && cached.pendingAmbiguous && cached.pendingAmbiguous.length > 0) {
       const currentSearchId = cached.pendingAmbiguous[0]!;
       const currentResolved = cached.resolvedSearches[currentSearchId];
+
+      // ── "Show more" pagination — page through cached candidates ──
+      if (isShowMore) {
+        if (currentResolved && currentResolved.candidates.length > 0) {
+          const currentSearch = cached.searches.find((s) => s.id === currentSearchId);
+          const newOffset = (cached.disambiguationOffset ?? 0) + DISAMBIGUATION_PAGE_SIZE;
+          const pageSlice = currentResolved.candidates.slice(newOffset, newOffset + DISAMBIGUATION_PAGE_SIZE);
+          const total = currentResolved.candidates.length;
+          const hasMore = newOffset + DISAMBIGUATION_PAGE_SIZE < total;
+          const updatedCached: CachedOutput = { ...cached, disambiguationOffset: newOffset };
+          return {
+            text: `Showing results ${newOffset + 1}–${newOffset + pageSlice.length} of ${total}.`,
+            ui: {
+              kind: "selection" as const,
+              prompt: "Please pick one.",
+              options: pageSlice.map((c) => ({
+                id: c.id,
+                entityKind: currentResolved.entity_type as any,
+                title: c.displayName,
+                subtitle: null,
+                selectMessage: `Use ${currentResolved.entity_type} ID ${c.id} as the selected context for this request.`,
+              })),
+              totalCount: total,
+            },
+            actions: currentSearch ? buildDisambiguationActions(currentSearch, hasMore) : undefined,
+            cachedIntents: cached.intents as AssistantIntent[],
+            cachedOutput: updatedCached,
+          };
+        }
+      }
 
       if (selection) {
         // Regular selection — update best_match to the chosen candidate
@@ -293,25 +332,30 @@ export async function processMessageStructured(
 
         if (nextResolved && nextResolved.candidates.length > 0) {
           const nextSearch = cached.searches.find((s) => s.id === nextSearchId);
+          const pageSlice = nextResolved.candidates.slice(0, DISAMBIGUATION_PAGE_SIZE);
+          const total = nextResolved.candidates.length;
+          const hasMore = DISAMBIGUATION_PAGE_SIZE < total;
           const updatedCached: CachedOutput = {
             ...cached,
             resolvedSearches: cached.resolvedSearches,
             pendingAmbiguous: remainingPending,
+            disambiguationOffset: 0,
           };
           return {
             text: `I found multiple matching ${nextResolved.entity_type}s. Please pick one.`,
             ui: {
               kind: "selection" as const,
               prompt: `I found multiple matching ${nextResolved.entity_type}s. Please pick one.`,
-              options: nextResolved.candidates.slice(0, 10).map((c) => ({
+              options: pageSlice.map((c) => ({
                 id: c.id,
                 entityKind: nextResolved.entity_type as any,
                 title: c.displayName,
                 subtitle: null,
                 selectMessage: `Use ${nextResolved.entity_type} ID ${c.id} as the selected context for this request.`,
               })),
+              totalCount: total,
             },
-            actions: nextSearch ? buildSelectionActions(nextSearch) : undefined,
+            actions: nextSearch ? buildDisambiguationActions(nextSearch, hasMore) : undefined,
             cachedIntents: cached.intents as AssistantIntent[],
             cachedOutput: updatedCached,
           };
@@ -484,20 +528,24 @@ export async function processMessageStructured(
         for (const [searchId, search] of searchResults) {
           if (search.ambiguous && search.candidates.length > 1) {
             const searchInstruction = cached.searches.find((s) => s.id === searchId);
+            const pageSlice = search.candidates.slice(0, DISAMBIGUATION_PAGE_SIZE);
+            const total = search.candidates.length;
+            const hasMore = DISAMBIGUATION_PAGE_SIZE < total;
             return {
               text: `I found multiple matching ${search.entity_type}s. Please pick one.`,
               ui: {
                 kind: "selection" as const,
                 prompt: `I found multiple matching ${search.entity_type}s. Please pick one.`,
-                options: search.candidates.slice(0, 10).map((c: { id: string; displayName: string }) => ({
+                options: pageSlice.map((c: { id: string; displayName: string }) => ({
                   id: c.id,
                   entityKind: search.entity_type as any,
                   title: c.displayName,
                   subtitle: null,
                   selectMessage: `Use contact ID ${c.id} as the selected context for this request.`,
                 })),
+                totalCount: total,
               },
-              actions: searchInstruction ? buildSelectionActions(searchInstruction) : undefined,
+              actions: searchInstruction ? buildDisambiguationActions(searchInstruction, hasMore) : undefined,
               cachedIntents: cached.intents as AssistantIntent[],
             };
           }
@@ -627,14 +675,36 @@ export async function processMessageStructured(
   console.log(`[assistant:structured] Starting single-pass inference (${modelName})`);
   console.log(`[assistant:structured] User: ${userContext.userName || "(no name)"}, timezone: ${tz}`);
 
-  let rawOutput: string = "";
   let inputTokens: number | undefined;
   let outputTokens: number | undefined;
-  let output: OrbitModelOutput | undefined;
+  let output: OrbitModelOutput;
 
   const inferenceStart = Date.now();
-  const MAX_RETRIES = 3;
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+  if (supportsStructuredOutput()) {
+    try {
+      const { generateObject } = await import("ai");
+      const result = await generateObject({
+        model,
+        schema: orbitModelOutputSchema,
+        schemaName: "OrbitModelOutput",
+        system: systemPrompt,
+        messages: modelMessages,
+        maxOutputTokens: 2048,
+      });
+
+      output = result.object;
+      inputTokens = result.usage?.inputTokens;
+      outputTokens = result.usage?.outputTokens;
+    } catch (err) {
+      console.error(`[assistant:structured] generateObject failed:`, err);
+      return {
+        text: "I had trouble understanding how to process that. Could you try rephrasing your request?",
+        ui: null,
+        modelName,
+      };
+    }
+  } else {
+    // Fallback: generateText + manual JSON parsing (for providers without JSON schema support)
     try {
       const { generateText } = await import("ai");
       const result = await generateText({
@@ -644,45 +714,20 @@ export async function processMessageStructured(
         maxOutputTokens: 2048,
       });
 
-      rawOutput = result.text;
       inputTokens = result.usage?.inputTokens;
       outputTokens = result.usage?.outputTokens;
+      output = parseModelOutput(result.text);
     } catch (err) {
-      console.error(`[assistant:structured] Model call failed (attempt ${attempt}/${MAX_RETRIES}):`, err);
-      if (attempt === MAX_RETRIES) {
-        return {
-          text: "I'm having trouble processing your request right now. Please try again.",
-          ui: null,
-        };
-      }
-      continue;
-    }
-
-    console.log(`[assistant:structured] Raw output (${rawOutput.length} chars): ${rawOutput.substring(0, 300)}`);
-    console.log(`[assistant:structured] Usage — model: ${modelName}, time: ${((Date.now() - inferenceStart) / 1000).toFixed(1)}s, input: ${inputTokens ?? "n/a"}, output: ${outputTokens ?? "n/a"}`);
-
-    // Parse the structured output
-    try {
-      output = parseModelOutput(rawOutput);
-      break; // Success — exit retry loop
-    } catch (err) {
-      console.warn(`[assistant:structured] Failed to parse model output (attempt ${attempt}/${MAX_RETRIES}):`, err);
-      if (attempt < MAX_RETRIES) {
-        console.log(`[assistant:structured] Retrying LLM call...`);
-      }
+      console.error(`[assistant:structured] generateText/parse failed:`, err);
+      return {
+        text: "I had trouble understanding how to process that. Could you try rephrasing your request?",
+        ui: null,
+        modelName,
+      };
     }
   }
 
-  if (!output) {
-    console.error(`[assistant:structured] All ${MAX_RETRIES} attempts failed to produce valid JSON`);
-    return {
-      text: "I had trouble understanding how to process that. Could you try rephrasing your request?",
-      ui: null,
-      modelName,
-      inputTokens,
-      outputTokens,
-    };
-  }
+  console.log(`[assistant:structured] Usage — model: ${modelName}, time: ${((Date.now() - inferenceStart) / 1000).toFixed(1)}s, input: ${inputTokens ?? "n/a"}, output: ${outputTokens ?? "n/a"}`);
 
   console.log(`[assistant:structured] Parsed — intents: [${output.intents.join(", ")}], searches: ${output.searches.length}, needs_confirmation: ${output.needs_confirmation}, needs_resolution: ${output.needs_resolution}`);
 
@@ -723,6 +768,10 @@ export async function processMessageStructured(
         resolvedSearches[id] = resolved;
       }
 
+      const pageSlice = firstAmbiguous.candidates.slice(0, DISAMBIGUATION_PAGE_SIZE);
+      const total = firstAmbiguous.candidates.length;
+      const hasMore = DISAMBIGUATION_PAGE_SIZE < total;
+
       const cachedOutput: CachedOutput = {
         intents: output.intents,
         actions: allActions,
@@ -730,6 +779,7 @@ export async function processMessageStructured(
         response: output.response,
         resolvedSearches,
         pendingAmbiguous: ambiguousSearchIds,
+        disambiguationOffset: 0,
       };
 
       return {
@@ -737,15 +787,16 @@ export async function processMessageStructured(
         ui: {
           kind: "selection" as const,
           prompt: `I found multiple matching ${firstAmbiguous.entity_type}s. Please pick one.`,
-          options: firstAmbiguous.candidates.slice(0, 10).map((c) => ({
+          options: pageSlice.map((c) => ({
             id: c.id,
             entityKind: firstAmbiguous.entity_type as any,
             title: c.displayName,
             subtitle: null,
             selectMessage: `Use ${firstAmbiguous.entity_type} ID ${c.id} as the selected context for this request.`,
           })),
+          totalCount: total,
         },
-        actions: ambiguousSearch ? buildSelectionActions(ambiguousSearch) : undefined,
+        actions: ambiguousSearch ? buildDisambiguationActions(ambiguousSearch, hasMore) : undefined,
         cachedIntents: output.intents as AssistantIntent[],
         cachedOutput,
         modelName,

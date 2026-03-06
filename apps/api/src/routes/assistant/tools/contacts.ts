@@ -294,7 +294,7 @@ export async function queryContacts(
   searchTerm?: string,
   limit?: number
 ): Promise<ToolResult> {
-  const takeLimit = Math.min(limit || 10, 10);
+  const takeLimit = Math.min(limit || 10, 50);
 
   if (searchTerm) {
     try {

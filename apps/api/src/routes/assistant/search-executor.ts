@@ -12,6 +12,8 @@ import { listReminders } from "./tools/reminders";
 
 export type { ResolvedSearch };
 
+const DISAMBIGUATION_FETCH_LIMIT = 20;
+
 // Generic terms that should NOT be treated as participant/contact names.
 // When these appear as the query in display_results searches, we skip
 // participant-name-based filtering (queryConversations / queryEvents) and
@@ -79,10 +81,10 @@ async function executeContactSearch(
   if (search.search_type === "phone") {
     result = await searchContactsByPhone(userId, search.query);
   } else if (search.search_type === "fuzzy_name") {
-    result = await searchContactsFuzzy(userId, search.query);
+    result = await searchContactsFuzzy(userId, search.query, DISAMBIGUATION_FETCH_LIMIT);
   } else {
     // keyword / semantic → use query contacts
-    result = await queryContacts(userId, search.query, 5);
+    result = await queryContacts(userId, search.query, DISAMBIGUATION_FETCH_LIMIT);
   }
 
   if (result.type === "error") return base;

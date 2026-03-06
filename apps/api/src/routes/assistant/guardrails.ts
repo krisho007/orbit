@@ -83,6 +83,10 @@ export function isCreateNewContactSelection(text: string): boolean {
   return /create.*new.*contact|create\s*"/i.test(text.trim());
 }
 
+export function isShowMoreDisambiguation(text: string): boolean {
+  return /^show more$/i.test(text.trim());
+}
+
 export function parseIntentFromText(rawText: string): AssistantIntent {
   const cleaned = rawText.replace(/```json|```/gi, "").trim();
   if (!cleaned) return "unknown";

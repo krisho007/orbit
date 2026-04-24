@@ -1,0 +1,1 @@
+ALTER TABLE "assistant_conversations" ADD COLUMN "titleGenerated" boolean DEFAULT false NOT NULL;

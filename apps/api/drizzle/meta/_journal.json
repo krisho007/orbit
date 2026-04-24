@@ -113,6 +113,20 @@
       "when": 1772303088521,
       "tag": "0015_ambiguous_star_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1777044399229,
+      "tag": "0016_great_serpent_society",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1777044669688,
+      "tag": "0017_next_praxagora",
+      "breakpoints": true
     }
   ]
 }

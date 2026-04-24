@@ -12,6 +12,7 @@ import {
   unique,
   index,
   vector,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -386,6 +387,7 @@ export const assistantConversations = pgTable(
       .$defaultFn(() => crypto.randomUUID()),
     userId: text("userId").notNull(),
     title: text("title"),
+    titleGenerated: boolean("titleGenerated").default(false).notNull(),
     createdAt: timestamp("createdAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updatedAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   },
@@ -405,6 +407,7 @@ export const assistantMessages = pgTable(
     role: assistantMessageRoleEnum("role").notNull(),
     content: text("content").notNull(),
     ui: text("ui"),
+    parts: jsonb("parts"),
     modelName: text("modelName"),
     inputTokens: integer("inputTokens"),
     outputTokens: integer("outputTokens"),

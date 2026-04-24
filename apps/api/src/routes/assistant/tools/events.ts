@@ -1,785 +1,200 @@
 import { z } from "zod";
 import { tool } from "ai";
-import { eq, and, desc, sql, ilike, or, inArray, isNotNull } from "drizzle-orm";
-import {
-  db,
-  contacts,
-  conversations,
-  conversationParticipants,
-  events,
-  eventParticipants,
-} from "../../../db";
-import type { ToolResult } from "../types";
-import { PAGE_SIZE } from "../types";
-import { assertValidEventType, assertValidMedium } from "../enums";
+import { and, asc, desc, eq, gte, ilike, inArray, or, sql } from "drizzle-orm";
+import { db, contacts, events, eventParticipants } from "../../../db";
 import { getOwnedEvent } from "../ownership";
-import { findBestContactMatch } from "../db-helpers";
 import { enrichEvents } from "../enrichment";
-import {
-  generateEmbedding,
-  generateQueryEmbedding,
-  buildEventEmbeddingText,
-} from "../../../lib/embeddings";
-import type { EnumSchemas } from "./contacts";
 
-/** Fire-and-forget: generate embedding for an event and store it. */
-function generateAndStoreEventEmbedding(
-  eventId: string,
-  title: string,
-  eventType: string,
-  participantIds: string[],
-  location?: string | null,
-  description?: string | null
-) {
-  (async () => {
-    try {
-      let participantNames: string[] = [];
-      if (participantIds.length > 0) {
+type Ctx = { userId: string };
+
+const eventTypeEnum = z.enum([
+  "MEETING",
+  "CALL",
+  "BIRTHDAY",
+  "ANNIVERSARY",
+  "CONFERENCE",
+  "SOCIAL",
+  "FAMILY_EVENT",
+  "JOURNAL",
+  "OTHER",
+]);
+
+function parseIso(v?: string): Date | undefined {
+  if (!v) return undefined;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? undefined : d;
+}
+
+async function verifyOwnedContacts(userId: string, ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const rows = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(eq(contacts.userId, userId), inArray(contacts.id, ids)));
+  return rows.map((r) => r.id);
+}
+
+export function eventTools({ userId }: Ctx) {
+  return {
+    search_events: tool({
+      description:
+        "Search events by title/description/location, type, participant, or date range.",
+      inputSchema: z.object({
+        query: z.string().optional(),
+        eventType: eventTypeEnum.optional(),
+        participantId: z.string().optional(),
+        since: z.string().optional(),
+        until: z.string().optional(),
+        limit: z.number().int().min(1).max(50).default(10),
+      }),
+      execute: async ({ query, eventType, participantId, since, until, limit }) => {
+        const conditions = [eq(events.userId, userId)];
+        if (eventType) conditions.push(eq(events.eventType, eventType));
+        if (query) {
+          conditions.push(
+            or(
+              ilike(events.title, `%${query}%`),
+              ilike(events.description, `%${query}%`),
+              ilike(events.location, `%${query}%`)
+            )!
+          );
+        }
+        const sinceDate = parseIso(since);
+        const untilDate = parseIso(until);
+        if (sinceDate) conditions.push(sql`${events.startAt} >= ${sinceDate}`);
+        if (untilDate) conditions.push(sql`${events.startAt} <= ${untilDate}`);
+        if (participantId) {
+          const ids = await db
+            .select({ id: eventParticipants.eventId })
+            .from(eventParticipants)
+            .where(eq(eventParticipants.contactId, participantId));
+          const eventIds = ids.map((r) => r.id);
+          if (eventIds.length === 0) return { count: 0, events: [] };
+          conditions.push(inArray(events.id, eventIds));
+        }
         const rows = await db
-          .select({ displayName: contacts.displayName })
-          .from(contacts)
-          .where(inArray(contacts.id, participantIds));
-        participantNames = rows.map((r) => r.displayName);
-      }
-
-      const text = buildEventEmbeddingText({
-        title,
-        eventType,
-        location,
-        description,
-        participantNames,
-      });
-      if (!text || text.length < 5) return;
-
-      const embedding = await generateEmbedding(text);
-      await db
-        .update(events)
-        .set({ embedding })
-        .where(eq(events.id, eventId));
-    } catch (err) {
-      console.error(`[embeddings] Failed to generate embedding for event ${eventId}:`, err);
-    }
-  })();
-}
-
-/** Semantic vector search for events. */
-async function semanticSearchEvents(
-  userId: string,
-  query: string,
-  eventType?: string,
-  limit?: number
-): Promise<ToolResult> {
-  const takeLimit = Math.min(limit || 10, 20);
-  console.log(`[assistant:tool] semanticSearchEvents — query="${query}", limit=${takeLimit}`);
-
-  try {
-    const queryEmbedding = await generateQueryEmbedding(query);
-    const embeddingStr = JSON.stringify(queryEmbedding);
-
-    const conditions = [
-      eq(events.userId, userId),
-      isNotNull(events.embedding),
-      sql`(${events.embedding} <=> ${embeddingStr}::vector) < 0.6`,
-    ];
-
-    if (eventType) {
-      conditions.push(eq(events.eventType, assertValidEventType(eventType)));
-    }
-
-    const eventsList = await db
-      .select({
-        id: events.id,
-        title: events.title,
-        eventType: events.eventType,
-        startAt: events.startAt,
-        endAt: events.endAt,
-        location: events.location,
-        description: events.description,
-        similarity: sql<number>`1 - (${events.embedding} <=> ${embeddingStr}::vector)`,
-      })
-      .from(events)
-      .where(and(...conditions))
-      .orderBy(sql`${events.embedding} <=> ${embeddingStr}::vector`)
-      .limit(takeLimit);
-
-    // Fetch participants for results
-    const eventIds = eventsList.map((e) => e.id);
-    let participants: any[] = [];
-    if (eventIds.length > 0) {
-      participants = await db
-        .select()
-        .from(eventParticipants)
-        .innerJoin(contacts, eq(eventParticipants.contactId, contacts.id))
-        .where(inArray(eventParticipants.eventId, eventIds));
-    }
-
-    console.log(`[assistant:tool] semanticSearchEvents — returning ${eventsList.length} result(s)`);
-
-    return {
-      type: "events_found",
-      count: eventsList.length,
-      events: eventsList.map((e) => ({
-        id: e.id,
-        title: e.title,
-        eventType: e.eventType,
-        startAt: e.startAt,
-        location: e.location,
-        description: e.description,
-        similarity: e.similarity,
-        participants: participants
-          .filter((p: any) => p.event_participants.eventId === e.id)
-          .map((p: any) => p.contacts.displayName),
-      })),
-    };
-  } catch (err) {
-    console.error(`[assistant:tool] semanticSearchEvents — error:`, err);
-    // Fallback to keyword search if vector search fails
-    return listEvents(userId, undefined, query, eventType, limit);
-  }
-}
-
-// ── Implementation functions ─────────────────────────────────────────
-
-export async function createEvent(
-  userId: string,
-  title: string,
-  startAt: string,
-  participantIds?: string[],
-  endAt?: string,
-  location?: string,
-  description?: string,
-  eventType?: string,
-  assistantConversationId?: string
-): Promise<ToolResult> {
-  let resolvedParticipantIds: string[] = [];
-
-  if (participantIds && participantIds.length > 0) {
-    const ownedContacts = await db
-      .select({ id: contacts.id })
-      .from(contacts)
-      .where(and(eq(contacts.userId, userId), inArray(contacts.id, participantIds)));
-
-    const ownedIds = ownedContacts.map((c) => c.id);
-    const missingIds = participantIds.filter((id) => !ownedIds.includes(id));
-
-    if (missingIds.length > 0) {
-      return {
-        type: "error",
-        message: `Could not find contacts with ids: ${missingIds.join(", ")}`,
-      };
-    }
-
-    resolvedParticipantIds = participantIds;
-  }
-
-  if (!eventType) {
-    return { type: "error", message: "eventType is required" };
-  }
-
-  const [event] = await db
-    .insert(events)
-    .values({
-      title,
-      description: description || null,
-      eventType: assertValidEventType(eventType),
-      startAt: new Date(startAt),
-      endAt: endAt ? new Date(endAt) : null,
-      location: location || null,
-      userId,
-      assistantConversationId: assistantConversationId || null,
-    })
-    .returning();
-
-  if (!event) {
-    return { type: "error", message: "Failed to create event" };
-  }
-
-  // Add participants
-  if (resolvedParticipantIds.length > 0) {
-    await db.insert(eventParticipants).values(
-      resolvedParticipantIds.map((contactId) => ({
-        eventId: event.id,
-        contactId,
-      }))
-    );
-  }
-
-  // Get participant names
-  const participantContacts =
-    resolvedParticipantIds.length > 0
-      ? await db
-          .select({ displayName: contacts.displayName })
-          .from(contacts)
-          .where(inArray(contacts.id, resolvedParticipantIds))
-      : [];
-
-  // Fire-and-forget embedding generation
-  generateAndStoreEventEmbedding(
-    event.id,
-    event.title,
-    event.eventType,
-    resolvedParticipantIds,
-    event.location,
-    description
-  );
-
-  return {
-    type: "event_created",
-    id: event.id,
-    title: event.title,
-    eventType: event.eventType,
-    startAt: event.startAt,
-    location: event.location,
-    participants: participantContacts.map((p) => p.displayName),
-  };
-}
-
-export async function queryEvents(
-  userId: string,
-  participantName?: string,
-  limit?: number
-): Promise<ToolResult> {
-  console.log(`[assistant:tool] queryEvents — participant="${participantName || "any"}", limit=${limit || 10}`);
-  const takeLimit = Math.min(limit || 10, 10);
-  let contactFilter: string | null = null;
-  if (participantName) {
-    const contact = await findBestContactMatch(userId, participantName);
-    if (contact) {
-      contactFilter = contact.id;
-      console.log(`[assistant:tool] queryEvents — filtering by contact: ${contact.displayName} (${contact.id})`);
-    } else {
-      console.log(`[assistant:tool] queryEvents — no contact found for "${participantName}", returning unfiltered`);
-    }
-  }
-
-  // When filtering by participant, use a subquery to avoid the post-hoc filtering bug
-  // where matching events beyond the limit would be missed
-  const conditions = [eq(events.userId, userId)];
-  if (contactFilter) {
-    const participantEventIds = db
-      .select({ eventId: eventParticipants.eventId })
-      .from(eventParticipants)
-      .where(eq(eventParticipants.contactId, contactFilter));
-
-    conditions.push(inArray(events.id, participantEventIds));
-  }
-
-  const eventsList = await db
-    .select()
-    .from(events)
-    .where(and(...conditions))
-    .orderBy(desc(events.startAt))
-    .limit(takeLimit);
-
-  // Get participants for each event
-  const eventIds = eventsList.map((e) => e.id);
-  const participants =
-    eventIds.length > 0
-      ? await db
           .select()
-          .from(eventParticipants)
-          .innerJoin(contacts, eq(eventParticipants.contactId, contacts.id))
-          .where(inArray(eventParticipants.eventId, eventIds))
-      : [];
-
-  console.log(`[assistant:tool] queryEvents — returning ${eventsList.length} event(s)`);
-
-  return {
-    type: "events_found",
-    count: eventsList.length,
-    events: eventsList.map((e) => ({
-      id: e.id,
-      title: e.title,
-      startAt: e.startAt,
-      location: e.location,
-      participants: participants
-        .filter((p: any) => p.event_participants.eventId === e.id)
-        .map((p: any) => p.contacts.displayName),
-    })),
-  };
-}
-
-export async function listEvents(
-  userId: string,
-  cursor?: string,
-  search?: string,
-  eventType?: string,
-  limit?: number
-): Promise<ToolResult> {
-  const conditions = [eq(events.userId, userId)];
-  if (eventType) {
-    conditions.push(eq(events.eventType, assertValidEventType(eventType)));
-  }
-  if (search) {
-    conditions.push(
-      or(
-        ilike(events.title, `%${search}%`),
-        ilike(events.description, `%${search}%`),
-        ilike(events.location, `%${search}%`)
-      )!
-    );
-  }
-
-  const takeLimit = limit || PAGE_SIZE;
-  let eventsList;
-  if (cursor) {
-    eventsList = await db
-      .select()
-      .from(events)
-      .where(
-        and(
-          ...conditions,
-          sql`${events.startAt} < (SELECT "startAt" FROM events WHERE id = ${cursor})`
-        )
-      )
-      .orderBy(desc(events.startAt))
-      .limit(takeLimit + 1);
-  } else {
-    eventsList = await db
-      .select()
-      .from(events)
-      .where(and(...conditions))
-      .orderBy(desc(events.startAt))
-      .limit(takeLimit + 1);
-  }
-
-  let nextCursor: string | null = null;
-  if (eventsList.length > takeLimit) {
-    const nextItem = eventsList.pop();
-    nextCursor = nextItem?.id || null;
-  }
-
-  const enrichedEvents = await enrichEvents(eventsList);
-
-  let stats = null;
-  if (!cursor && !search && !eventType) {
-    const [totalResult] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(events)
-      .where(eq(events.userId, userId));
-
-    stats = { totalCount: Number(totalResult?.count || 0) };
-  }
-
-  return {
-    type: "events_found",
-    count: enrichedEvents.length,
-    events: enrichedEvents,
-    nextCursor,
-    stats,
-  };
-}
-
-export async function getEventById(userId: string, eventId: string): Promise<ToolResult> {
-  const event = await getOwnedEvent(userId, eventId);
-
-  if (!event) {
-    return { type: "error", message: "Event not found" };
-  }
-
-  const participantsData = await db
-    .select()
-    .from(eventParticipants)
-    .innerJoin(contacts, eq(eventParticipants.contactId, contacts.id))
-    .where(eq(eventParticipants.eventId, eventId));
-
-  const linkedConversations = await db
-    .select()
-    .from(conversations)
-    .where(eq(conversations.eventId, eventId))
-    .orderBy(desc(conversations.happenedAt));
-
-  return {
-    type: "event_details",
-    ...event,
-    participants: participantsData.map((p) => ({
-      ...p.event_participants,
-      contact: p.contacts,
-    })),
-    conversations: linkedConversations,
-  };
-}
-
-export async function createEventByIds(
-  userId: string,
-  payload: {
-    title: string;
-    description?: string;
-    eventType: string;
-    startAt: string;
-    endAt?: string;
-    location?: string;
-    participantIds?: string[];
-  },
-  assistantConversationId?: string
-): Promise<ToolResult> {
-  const [newEvent] = await db
-    .insert(events)
-    .values({
-      userId,
-      title: payload.title,
-      description: payload.description || null,
-      eventType: assertValidEventType(payload.eventType),
-      startAt: new Date(payload.startAt),
-      endAt: payload.endAt ? new Date(payload.endAt) : null,
-      location: payload.location || null,
-      assistantConversationId: assistantConversationId || null,
-    })
-    .returning();
-
-  if (!newEvent) {
-    return { type: "error", message: "Failed to create event" };
-  }
-
-  if (payload.participantIds && payload.participantIds.length > 0) {
-    await db.insert(eventParticipants).values(
-      payload.participantIds.map((contactId) => ({
-        eventId: newEvent.id,
-        contactId,
-      }))
-    );
-  }
-
-  const participantContacts =
-    payload.participantIds && payload.participantIds.length > 0
-      ? await db
-          .select({ displayName: contacts.displayName })
-          .from(contacts)
-          .where(inArray(contacts.id, payload.participantIds))
-      : [];
-
-  // Fire-and-forget embedding generation
-  generateAndStoreEventEmbedding(
-    newEvent.id,
-    newEvent.title,
-    newEvent.eventType,
-    payload.participantIds || [],
-    newEvent.location,
-    payload.description
-  );
-
-  return {
-    type: "event_created",
-    id: newEvent.id,
-    title: newEvent.title,
-    startAt: newEvent.startAt,
-    location: newEvent.location,
-    participants: participantContacts.map((p) => p.displayName),
-  };
-}
-
-export async function updateEventById(
-  userId: string,
-  eventId: string,
-  updates: {
-    title?: string;
-    description?: string;
-    eventType?: string;
-    startAt?: string;
-    endAt?: string;
-    location?: string;
-    participantIds?: string[];
-  }
-): Promise<ToolResult> {
-  const existing = await getOwnedEvent(userId, eventId);
-
-  if (!existing) {
-    return { type: "error", message: "Event not found" };
-  }
-
-  const updateData: Record<string, unknown> = { updatedAt: new Date() };
-  if (updates.title !== undefined) updateData.title = updates.title;
-  if (updates.description !== undefined)
-    updateData.description = updates.description || null;
-  if (updates.eventType !== undefined) updateData.eventType = assertValidEventType(updates.eventType);
-  if (updates.startAt !== undefined) updateData.startAt = new Date(updates.startAt);
-  if (updates.endAt !== undefined)
-    updateData.endAt = updates.endAt ? new Date(updates.endAt) : null;
-  if (updates.location !== undefined) updateData.location = updates.location || null;
-
-  const [updatedEvent] = await db
-    .update(events)
-    .set(updateData)
-    .where(eq(events.id, eventId))
-    .returning();
-
-  if (updates.participantIds !== undefined) {
-    await db.delete(eventParticipants).where(eq(eventParticipants.eventId, eventId));
-
-    if (updates.participantIds.length > 0) {
-      await db.insert(eventParticipants).values(
-        updates.participantIds.map((contactId) => ({
-          eventId,
-          contactId,
-        }))
-      );
-    }
-  }
-
-  // Regenerate embedding if relevant fields changed
-  if (
-    updates.title !== undefined ||
-    updates.description !== undefined ||
-    updates.location !== undefined ||
-    updates.eventType !== undefined ||
-    updates.participantIds !== undefined
-  ) {
-    let participantIdsForEmbedding: string[] = [];
-    if (updates.participantIds !== undefined) {
-      participantIdsForEmbedding = updates.participantIds;
-    } else {
-      const existingParticipants = await db
-        .select({ contactId: eventParticipants.contactId })
-        .from(eventParticipants)
-        .where(eq(eventParticipants.eventId, eventId));
-      participantIdsForEmbedding = existingParticipants.map((r) => r.contactId);
-    }
-
-    generateAndStoreEventEmbedding(
-      eventId,
-      updatedEvent?.title || existing.title,
-      updatedEvent?.eventType || existing.eventType,
-      participantIdsForEmbedding,
-      updatedEvent?.location,
-      updatedEvent?.description
-    );
-  }
-
-  return { type: "event_updated", id: eventId };
-}
-
-export async function deleteEventById(userId: string, eventId: string): Promise<ToolResult> {
-  const existing = await getOwnedEvent(userId, eventId);
-
-  if (!existing) {
-    return { type: "error", message: "Event not found" };
-  }
-
-  await db.update(conversations).set({ eventId: null }).where(eq(conversations.eventId, eventId));
-  await db.delete(events).where(eq(events.id, eventId));
-
-  return { type: "event_deleted", id: eventId };
-}
-
-export async function listEventConversations(
-  userId: string,
-  eventId: string,
-  cursor?: string,
-  search?: string,
-  medium?: string,
-  limit?: number
-): Promise<ToolResult> {
-  const event = await getOwnedEvent(userId, eventId);
-  if (!event) return { type: "error", message: "Event not found" };
-
-  const conditions = [eq(conversations.userId, userId), eq(conversations.eventId, eventId)];
-
-  if (medium) {
-    conditions.push(eq(conversations.medium, assertValidMedium(medium)));
-  }
-
-  if (search) {
-    conditions.push(ilike(conversations.content, `%${search}%`));
-  }
-
-  const takeLimit = limit || PAGE_SIZE;
-  let conversationsList;
-  if (cursor) {
-    conversationsList = await db
-      .select()
-      .from(conversations)
-      .where(
-        and(
-          ...conditions,
-          sql`${conversations.happenedAt} < (SELECT "happenedAt" FROM conversations WHERE id = ${cursor})`
-        )
-      )
-      .orderBy(desc(conversations.happenedAt))
-      .limit(takeLimit + 1);
-  } else {
-    conversationsList = await db
-      .select()
-      .from(conversations)
-      .where(and(...conditions))
-      .orderBy(desc(conversations.happenedAt))
-      .limit(takeLimit + 1);
-  }
-
-  let nextCursor: string | null = null;
-  if (conversationsList.length > takeLimit) {
-    const nextItem = conversationsList.pop();
-    nextCursor = nextItem?.id || null;
-  }
-
-  const conversationIds = conversationsList.map((conv) => conv.id);
-  const participantsData =
-    conversationIds.length > 0
-      ? await db
-          .select()
-          .from(conversationParticipants)
-          .innerJoin(contacts, eq(conversationParticipants.contactId, contacts.id))
-          .where(inArray(conversationParticipants.conversationId, conversationIds))
-      : [];
-
-  const enrichedConversations = conversationsList.map((conv) => ({
-    ...conv,
-    participants: participantsData
-      .filter((p: any) => p.conversation_participants.conversationId === conv.id)
-      .map((p: any) => ({
-        ...p.conversation_participants,
-        contact: p.contacts,
-      })),
-    event: { id: event.id, title: event.title },
-  }));
-
-  return {
-    type: "conversations_found",
-    count: enrichedConversations.length,
-    conversations: enrichedConversations,
-    nextCursor,
-  };
-}
-
-export async function listEventContacts(
-  userId: string,
-  eventId: string
-): Promise<ToolResult> {
-  const event = await getOwnedEvent(userId, eventId);
-  if (!event) return { type: "error", message: "Event not found" };
-
-  const participantsData = await db
-    .select()
-    .from(eventParticipants)
-    .innerJoin(contacts, eq(eventParticipants.contactId, contacts.id))
-    .where(eq(eventParticipants.eventId, eventId));
-
-  return {
-    type: "event_contacts",
-    contacts: participantsData.map((p: any) => ({
-      ...p.event_participants,
-      contact: p.contacts,
-    })),
-  };
-}
-
-// ── Tool definitions ─────────────────────────────────────────────────
-
-export function createEventTools(userId: string, schemas: EnumSchemas, assistantConversationId?: string) {
-  return {
-    create_event: tool({
-      description: "Create a new event. Use participant contact IDs when linking contacts.",
-      inputSchema: z.object({
-        title: z.string().describe("Event title"),
-        participantIds: z.array(z.string()).optional().describe("Participant contact IDs"),
-        startAt: z.string().describe("Start date/time as full ISO 8601 datetime, e.g. 2026-02-21T10:00:00.000Z"),
-        endAt: z.string().optional().describe("End date/time as full ISO 8601 datetime, e.g. 2026-02-21T11:00:00.000Z"),
-        location: z.string().optional().describe("Event location"),
-        description: z.string().optional().describe("Event description"),
-        eventType: schemas.eventTypeSchema.describe("Event type value"),
-      }),
-      execute: async ({ title, participantIds, startAt, endAt, location, description, eventType }) =>
-        createEvent(userId, title, startAt, participantIds, endAt, location, description, eventType, assistantConversationId),
-    }),
-
-    query_events: tool({
-      description: "Search and retrieve events",
-      inputSchema: z.object({
-        participantName: z.string().optional().describe("Name of participant to filter by"),
-        limit: z.number().optional().describe("Number of results to return, defaults to 10"),
-      }),
-      execute: async ({ participantName, limit }) => queryEvents(userId, participantName, limit),
-    }),
-
-    searchEvents: tool({
-      description: "Search events by meaning (semantic search). Best for natural language queries like 'team meetings' or 'birthday celebrations'.",
-      inputSchema: z.object({
-        searchTerm: z.string().optional().describe("Natural language search query — finds conceptually related events"),
-        participantName: z.string().optional().describe("Participant name"),
-        eventType: schemas.optionalEventTypeSchema.describe("Event type filter"),
-        limit: z.number().optional().describe("Maximum results"),
-      }),
-      execute: async ({ searchTerm, participantName, eventType, limit }) => {
-        if (participantName && !searchTerm && !eventType) {
-          return queryEvents(userId, participantName, limit);
-        }
-        // Use semantic search when no participant filter — finds conceptually related events
-        if (searchTerm && !participantName) {
-          return semanticSearchEvents(userId, searchTerm, eventType, limit);
-        }
-        return listEvents(userId, undefined, searchTerm, eventType, limit);
+          .from(events)
+          .where(and(...conditions))
+          .orderBy(desc(events.startAt))
+          .limit(limit);
+        const enriched = await enrichEvents(rows);
+        return { count: enriched.length, events: enriched };
       },
     }),
 
-    list_events: tool({
-      description: "List events with optional pagination and filters",
-      inputSchema: z.object({
-        cursor: z.string().optional().describe("Pagination cursor (event id)"),
-        search: z.string().optional().describe("Search term"),
-        eventType: schemas.optionalEventTypeSchema.describe("Event type"),
-        limit: z.number().optional().describe("Number of results to return"),
-      }),
-      execute: async ({ cursor, search, eventType, limit }) =>
-        listEvents(userId, cursor, search, eventType, limit),
-    }),
-
     get_event: tool({
-      description: "Get a single event by id",
-      inputSchema: z.object({
-        eventId: z.string().describe("Event id"),
-      }),
-      execute: async ({ eventId }) => getEventById(userId, eventId),
+      description: "Get an event by id with participants.",
+      inputSchema: z.object({ eventId: z.string() }),
+      execute: async ({ eventId }) => {
+        const row = await getOwnedEvent(userId, eventId);
+        if (!row) return { error: "Event not found" };
+        const [enriched] = await enrichEvents([row]);
+        return { event: enriched };
+      },
     }),
 
-    create_event_by_ids: tool({
-      description: "Create an event using participant ids",
+    create_event: tool({
+      description:
+        "Create an event (meeting, call, birthday, journal entry, etc.). Use when the user gives enough detail; otherwise prefer open_event_create_form.",
       inputSchema: z.object({
-        title: z.string().describe("Event title"),
-        description: z.string().optional().describe("Event description"),
-        eventType: schemas.eventTypeSchema.describe("Event type"),
-        startAt: z.string().describe("Start date/time as full ISO 8601 datetime, e.g. 2026-02-21T10:00:00.000Z"),
-        endAt: z.string().optional().describe("End date/time as full ISO 8601 datetime, e.g. 2026-02-21T11:00:00.000Z"),
-        location: z.string().optional().describe("Event location"),
-        participantIds: z.array(z.string()).optional().describe("Participant contact ids"),
+        title: z.string().min(1),
+        eventType: eventTypeEnum,
+        startAt: z.string().describe("ISO start time"),
+        endAt: z.string().optional().describe("ISO end time"),
+        description: z.string().optional(),
+        location: z.string().optional(),
+        participantIds: z.array(z.string()).default([]),
       }),
-      execute: async ({ title, description, eventType, startAt, endAt, location, participantIds }) =>
-        createEventByIds(userId, { title, description, eventType, startAt, endAt, location, participantIds }, assistantConversationId),
+      execute: async ({ title, eventType, startAt, endAt, description, location, participantIds }) => {
+        const start = parseIso(startAt);
+        if (!start) return { error: "Invalid startAt" };
+        const end = parseIso(endAt);
+        const owned = await verifyOwnedContacts(userId, participantIds);
+        const [row] = await db
+          .insert(events)
+          .values({
+            userId,
+            title,
+            eventType,
+            startAt: start,
+            endAt: end ?? null,
+            description: description ?? null,
+            location: location ?? null,
+          })
+          .returning();
+        if (row && owned.length > 0) {
+          await db
+            .insert(eventParticipants)
+            .values(owned.map((cid) => ({ eventId: row.id, contactId: cid })))
+            .onConflictDoNothing();
+        }
+        return { event: row, participantIds: owned };
+      },
     }),
 
-    update_event_by_id: tool({
-      description: "Update an event by id",
+    update_event: tool({
+      description: "Update fields on an event by id.",
       inputSchema: z.object({
-        eventId: z.string().describe("Event id"),
-        title: z.string().optional().describe("Event title"),
-        description: z.string().optional().describe("Event description"),
-        eventType: schemas.optionalEventTypeSchema.describe("Event type"),
-        startAt: z.string().optional().describe("Start date/time as full ISO 8601 datetime, e.g. 2026-02-21T10:00:00.000Z"),
-        endAt: z.string().optional().describe("End date/time as full ISO 8601 datetime, e.g. 2026-02-21T11:00:00.000Z"),
-        location: z.string().optional().describe("Event location"),
-        participantIds: z.array(z.string()).optional().describe("Participant contact ids"),
+        eventId: z.string(),
+        title: z.string().optional(),
+        eventType: eventTypeEnum.optional(),
+        startAt: z.string().optional(),
+        endAt: z.string().nullable().optional(),
+        description: z.string().nullable().optional(),
+        location: z.string().nullable().optional(),
+        participantIds: z.array(z.string()).optional().describe("Replace participant list"),
       }),
-      execute: async ({ eventId, title, description, eventType, startAt, endAt, location, participantIds }) =>
-        updateEventById(userId, eventId, { title, description, eventType, startAt, endAt, location, participantIds }),
+      execute: async ({ eventId, participantIds, ...fields }) => {
+        const owned = await getOwnedEvent(userId, eventId);
+        if (!owned) return { error: "Event not found" };
+        const patch: Record<string, unknown> = { updatedAt: new Date() };
+        if (fields.title !== undefined) patch.title = fields.title;
+        if (fields.eventType !== undefined) patch.eventType = fields.eventType;
+        if (fields.startAt !== undefined) patch.startAt = parseIso(fields.startAt);
+        if (fields.endAt !== undefined) patch.endAt = fields.endAt ? parseIso(fields.endAt) : null;
+        if (fields.description !== undefined) patch.description = fields.description;
+        if (fields.location !== undefined) patch.location = fields.location;
+        await db.update(events).set(patch).where(eq(events.id, eventId));
+        if (participantIds !== undefined) {
+          const ownedIds = await verifyOwnedContacts(userId, participantIds);
+          await db.delete(eventParticipants).where(eq(eventParticipants.eventId, eventId));
+          if (ownedIds.length > 0) {
+            await db
+              .insert(eventParticipants)
+              .values(ownedIds.map((cid) => ({ eventId, contactId: cid })));
+          }
+        }
+        return { ok: true, eventId };
+      },
     }),
 
-    list_event_conversations: tool({
-      description: "List conversations for an event",
-      inputSchema: z.object({
-        eventId: z.string().describe("Event id"),
-        cursor: z.string().optional().describe("Pagination cursor (conversation id)"),
-        search: z.string().optional().describe("Search term"),
-        medium: schemas.optionalMediumSchema.describe("Conversation medium"),
-        limit: z.number().optional().describe("Number of results to return"),
-      }),
-      execute: async ({ eventId, cursor, search, medium, limit }) =>
-        listEventConversations(userId, eventId, cursor, search, medium, limit),
+    delete_event: tool({
+      description: "Delete an event by id.",
+      inputSchema: z.object({ eventId: z.string() }),
+      execute: async ({ eventId }) => {
+        const owned = await getOwnedEvent(userId, eventId);
+        if (!owned) return { error: "Event not found" };
+        await db.delete(events).where(eq(events.id, eventId));
+        return { ok: true, eventId };
+      },
     }),
 
-    list_event_contacts: tool({
-      description: "List contacts for an event",
+    list_upcoming_events: tool({
+      description: "List events starting from now onwards (upcoming + today).",
       inputSchema: z.object({
-        eventId: z.string().describe("Event id"),
+        limit: z.number().int().min(1).max(50).default(10),
       }),
-      execute: async ({ eventId }) => listEventContacts(userId, eventId),
+      execute: async ({ limit }) => {
+        const rows = await db
+          .select()
+          .from(events)
+          .where(and(eq(events.userId, userId), gte(events.startAt, new Date())))
+          .orderBy(asc(events.startAt))
+          .limit(limit);
+        const enriched = await enrichEvents(rows);
+        return { count: enriched.length, events: enriched };
+      },
     }),
   };
 }

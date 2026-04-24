@@ -449,135 +449,63 @@ export const userApi = {
   getPlan: () => api.get<PlanInfo>("/api/users/me/plan"),
 };
 
-// Assistant
-export type AssistantContactCard = {
-  id: string;
-  displayName: string;
-  primaryPhone?: string | null;
-  primaryEmail?: string | null;
-  company?: string | null;
-  jobTitle?: string | null;
-  location?: string | null;
-};
-
-export type AssistantConversationCard = {
-  id: string;
-  medium: string;
-  happenedAt: string;
-  content?: string | null;
-  participants?: string[];
-};
-
-export type AssistantEventCard = {
-  id: string;
-  title: string;
-  startAt: string;
-  location?: string | null;
-  participants?: string[];
-};
-
-export type AssistantReminderCard = {
-  id: string;
-  title: string;
-  dueAt: string;
-  status: string;
-  participants?: string[];
-};
-
-export type AssistantCreatedCard =
-  | { kind: "contact"; contact: AssistantContactCard }
-  | { kind: "conversation"; conversation: AssistantConversationCard }
-  | { kind: "event"; event: AssistantEventCard }
-  | { kind: "reminder"; reminder: AssistantReminderCard };
-
-export type AssistantSelectionOption = {
-  id: string;
-  entityKind: "contact" | "conversation" | "event" | "reminder" | "relationship_type";
-  title: string;
-  subtitle?: string | null;
-  selectMessage: string;
-};
-
-export type AssistantUi =
-  | { kind: "contact"; contact: AssistantContactCard }
-  | { kind: "contacts"; count: number; contacts: AssistantContactCard[] }
-  | { kind: "conversations"; count: number; conversations: AssistantConversationCard[] }
-  | { kind: "events"; count: number; events: AssistantEventCard[] }
-  | { kind: "reminders"; count: number; reminders: AssistantReminderCard[] }
-  | { kind: "created"; cards: AssistantCreatedCard[] }
-  | { kind: "selection"; prompt: string; options: AssistantSelectionOption[]; totalCount?: number }
-  | { kind: "confirmation"; action: string; entityType?: string; details?: Record<string, unknown>; items?: Array<{ entityType: string; details: Record<string, unknown> }> };
-
-export type AssistantAction = {
-  label: string;
-  message: string;
-  style: "primary" | "secondary";
-};
-
-export type ChatMessage = {
-  role: "user" | "assistant";
-  content: string;
-  ui?: AssistantUi | null;
-  actions?: AssistantAction[];
-};
-
-export type ChatResponse = ChatMessage & {
-  conversationId: string;
-  actions?: AssistantAction[];
-};
-
+// Assistant — UIMessage-based
 export type AssistantConversationSummary = {
   id: string;
   title: string | null;
+  titleGenerated: boolean;
+  createdAt: string;
   updatedAt: string;
-  lastMessage: { content: string; role: "user" | "assistant" } | null;
+};
+
+export type AssistantStoredMessage = {
+  id: string;
+  role: "user" | "assistant";
+  // Parts shape matches AI SDK UIMessage["parts"]: text parts, tool-* parts, etc.
+  parts: unknown[] | null;
+  content: string | null;
+  createdAt: string;
 };
 
 export type AssistantConversationDetail = {
-  id: string;
-  title: string | null;
-  createdAt: string;
-  updatedAt: string;
-  messages: Array<{
+  conversation: {
     id: string;
-    role: "user" | "assistant";
-    content: string;
-    ui: AssistantUi | null;
-    thumbsUp?: boolean;
-    thumbsDown?: boolean;
+    title: string | null;
+    titleGenerated: boolean;
     createdAt: string;
-  }>;
+    updatedAt: string;
+  };
+  messages: AssistantStoredMessage[];
 };
 
 export const assistantApi = {
-  chat: (messages: ChatMessage[], conversationId?: string, onStatus?: (message: string) => void) => {
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (onStatus) {
-      return api.streamPost<ChatResponse>("/api/assistant", { messages, conversationId, timezone }, onStatus);
-    }
-    return api.post<ChatResponse>("/api/assistant", { messages, conversationId, timezone });
+  /** URL of the chat endpoint — useChat consumes this directly via its transport. */
+  chatUrl: () => `${API_URL}/api/assistant/chat`,
+
+  /** Fresh auth headers — callers that use useChat should invoke this on every send. */
+  chatHeaders: async (): Promise<Record<string, string>> => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+    return headers;
   },
 
-  listConversations: (cursor?: string) =>
-    api.get<{
-      conversations: AssistantConversationSummary[];
-      nextCursor: string | null;
-    }>("/api/assistant/conversations", cursor ? { cursor } : undefined),
+  listConversations: () =>
+    api.get<{ conversations: AssistantConversationSummary[] }>("/api/assistant/conversations"),
 
   getConversation: (id: string) =>
     api.get<AssistantConversationDetail>(`/api/assistant/conversations/${id}`),
 
   deleteConversation: (id: string) =>
-    api.delete<{ success: boolean }>(`/api/assistant/conversations/${id}`),
+    api.delete<{ ok: true }>(`/api/assistant/conversations/${id}`),
 
   updateConversationTitle: (id: string, title: string) =>
-    api.patch<{ id: string; title: string; updatedAt: string }>(
-      `/api/assistant/conversations/${id}`,
-      { title }
-    ),
+    api.patch<{ ok: true }>(`/api/assistant/conversations/${id}`, { title }),
 
   feedbackMessage: (messageId: string, feedback: { thumbsUp?: boolean; thumbsDown?: boolean }) =>
-    api.patch<{ success: boolean }>(`/api/assistant/messages/${messageId}/feedback`, feedback),
+    api.patch<{ ok: true }>(`/api/assistant/messages/${messageId}/feedback`, feedback),
 };
 
 export const speechApi = {

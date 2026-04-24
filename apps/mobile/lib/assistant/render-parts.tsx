@@ -1,8 +1,7 @@
 import React, { useEffect, useRef } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import type { UIMessage } from "ai";
-import { Text } from "../../components/ui/text";
 
 type Part = UIMessage["parts"][number];
 

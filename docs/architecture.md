@@ -4,13 +4,13 @@
 
 ```
 ┌─────────────────────┐      ┌────────────────────────────────────┐
-│  Mobile App (Expo)  │─────▶│  Fly.io Container                  │
-│  Android / iOS      │      │  ┌──────────────────────────────┐  │
+│  Browser / PWA      │─────▶│  Fly.io Container                  │
+│  (installable)      │      │  ┌──────────────────────────────┐  │
 └─────────────────────┘      │  │  Hono API   (/api/*)         │  │
                              │  ├──────────────────────────────┤  │
-┌─────────────────────┐      │  │  Expo Web   (/* static)      │  │
-│  Browser (Web UI)   │─────▶│  └──────────────────────────────┘  │
-└─────────────────────┘      └──────────────┬─────────────────────┘
+                             │  │  Expo Web   (/* static, PWA) │  │
+                             │  └──────────────────────────────┘  │
+                             └──────────────┬─────────────────────┘
                                             │
                                             ▼
                              ┌──────────────────────────────┐
@@ -19,8 +19,7 @@
 ```
 
 - The **API** (Hono on Bun) serves REST endpoints at `/api/*`
-- The **Web UI** (Expo Web export) is bundled as static files into the same Docker image and served at `/` by Hono's `serveStatic`
-- The **Mobile app** (Expo React Native) is a standalone Android/iOS app that talks to the API
+- The **Web app** (Expo Web static export) is bundled into the same Docker image and served at `/` by Hono's `serveStatic`, as an installable **PWA** (service worker + manifest). It is the only client — there are no native (Android/iOS) builds.
 - Auth is handled by **Better Auth** (Google OAuth); it owns `/api/auth/*`, and the database is **Neon** Postgres
 
 ## API Layer (`apps/api`)
@@ -78,33 +77,39 @@ The assistant uses Google Gemini via Vercel AI SDK (`@ai-sdk/google`) with funct
 - `enrichment.ts` - Enriches tool results with related data
 - `db-helpers.ts` - Database query helpers for the assistant
 
-## Mobile App Layer (`apps/mobile`)
+## Web App Layer (`apps/app`)
+
+Built with Expo (React Native Web) + Expo Router and exported as a static web bundle (`output: "static"`). See the [web app guide](web.md) for the full route map and UI conventions.
+
+### PWA
+
+The web export is shipped as an installable PWA:
+- **Manifest + icons**: `apps/app/public/manifest.json` and `apps/app/public/icons/*` (copied to the export root).
+- **Root HTML**: `apps/app/app/+html.tsx` injects the manifest/meta tags and registers the service worker.
+- **Service worker**: generated at build time by Workbox (`apps/app/workbox-config.js`, run after `expo export`). It precaches the content-hashed bundles (fast, offline app shell via `navigateFallback`), network-firsts `/api` GETs, and uses `skipWaiting`/`clientsClaim` so a new deploy is picked up on the next load.
+- **HTTP caching** (set in `apps/api/src/index.ts`): content-hashed assets under `/_expo/static/*` are `immutable`; HTML, `sw.js`, and `manifest.json` are `no-cache` so a UI change busts the cache.
 
 ### Auth Flow
 
-`apps/mobile/lib/auth.tsx` provides `AuthProvider` and `useAuth()`:
-- **Web**: Standard Supabase OAuth redirect with PKCE code exchange
-- **Native**: Opens OAuth via `expo-web-browser`, handles redirect back to `orbit://auth/callback`
-- **Expo Go**: OAuth is not supported (alerts user to use dev build)
-- Token stored/managed by Supabase client automatically
+`apps/app/lib/auth.tsx` provides `AuthProvider` and `useAuth()`: standard OAuth redirect with PKCE code exchange, then a session established with the API.
 
 ### API Client
 
-`apps/mobile/lib/api.ts` provides:
-- `ApiClient` class that auto-attaches Supabase auth tokens to every request
+`apps/app/lib/api.ts` provides:
+- `ApiClient` class that auto-attaches the auth token to every request
 - Domain-specific API methods: `contactsApi`, `conversationsApi`, `eventsApi`, `remindersApi`, `tagsApi`, `assistantApi`, `speechApi`
 - All TypeScript types for API payloads and responses
 
 ### Theme System
 
-`apps/mobile/lib/theme.tsx` provides:
+`apps/app/lib/theme.tsx` provides:
 - `ThemeModeProvider` / `useThemeMode()` - Light/dark mode with AsyncStorage persistence
 - `useThemeColors()` / `getThemeColor()` - Color token resolution
 - Gluestack UI provider wraps the app for component theming
 
 ### Onboarding
 
-`apps/mobile/lib/onboarding.ts` manages versioned onboarding state via AsyncStorage. The root layout checks onboarding status and redirects new users to the welcome flow.
+`apps/app/lib/onboarding.ts` manages versioned onboarding state via AsyncStorage. The root layout checks onboarding status and redirects new users to the welcome flow.
 
 ## Environment Variables
 
@@ -120,7 +125,7 @@ The assistant uses Google Gemini via Vercel AI SDK (`@ai-sdk/google`) with funct
 | `CORS_ALLOWED_ORIGINS` | No | Comma-separated allowed origins |
 | `PORT` | No | Server port (default: 3001) |
 
-### Mobile (`apps/mobile/.env`)
+### Web app (`apps/app/.env`)
 
 | Variable | Required | Description |
 |----------|----------|-------------|

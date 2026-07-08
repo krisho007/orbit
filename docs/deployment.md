@@ -2,11 +2,11 @@
 
 ## Architecture
 
-The API and Web UI are bundled into a single Docker image deployed to Fly.io:
-1. **Stage 1** (Node): Builds Expo Web (`npx expo export --platform web`) from `apps/mobile`
-2. **Stage 2** (Bun): Copies built static files into `/app/public`, installs API deps, runs `bun run src/index.ts`
+The API and web app are bundled into a single Docker image deployed to Fly.io:
+1. **Stage 1** (Node): Builds the Expo Web static export (`npx expo export --platform web`) from `apps/app`, then generates the PWA service worker with Workbox (`npx workbox generateSW workbox-config.js`)
+2. **Stage 2** (Bun): Copies the built static files (incl. `sw.js`, `manifest.json`) into `/app/public`, installs API deps, runs `bun run src/index.ts`
 
-Hono serves the API at `/api/*` and the Expo Web static files at `/*` with SPA fallback.
+Hono serves the API at `/api/*` and the Expo Web static files at `/*` with SPA fallback, applying PWA cache headers (immutable for content-hashed `/_expo/static/*`, `no-cache` for HTML/`sw.js`/`manifest.json`).
 
 ## Deploying
 
@@ -38,26 +38,25 @@ fly deploy
 
 **Always run migrations BEFORE deploying** new API code that depends on schema changes.
 
-### Mobile Builds (EAS)
+### Web build & PWA (local)
 
-| Profile | Output | Command |
-|---------|--------|---------|
-| `development` | APK with dev tools | `eas build --profile development --platform android` |
-| `preview` | Standalone APK | `eas build --profile preview --platform android` |
-| `preview` (local) | APK built on Mac | `eas build --profile preview --platform android --local` |
-| `production` | AAB for Play Store | `eas build --profile production --platform android` |
+The web build runs inside the Docker image, but you can reproduce it locally:
 
-All profiles connect to the same backend. The difference is build type only.
+```bash
+cd apps/app
+bun run build:web        # expo export --platform web && workbox generateSW workbox-config.js
+```
+
+This produces `dist/` (static bundle + `sw.js` + `manifest.json`). There are no native (Android/iOS / EAS) builds — Orbit ships as a web PWA only.
 
 ## Deployment Decision Matrix
 
 | Changed... | Action |
 |---|---|
-| Mobile UI only | `fly deploy` (rebuilds web + API image) |
+| Web UI only | `fly deploy` (rebuilds web + API image; the content-hash + service worker bust the cache automatically) |
 | API code only | `fly deploy` |
 | DB schema only | `cd apps/api && bun run db:generate && bun run db:migrate` |
 | Schema + API | Migrate first, then deploy |
-| Mobile native deps | `eas build --profile development --platform android` |
 
 ## Environment Setup
 
@@ -74,25 +73,22 @@ Optional:
 - `CORS_ALLOWED_ORIGINS` - Comma-separated allowed origins
 - `PORT` - Default 3001
 
-### Mobile (`apps/mobile/.env`)
+### Web app (`apps/app/.env`)
 
-Copy from `apps/mobile/.env.example`. Required:
+Copy from `apps/app/.env.example`. Required:
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 
 Development:
 - `EXPO_PUBLIC_API_URL` - Set to local API for dev, leave empty for production
 
-### API URL by platform (development)
+### API URL (development)
 
-| Platform | `EXPO_PUBLIC_API_URL` |
+| Where | `EXPO_PUBLIC_API_URL` |
 |----------|----------------------|
-| Web | `http://localhost:3001` |
-| Android emulator | `http://10.0.2.2:3001` |
-| iOS simulator | `http://127.0.0.1:3001` |
-| Physical device | `http://<your-wifi-ip>:3001` |
-| Production (web) | empty (same origin) |
-| Production (mobile) | `https://orbit-app.fly.dev` |
+| Local web (`bun run web:local`) | `http://localhost:3001` |
+| Another device on your LAN | `http://<your-wifi-ip>:3001` |
+| Production | empty (same origin as the Hono server) |
 
 ### Fly.io Production Variables
 

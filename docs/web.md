@@ -1,4 +1,6 @@
-# Mobile App Guide
+# Web App Guide
+
+Orbit's client is an Expo (React Native Web) app, exported as a static web bundle and shipped as an installable PWA. There are no native (Android/iOS) builds. See [architecture.md](architecture.md#web-app-layer-appsapp) for the PWA/service-worker/caching setup.
 
 ## Navigation Structure
 
@@ -36,8 +38,7 @@ app/
     [id].tsx               # Reminder detail
     [id]/edit.tsx          # Edit reminder
   google-import.tsx        # Google Contacts import flow
-  incoming-call.tsx        # Incoming call screen
-  auth/callback.tsx        # OAuth callback deep link handler
+  auth/callback.tsx        # OAuth callback handler
 ```
 
 ### Auth-Gated Navigation
@@ -68,8 +69,7 @@ The assistant tab is the default/home tab (`initialRouteName="assistant"` in tab
 | `@supabase/supabase-js` | Auth + Supabase client |
 | `expo-image-picker` | Camera/gallery image selection |
 | `expo-audio` | Voice recording for assistant |
-| `expo-web-browser` | OAuth redirect flow |
-| `expo-auth-session` | OAuth redirect URL generation |
+| `@tanstack/react-query` (+ persist) | Server-state cache, persisted for offline shell |
 | `react-native-gesture-handler` | Swipe/gesture interactions |
 | `@legendapp/motion` | Animations |
 | `date-fns` | Date formatting |
@@ -91,4 +91,4 @@ await contactsApi.update(contact.id, { company: 'Acme' });
 await contactsApi.delete(contact.id);
 ```
 
-The `ApiClient` automatically attaches the Supabase auth token from the current session. On web, when `EXPO_PUBLIC_API_URL` is empty, requests use relative URLs (same origin as the Hono server).
+The `ApiClient` automatically attaches the auth token from the current session. When `EXPO_PUBLIC_API_URL` is empty (production), requests use relative URLs (same origin as the Hono server).

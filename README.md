@@ -8,40 +8,39 @@ Personal CRM application built with a modern stack.
 orbit/
 ├── apps/
 │   ├── api/        # Bun + Hono + Drizzle backend
-│   └── mobile/     # Expo React Native app (iOS, Android, Web)
+│   └── app/        # Expo (React Native Web) app — shipped as an installable web PWA
 ├── docs/           # Architecture, deployment, API reference
 ```
 
 **How it all fits together:**
 
 - The **API** (Hono on Bun) serves REST endpoints at `/api/*`
-- The **Web UI** (Expo Web export) is bundled as static files into the same Docker image and served at `/` by Hono
-- The **Mobile app** (Expo React Native) is a standalone Android/iOS app that talks to the API
-- The **Database** is PostgreSQL hosted on Supabase, managed via Drizzle ORM
-- **Auth** is handled by Supabase Auth (the mobile app and API both use Supabase tokens)
+- The **Web app** (Expo Web static export) is bundled into the same Docker image and served at `/` by Hono, as an installable **PWA** (service worker + manifest)
+- The **Database** is PostgreSQL hosted on Neon, managed via Drizzle ORM
+- **Auth** is handled by Better Auth (Google OAuth); the API owns `/api/auth/*`
 
 ```
 ┌─────────────────────┐      ┌────────────────────────────────────┐
-│  Mobile App (Expo)  │─────▶│  Fly.io Container                  │
-│  Android / iOS      │      │  ┌──────────────────────────────┐  │
+│  Browser / PWA      │─────▶│  Fly.io Container                  │
+│  (installable)      │      │  ┌──────────────────────────────┐  │
 └─────────────────────┘      │  │  Hono API   (/api/*)         │  │
                              │  ├──────────────────────────────┤  │
-┌─────────────────────┐      │  │  Expo Web   (/* static)      │  │
-│  Browser (Web UI)   │─────▶│  └──────────────────────────────┘  │
-└─────────────────────┘      └──────────────┬─────────────────────┘
+                             │  │  Expo Web   (/* static, PWA) │  │
+                             │  └──────────────────────────────┘  │
+                             └──────────────┬─────────────────────┘
                                             │
                                             ▼
                              ┌──────────────────────────────┐
-                             │  Supabase (PostgreSQL + Auth) │
+                             │  Neon (PostgreSQL)            │
                              └──────────────────────────────┘
 ```
 
 ## Tech Stack
 
-- **API**: Bun, Hono, Drizzle ORM, PostgreSQL (Supabase)
-- **Mobile**: Expo, React Native, NativeWind (Tailwind CSS)
-- **Auth**: Supabase Auth
-- **Deployment**: Fly.io (API + Web UI), EAS Build (Mobile)
+- **API**: Bun, Hono, Drizzle ORM, PostgreSQL (Neon)
+- **Web app**: Expo (React Native Web), Expo Router, NativeWind (Tailwind CSS), installable PWA
+- **Auth**: Better Auth (Google OAuth)
+- **Deployment**: Fly.io (single image: API + Expo Web static export)
 
 ---
 
@@ -51,7 +50,7 @@ orbit/
 
 ```bash
 cd apps/api
-cp .env.example .env    # then fill in DATABASE_URL, SUPABASE_URL, etc.
+cp .env.example .env    # then fill in DATABASE_URL, BETTER_AUTH_SECRET, GOOGLE_CLIENT_ID, etc.
 bun install
 bun run dev             # starts on http://localhost:3001 with hot reload
 ```
@@ -65,16 +64,16 @@ bun install
 bun run dev             # starts the web dev server against the local API
 ```
 
-Orbit ships as a web app only (installable PWA); there are no native builds.
+Orbit ships as a web app only (installable PWA); there are no native (Android/iOS) builds.
 
 ---
 
 ## Deployment
 
-The API and Web UI are bundled into a single Docker image and deployed together:
+The API and web app are bundled into a single Docker image and deployed together:
 
 ```bash
-fly deploy                # from repo root — deploys API + Web UI to Fly.io
+fly deploy                # from repo root — deploys API + Web app to Fly.io
 ```
 
-For database migrations, mobile builds, environment setup, and the full deployment guide, see **[docs/deployment.md](docs/deployment.md)**.
+For database migrations, the PWA/web build, environment setup, and the full deployment guide, see **[docs/deployment.md](docs/deployment.md)**.

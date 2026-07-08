@@ -1525,7 +1525,7 @@ app.post("/:id/images/upload", async (c) => {
       .insert(contactImages)
       .values({
         contactId,
-        imageUrl: imageBlobUrl(blobId, c.req.url),
+        imageUrl: imageBlobUrl(blobId),
         publicId: blobId,
         order: maxOrder + 1,
       })

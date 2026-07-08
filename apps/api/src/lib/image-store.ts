@@ -28,13 +28,10 @@ export async function deleteImageBlob(id: string): Promise<void> {
 }
 
 /**
- * Absolute capability URL for an image blob. Prefers the configured public API
- * base (BETTER_AUTH_URL) so the URL is fully-qualified for native clients;
- * falls back to the incoming request's origin.
+ * Relative capability URL for an image blob. The web app is served same-origin
+ * by the API, so a relative path resolves correctly in every environment
+ * (localhost in dev, myorbit360.com in prod) without baking in a host.
  */
-export function imageBlobUrl(id: string, requestUrl?: string): string {
-  const base =
-    process.env.BETTER_AUTH_URL ||
-    (requestUrl ? new URL(requestUrl).origin : "http://localhost:3001");
-  return new URL(`/api/images/${id}`, base).toString();
+export function imageBlobUrl(id: string): string {
+  return `/api/images/${id}`;
 }

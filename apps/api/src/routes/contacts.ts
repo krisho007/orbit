@@ -84,20 +84,26 @@ const fetchGoogleContactsSchema = z.object({
   accessToken: z.string().optional(),
   includePhotos: z.boolean().optional().default(true),
 });
+// Accept `null` as well as `undefined`/absent: `/google/fetch` emits explicit
+// `null` for every empty field, and the client posts those contacts back
+// verbatim. `.nullish()` (string | null | undefined) prevents phone-only
+// contacts (no email) — the common case — from failing the whole batch.
+// Email is intentionally not `.email()`-validated: a single malformed address
+// from Google would otherwise reject the entire 200-contact batch.
 const googleImportContactSchema = z.object({
-  displayName: z.string().optional(),
-  primaryEmail: z.string().email().optional().or(z.literal("")),
-  primaryPhone: z.string().optional(),
-  company: z.string().optional(),
-  jobTitle: z.string().optional(),
-  location: z.string().optional(),
-  notes: z.string().optional(),
-  dateOfBirth: z.string().optional(),
-  photoBase64: z.string().optional(),
+  displayName: z.string().nullish(),
+  primaryEmail: z.string().nullish(),
+  primaryPhone: z.string().nullish(),
+  company: z.string().nullish(),
+  jobTitle: z.string().nullish(),
+  location: z.string().nullish(),
+  notes: z.string().nullish(),
+  dateOfBirth: z.string().nullish(),
+  photoBase64: z.string().nullish(),
   photoContentType: z
     .string()
     .regex(/^image\/[a-zA-Z0-9.+-]+$/, "photoContentType must be an image MIME type")
-    .optional(),
+    .nullish(),
 });
 const importGoogleContactsBatchSchema = z.object({
   contacts: z.array(googleImportContactSchema),
@@ -141,7 +147,7 @@ function normalizeEmail(email?: string | null): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
-function parseOptionalDate(value?: string): Date | null {
+function parseOptionalDate(value?: string | null): Date | null {
   if (!value) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;

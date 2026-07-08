@@ -14,25 +14,6 @@
       "resizeMode": "contain",
       "backgroundColor": "#FFFFFF"
     },
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.stellarorbit.app"
-    },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FFFFFF"
-      },
-      "edgeToEdgeEnabled": true,
-      "package": "com.stellarorbit.app",
-      "versionCode": 1,
-      "permissions": [
-        "POST_NOTIFICATIONS",
-        "READ_CALL_LOG",
-        "READ_CONTACTS",
-        "READ_PHONE_STATE"
-      ]
-    },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro",
@@ -40,7 +21,6 @@
     },
     "plugins": [
       "expo-router",
-      "./plugins/withContactViewerIntent",
       [
         "expo-image-picker",
         {

@@ -31,9 +31,11 @@ RUN bun install --frozen-lockfile
 # Copy mobile app source
 COPY apps/mobile/ ./
 
-# Build Expo Web (static export using Node/Metro)
+# Build Expo Web (static export using Node/Metro), then generate the PWA
+# service worker with Workbox (precache manifest of the content-hashed assets).
 ENV NODE_ENV=production
-RUN npx expo export --platform web
+RUN npx expo export --platform web \
+  && npx workbox generateSW workbox-config.js
 
 # ==================================
 # Stage 2: Production with Bun

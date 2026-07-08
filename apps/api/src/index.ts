@@ -1,5 +1,6 @@
 // Hono API Server - Orbit Personal CRM
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { bodyLimit } from "hono/body-limit";
@@ -116,12 +117,26 @@ app.get("/", (c, next) => {
 const privacyHtml = await Bun.file(import.meta.dir + "/privacy.html").text();
 app.get("/privacy", (c) => c.html(privacyHtml));
 
+// Cache-Control for the Expo Web + PWA static assets.
+// - Content-hashed bundles under /_expo/static/* never change for a given URL →
+//   cache them forever (immutable). A UI change produces a new hashed URL.
+// - Everything else (index.html, sw.js, manifest.json, icons) must revalidate so a
+//   new deploy — and a new service worker — is picked up on the very next load.
+const IMMUTABLE = "public, max-age=31536000, immutable";
+const REVALIDATE = "no-cache, must-revalidate";
+const setStaticCacheHeaders = (path: string, c: Context) => {
+  c.header("Cache-Control", path.includes("/_expo/static/") ? IMMUTABLE : REVALIDATE);
+};
+
 // Serve Expo Web static files (after API routes)
 // This serves the web UI for all non-API routes
-app.use("*", serveStatic({ root: "./public" }));
+app.use("*", serveStatic({ root: "./public", onFound: setStaticCacheHeaders }));
 
 // SPA fallback - serve index.html for client-side routing
-app.use("*", serveStatic({ root: "./public", path: "index.html" }));
+app.use(
+  "*",
+  serveStatic({ root: "./public", path: "index.html", onFound: setStaticCacheHeaders })
+);
 
 // 404 handler (only for API routes that don't exist)
 app.notFound((c) => {

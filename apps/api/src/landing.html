@@ -10,6 +10,21 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.myorbit360.com">
   <link rel="canonical" href="https://www.myorbit360.com">
+  <!-- PWA: installable from the marketing page too (start_url points into the app) -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0D9488">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Orbit">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js').catch(function (err) {
+          console.error('Service worker registration failed:', err);
+        });
+      });
+    }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -217,7 +232,7 @@
             </div>
             <div>
               <h3 class="font-semibold text-stone-900">Third-Party Transparency</h3>
-              <p class="mt-1 text-sm text-stone-500">We're upfront about every service we use: Supabase (auth & database), Google Gemini (AI), and Sarvam AI (voice). That's it.</p>
+              <p class="mt-1 text-sm text-stone-500">We're upfront about every service we use: Google Sign-In (auth), Neon (database), Google Gemini (AI), and Sarvam AI (voice). That's it.</p>
             </div>
           </div>
 

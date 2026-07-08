@@ -7,7 +7,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { queryClient, asyncStoragePersister } from "../lib/query-client";
 import { AuthProvider, useAuth } from "../lib/auth";
-import { View, ActivityIndicator, PermissionsAndroid, Platform } from "react-native";
+import { View, ActivityIndicator } from "react-native";
 import {
   GluestackUIProvider,
   useGluestackUI,
@@ -82,29 +82,6 @@ function RootLayoutNav() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (Platform.OS !== "android") return;
-
-    const requestAndroidPermissions = async () => {
-      try {
-        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_PHONE_STATE);
-        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CALL_LOG, {
-          title: "Call Log Access",
-          message: "Orbit needs call log access to identify incoming callers and show their contact info.",
-          buttonPositive: "Allow",
-          buttonNegative: "Deny",
-        });
-        if (typeof Platform.Version === "number" && Platform.Version >= 33) {
-          await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
-        }
-      } catch (error) {
-        console.error("Failed to request Android permissions:", error);
-      }
-    };
-
-    requestAndroidPermissions();
-  }, []);
-
-  useEffect(() => {
     if (isLoading || onboardingState === "checking") return;
 
     const inAuthGroup = firstSegment === "(auth)";
@@ -112,8 +89,6 @@ function RootLayoutNav() {
     const inOnboardingGroup = firstSegment === "(onboarding)";
     const inOnboardingWelcome = firstSegment === "welcome";
     const inGoogleImportScreen = firstSegment === "google-import";
-    const inIncomingCallScreen = firstSegment === "incoming-call";
-    const inViewContactScreen = firstSegment === "view-contact";
     const inOnboardingFlow =
       inOnboardingGroup || inOnboardingWelcome || inGoogleImportScreen;
 
@@ -127,9 +102,7 @@ function RootLayoutNav() {
     } else if (
       user?.id &&
       onboardingState === "required" &&
-      !inOnboardingFlow &&
-      !inIncomingCallScreen &&
-      !inViewContactScreen
+      !inOnboardingFlow
     ) {
       redirectTarget = "/welcome";
     } else if (

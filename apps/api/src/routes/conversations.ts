@@ -1,7 +1,7 @@
 // Conversations API Routes
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, sql, ilike, or, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, desc, sql, ilike, inArray, isNotNull } from "drizzle-orm";
 import {
   db,
   conversations,
@@ -336,7 +336,6 @@ app.get("/", async (c) => {
     if (semantic && search) {
       const queryEmbedding = await generateQueryEmbedding(search);
       const embeddingStr = JSON.stringify(queryEmbedding);
-      const distance = sql`${conversations.embedding} <=> ${embeddingStr}::vector`;
 
       const conditions = [
         eq(conversations.userId, userId),

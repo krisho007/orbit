@@ -8,13 +8,21 @@ import {
   pgEnum,
   boolean,
   integer,
-  primaryKey,
   unique,
   index,
   vector,
   jsonb,
+  customType,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+
+// Raw binary column (Postgres `bytea`). Used to store contact/user image bytes
+// directly in Neon instead of an external object store.
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 // ============================================
 // Enums
@@ -63,28 +71,97 @@ export const assistantMessageRoleEnum = pgEnum("AssistantMessageRole", ["user", 
 export const userPlanEnum = pgEnum("UserPlan", ["free", "paid"]);
 
 // ============================================
-// Users (Supabase Auth - reference only)
+// Auth (Better Auth) — users, sessions, accounts, verifications
 // ============================================
 
-// Note: Users are managed by Supabase Auth
-// This table references the auth.users table
+// The `users` table is owned by Better Auth. `id` stays `text` so existing
+// user IDs (legacy Supabase UUIDs / NextAuth CUIDs) survive the migration and
+// keep owning all tenant rows. Extra columns (plan, primaryContactId, consent)
+// are orbit-specific; Better Auth ignores them on insert and the DB defaults
+// fill them in. Google provider tokens now live in `accounts`, not here.
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
   name: text("name"),
   email: text("email").notNull().unique(),
-  emailVerified: timestamp("emailVerified", { mode: "date", withTimezone: true }),
+  emailVerified: boolean("emailVerified").default(false).notNull(),
   image: text("image"),
   // Links the user to their own contact record in the CRM.
   // When set, the assistant knows who "I" / "me" / "my" refers to.
   primaryContactId: text("primaryContactId"),
   plan: userPlanEnum("plan").default("free").notNull(),
   thirdPartyConsentGranted: boolean("thirdPartyConsentGranted").default(false).notNull(),
-  googleProviderToken: text("googleProviderToken"),
-  googleProviderRefreshToken: text("googleProviderRefreshToken"),
-  googleTokenExpiresAt: timestamp("googleTokenExpiresAt", { mode: "date", withTimezone: true }),
   createdAt: timestamp("createdAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
 });
+
+// Better Auth session table. Verified on every request via auth.api.getSession.
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    token: text("token").notNull(),
+    expiresAt: timestamp("expiresAt", { mode: "date", withTimezone: true }).notNull(),
+    ipAddress: text("ipAddress"),
+    userAgent: text("userAgent"),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("createdAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    unique("sessions_token_unique").on(table.token),
+    index("sessions_userId_idx").on(table.userId),
+  ]
+);
+
+// Better Auth account table — one row per linked provider (Google).
+// Holds the Google OAuth access/refresh tokens + granted scope; this is the
+// source of truth for the Contacts import token (see utils/google-token.ts).
+export const accounts = pgTable(
+  "accounts",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    accountId: text("accountId").notNull(),
+    providerId: text("providerId").notNull(),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accessToken: text("accessToken"),
+    refreshToken: text("refreshToken"),
+    idToken: text("idToken"),
+    accessTokenExpiresAt: timestamp("accessTokenExpiresAt", { mode: "date", withTimezone: true }),
+    refreshTokenExpiresAt: timestamp("refreshTokenExpiresAt", { mode: "date", withTimezone: true }),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: timestamp("createdAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("accounts_userId_idx").on(table.userId),
+    unique("accounts_provider_account_unique").on(table.providerId, table.accountId),
+  ]
+);
+
+// Better Auth verification table — stores OAuth state (CSRF), etc.
+export const verifications = pgTable(
+  "verifications",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: timestamp("expiresAt", { mode: "date", withTimezone: true }).notNull(),
+    createdAt: timestamp("createdAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("verifications_identifier_idx").on(table.identifier)]
+);
 
 // ============================================
 // Core CRM Models
@@ -375,6 +452,23 @@ export const contactImages = pgTable(
   (table) => [index("contact_images_contactId_idx").on(table.contactId)]
 );
 
+// Image bytes stored directly in Neon (replaces Supabase Storage).
+// `contactImages.publicId` holds this row's `id`; the public capability URL
+// `/api/images/:id` (id is an unguessable UUID) streams the bytes back.
+export const imageBlobs = pgTable(
+  "image_blobs",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    contactId: text("contactId").references(() => contacts.id, { onDelete: "cascade" }),
+    contentType: text("contentType").notNull(),
+    data: bytea("data").notNull(),
+    createdAt: timestamp("createdAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("image_blobs_contactId_idx").on(table.contactId)]
+);
+
 // ============================================
 // Assistant Conversation Models
 // ============================================
@@ -570,6 +664,9 @@ export const contactImagesRelations = relations(contactImages, ({ one }) => ({
 // ============================================
 
 export type User = typeof users.$inferSelect;
+export type Session = typeof sessions.$inferSelect;
+export type Account = typeof accounts.$inferSelect;
+export type Verification = typeof verifications.$inferSelect;
 export type Contact = typeof contacts.$inferSelect;
 export type NewContact = typeof contacts.$inferInsert;
 export type Tag = typeof tags.$inferSelect;
@@ -584,6 +681,7 @@ export type Relationship = typeof relationships.$inferSelect;
 export type RelationshipType = typeof relationshipTypes.$inferSelect;
 export type SocialLink = typeof socialLinks.$inferSelect;
 export type ContactImage = typeof contactImages.$inferSelect;
+export type ImageBlob = typeof imageBlobs.$inferSelect;
 export type AssistantConversation = typeof assistantConversations.$inferSelect;
 export type NewAssistantConversation = typeof assistantConversations.$inferInsert;
 export type AssistantMessage = typeof assistantMessages.$inferSelect;

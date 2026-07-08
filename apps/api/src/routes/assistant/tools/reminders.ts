@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { tool } from "ai";
-import { and, asc, desc, eq, gte, ilike, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lte } from "drizzle-orm";
 import { db, contacts, reminderParticipants, reminders } from "../../../db";
 import { getOwnedReminder } from "../ownership";
 import { enrichReminders } from "../enrichment";

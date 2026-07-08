@@ -3,7 +3,7 @@ import { z } from "zod";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { authMiddleware } from "../../middleware/auth";
 import { formatValidationErrors } from "../../utils/validation";
-import { db, assistantConversations, assistantMessages, users } from "../../db";
+import { db, assistantConversations, assistantMessages } from "../../db";
 import { assertConsentAndBudget, persistUserMessage, processAssistantChat, upsertConversation } from "./process";
 import { getProviderApiKeyEnvGuard } from "./model";
 

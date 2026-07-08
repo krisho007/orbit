@@ -127,6 +127,13 @@
       "when": 1777044669688,
       "tag": "0017_next_praxagora",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1783495257832,
+      "tag": "0018_better_auth_neon_migration",
+      "breakpoints": true
     }
   ]
 }

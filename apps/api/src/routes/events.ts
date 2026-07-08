@@ -304,7 +304,6 @@ app.get("/", async (c) => {
     if (semantic && search) {
       const queryEmbedding = await generateQueryEmbedding(search);
       const embeddingStr = JSON.stringify(queryEmbedding);
-      const distance = sql`${events.embedding} <=> ${embeddingStr}::vector`;
 
       const conditions = [
         eq(events.userId, userId),

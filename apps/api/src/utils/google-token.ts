@@ -1,5 +1,4 @@
-import { eq } from "drizzle-orm";
-import { db, users } from "../db";
+import { auth } from "../lib/auth";
 
 export type GoogleTokenError =
   | "NO_GOOGLE_TOKEN"
@@ -17,87 +16,34 @@ export class GoogleTokenException extends Error {
 
 /**
  * Returns a valid Google access token for the given user.
- * If the stored token is expired, it refreshes using the refresh token.
+ *
+ * Better Auth stores the Google OAuth access/refresh tokens in the `accounts`
+ * table (captured during sign-in) and `getAccessToken` returns a fresh token,
+ * transparently refreshing it via the stored refresh token when expired. This
+ * replaces the previous hand-rolled refresh against oauth2.googleapis.com.
  */
 export async function getValidGoogleToken(userId: string): Promise<string> {
-  const [user] = await db
-    .select({
-      googleProviderToken: users.googleProviderToken,
-      googleProviderRefreshToken: users.googleProviderRefreshToken,
-      googleTokenExpiresAt: users.googleTokenExpiresAt,
-    })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+  try {
+    const { accessToken } = await auth.api.getAccessToken({
+      body: { providerId: "google", userId },
+    });
 
-  if (!user?.googleProviderToken && !user?.googleProviderRefreshToken) {
-    throw new GoogleTokenException(
-      "NO_GOOGLE_TOKEN",
-      "No Google tokens stored. Please sign in with Google again."
-    );
-  }
-
-  // If token exists and is not expired (with 2-min buffer), return it
-  if (user.googleProviderToken && user.googleTokenExpiresAt) {
-    const bufferMs = 2 * 60 * 1000;
-    if (user.googleTokenExpiresAt.getTime() - bufferMs > Date.now()) {
-      return user.googleProviderToken;
+    if (!accessToken) {
+      throw new GoogleTokenException(
+        "NO_GOOGLE_TOKEN",
+        "No Google tokens stored. Please sign in with Google again."
+      );
     }
-  }
 
-  // Token is expired or missing — refresh it
-  if (!user.googleProviderRefreshToken) {
-    throw new GoogleTokenException(
-      "NO_REFRESH_TOKEN",
-      "No refresh token available. Please sign out and sign in with Google again."
-    );
-  }
-
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new GoogleTokenException(
-      "GOOGLE_CLIENT_CREDENTIALS_MISSING",
-      "Google OAuth client credentials are not configured on the server."
-    );
-  }
-
-  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: user.googleProviderRefreshToken,
-      grant_type: "refresh_token",
-    }),
-  });
-
-  if (!tokenResponse.ok) {
-    const errorBody = await tokenResponse.text();
-    console.error("Google token refresh failed:", errorBody);
+    return accessToken;
+  } catch (err) {
+    if (err instanceof GoogleTokenException) throw err;
+    // Better Auth throws when there is no linked Google account or the refresh
+    // fails (e.g. the refresh token was revoked). Surface as a re-auth prompt.
+    console.error("Google token retrieval failed:", err);
     throw new GoogleTokenException(
       "TOKEN_REFRESH_FAILED",
-      "Failed to refresh Google access token. Please sign in with Google again."
+      "Failed to get a valid Google access token. Please sign in with Google again."
     );
   }
-
-  const tokenData = (await tokenResponse.json()) as {
-    access_token: string;
-    expires_in: number;
-  };
-
-  const newExpiresAt = new Date(Date.now() + tokenData.expires_in * 1000);
-
-  await db
-    .update(users)
-    .set({
-      googleProviderToken: tokenData.access_token,
-      googleTokenExpiresAt: newExpiresAt,
-      updatedAt: new Date(),
-    })
-    .where(eq(users.id, userId));
-
-  return tokenData.access_token;
 }

@@ -10,7 +10,8 @@
  *   bun run scripts/perf-assistant.ts
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { eq } from "drizzle-orm";
+import { db, users } from "../src/db";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -68,67 +69,25 @@ type BenchmarkResult = {
 // ── Constants ───────────────────────────────────────────────────────
 const API_BASE = process.env.API_BASE_URL || "http://localhost:3001";
 const TEST_EMAIL = `orbit-perf-${Date.now()}@test.local`;
-const TEST_PASSWORD = `PerfPass!${crypto.randomUUID().slice(0, 12)}`;
 
 // ── Auth ────────────────────────────────────────────────────────────
 async function authenticate(): Promise<{
   token: string;
   cleanup: () => Promise<void>;
 }> {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // Google-only auth (Better Auth) has no password sign-in; seed a user row
+  // directly and authenticate via the dev-only `x-dev-user-id` header. `token`
+  // here IS the userId.
+  const userId = crypto.randomUUID();
+  const token = userId;
 
-  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
-    throw new Error(
-      "Missing env vars: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY"
-    );
-  }
-
-  const admin = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
-  const { data: createData, error: createError } =
-    await admin.auth.admin.createUser({
-      email: TEST_EMAIL,
-      password: TEST_PASSWORD,
-      email_confirm: true,
-    });
-
-  if (createError || !createData.user) {
-    throw new Error(
-      `Failed to create test user: ${createError?.message || "unknown"}`
-    );
-  }
-
-  const userId = createData.user.id;
-  const anonClient = createClient(supabaseUrl, supabaseAnonKey);
-  const { data: signInData, error: signInError } =
-    await anonClient.auth.signInWithPassword({
-      email: TEST_EMAIL,
-      password: TEST_PASSWORD,
-    });
-
-  if (signInError || !signInData.session) {
-    throw new Error(
-      `Failed to sign in: ${signInError?.message || "no session"}`
-    );
-  }
-
-  const token = signInData.session.access_token;
-
-  // Trigger DB user creation + set consent
-  await fetch(`${API_BASE}/api/contacts?limit=1`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  await fetch(`${API_BASE}/api/users/me/consent`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ aiConsent: true }),
+  await db.insert(users).values({
+    id: userId,
+    email: TEST_EMAIL,
+    name: "Orbit Perf Test",
+    emailVerified: true,
+    thirdPartyConsentGranted: true,
+    updatedAt: new Date(),
   });
 
   // Create a couple of contacts so searches have something to find
@@ -140,7 +99,7 @@ async function authenticate(): Promise<{
     await fetch(`${API_BASE}/api/contacts`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
+        "x-dev-user-id": token,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(c),
@@ -148,9 +107,11 @@ async function authenticate(): Promise<{
   }
 
   const cleanup = async () => {
-    const { error } = await admin.auth.admin.deleteUser(userId);
-    if (error)
-      console.warn(`  Warning: Failed to delete test user: ${error.message}`);
+    try {
+      await db.delete(users).where(eq(users.id, userId));
+    } catch (err) {
+      console.warn(`  Warning: Failed to delete test user: ${err}`);
+    }
   };
 
   return { token, cleanup };
@@ -166,7 +127,7 @@ async function callAssistant(
   const res = await fetch(`${API_BASE}/api/assistant`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
+      "x-dev-user-id": token,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ messages }),

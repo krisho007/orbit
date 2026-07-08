@@ -2,7 +2,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { eq, and, desc, asc, sql, ilike, or, inArray } from "drizzle-orm";
-import { createClient } from "@supabase/supabase-js";
+import { storeImageBlob, deleteImageBlob, imageBlobUrl } from "../lib/image-store";
 import {
   db,
   contacts,
@@ -105,26 +105,6 @@ const importGoogleContactsBatchSchema = z.object({
 });
 
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "orbit";
-
-function getStorageClient() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return null;
-  }
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
-
-function getImageExtension(contentType: string, fileName?: string): string {
-  const fileNameExt = fileName?.split(".").pop()?.trim();
-  const mimeExt = contentType.split("/")[1]?.split(";")[0]?.trim();
-  const raw = (fileNameExt || mimeExt || "jpg").toLowerCase();
-  const cleaned = raw.replace(/[^a-z0-9]/g, "");
-  return cleaned || "jpg";
-}
 
 async function getContactMaxImageOrder(contactId: string) {
   const [maxOrder] = await db
@@ -221,11 +201,6 @@ async function uploadImportedContactPhoto(
     return;
   }
 
-  const storageClient = getStorageClient();
-  if (!storageClient) {
-    return;
-  }
-
   const [existingPrimary] = await db
     .select()
     .from(contactImages)
@@ -239,43 +214,23 @@ async function uploadImportedContactPhoto(
 
   if (existingPrimary) {
     if (existingPrimary.publicId) {
-      const { error: storageDeleteError } = await storageClient.storage
-        .from(SUPABASE_STORAGE_BUCKET)
-        .remove([existingPrimary.publicId]);
-      if (storageDeleteError) {
-        console.error("Error deleting old imported image from storage:", storageDeleteError);
-      }
+      await deleteImageBlob(existingPrimary.publicId).catch((err) =>
+        console.error("Error deleting old imported image blob:", err)
+      );
     }
     await db.delete(contactImages).where(eq(contactImages.id, existingPrimary.id));
   }
 
-  const extension = getImageExtension(photoContentType);
-  const filePath = `contact-images/${contactId}-${Date.now()}.${extension}`;
-
-  const { error: uploadError } = await storageClient.storage
-    .from(SUPABASE_STORAGE_BUCKET)
-    .upload(filePath, imageBuffer, {
-      cacheControl: "3600",
-      upsert: false,
-      contentType: photoContentType,
-    });
-
-  if (uploadError) {
-    throw new Error(`Failed to upload imported contact photo: ${uploadError.message}`);
-  }
-
-  const { data: signedUrlData, error: signedUrlError } = await storageClient.storage
-    .from(SUPABASE_STORAGE_BUCKET)
-    .createSignedUrl(filePath, 31536000);
-
-  if (signedUrlError || !signedUrlData) {
-    throw new Error("Failed to create signed URL for imported contact photo");
-  }
+  const blobId = await storeImageBlob({
+    data: imageBuffer,
+    contentType: photoContentType,
+    contactId,
+  });
 
   await db.insert(contactImages).values({
     contactId,
-    imageUrl: signedUrlData.signedUrl,
-    publicId: filePath,
+    imageUrl: imageBlobUrl(blobId),
+    publicId: blobId,
     order: 0,
   });
 }
@@ -1553,55 +1508,25 @@ app.post("/:id/images/upload", async (c) => {
       return c.json({ error: "Contact not found" }, 404);
     }
 
-    const storageClient = getStorageClient();
-    if (!storageClient) {
-      return c.json(
-        {
-          error:
-            "Storage is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
-        },
-        500
-      );
-    }
-
-    const { base64Data, contentType, fileName } = validation.data;
+    const { base64Data, contentType } = validation.data;
     const imageBuffer = Buffer.from(base64Data, "base64");
     if (imageBuffer.length === 0 || imageBuffer.length > MAX_IMAGE_SIZE_BYTES) {
       return c.json({ error: "Image must be between 1 byte and 5MB" }, 400);
     }
 
-    const extension = getImageExtension(contentType, fileName);
-    const filePath = `contact-images/${contactId}-${Date.now()}.${extension}`;
-
-    const { error: uploadError } = await storageClient.storage
-      .from(SUPABASE_STORAGE_BUCKET)
-      .upload(filePath, imageBuffer, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType,
-      });
-
-    if (uploadError) {
-      console.error("Error uploading image to storage:", uploadError);
-      return c.json({ error: "Failed to upload image" }, 500);
-    }
-
-    const { data: signedUrlData, error: signedUrlError } = await storageClient.storage
-      .from(SUPABASE_STORAGE_BUCKET)
-      .createSignedUrl(filePath, 31536000);
-
-    if (signedUrlError || !signedUrlData) {
-      console.error("Error creating signed URL:", signedUrlError);
-      return c.json({ error: "Failed to generate image URL" }, 500);
-    }
+    const blobId = await storeImageBlob({
+      data: imageBuffer,
+      contentType,
+      contactId,
+    });
 
     const maxOrder = await getContactMaxImageOrder(contactId);
     const [newImage] = await db
       .insert(contactImages)
       .values({
         contactId,
-        imageUrl: signedUrlData.signedUrl,
-        publicId: filePath,
+        imageUrl: imageBlobUrl(blobId, c.req.url),
+        publicId: blobId,
         order: maxOrder + 1,
       })
       .returning();
@@ -1640,15 +1565,9 @@ app.delete("/:id/images/:imageId", async (c) => {
     }
 
     if (image.publicId) {
-      const storageClient = getStorageClient();
-      if (storageClient) {
-        const { error: storageDeleteError } = await storageClient.storage
-          .from(SUPABASE_STORAGE_BUCKET)
-          .remove([image.publicId]);
-        if (storageDeleteError) {
-          console.error("Error deleting image from storage:", storageDeleteError);
-        }
-      }
+      await deleteImageBlob(image.publicId).catch((err) =>
+        console.error("Error deleting image blob:", err)
+      );
     }
 
     await db.delete(contactImages).where(eq(contactImages.id, imageId));

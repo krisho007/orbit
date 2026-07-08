@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { tool } from "ai";
-import { and, asc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { db, relationships, relationshipTypes } from "../../../db";
 import { getOwnedContact, getOwnedRelationship, getOwnedRelationshipType } from "../ownership";
 

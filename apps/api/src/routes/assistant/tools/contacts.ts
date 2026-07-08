@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { tool } from "ai";
-import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import {
   db,
   contacts,

@@ -1,7 +1,7 @@
 // Relationships API Routes
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, asc, sql, or, inArray } from "drizzle-orm";
+import { eq, and, asc, or, inArray } from "drizzle-orm";
 import {
   db,
   relationships,

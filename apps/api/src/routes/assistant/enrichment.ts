@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, asc, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import {
   db,
   contacts,

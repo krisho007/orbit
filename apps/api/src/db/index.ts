@@ -10,8 +10,7 @@ if (!connectionString) {
   throw new Error("DATABASE_URL environment variable is required");
 }
 
-// Create postgres.js client
-// For Supabase, we use the connection pooler URL
+// Create postgres.js client. DATABASE_URL points at Neon's pooled endpoint.
 const client = postgres(connectionString, {
   max: 10, // Connection pool size
   idle_timeout: 20,

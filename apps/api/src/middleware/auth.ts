@@ -1,139 +1,56 @@
-// Supabase Auth JWT Verification Middleware
+// Better Auth session-verification middleware.
+//
+// Replaces the old Supabase JWT verification. `auth.api.getSession` reads the
+// session from either the web cookie or the native `Authorization: Bearer`
+// token (Expo plugin) — no branching needed. On success it exposes the
+// authenticated user's id (and the user object) on the Hono context.
 import { createMiddleware } from "hono/factory";
-import { createClient } from "@supabase/supabase-js";
-import type { User } from "@supabase/supabase-js";
 import { HTTPException } from "hono/http-exception";
-import { db, users } from "../db";
-import { eq } from "drizzle-orm";
+import { auth, type AuthSession } from "../lib/auth";
 
-// Extend Hono context with user
+// Extend Hono context with the authenticated user.
 declare module "hono" {
   interface ContextVariableMap {
-    user: User;
+    user: AuthSession["user"];
     userId: string;
   }
 }
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn("Supabase URL or Anon Key not configured. Auth middleware will fail.");
-}
-
-// Module-level singleton — avoids re-creating HTTP client on every request
-const supabase = supabaseUrl && supabaseAnonKey
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
-
-/**
- * Auth middleware that verifies Supabase JWT tokens
- * Extracts user from the Authorization header and sets it in context
- * 
- * Important: This middleware resolves the user by email to support
- * both Supabase Auth (UUIDs) and NextAuth (CUIDs) user IDs.
- */
 export const authMiddleware = createMiddleware(async (c, next) => {
-  const authHeader = c.req.header("Authorization");
+  const session = await auth.api.getSession({ headers: c.req.raw.headers });
 
-  if (!authHeader) {
-    throw new HTTPException(401, { message: "Missing Authorization header" });
+  if (session?.user) {
+    c.set("user", session.user);
+    c.set("userId", session.user.id);
+    return next();
   }
 
-  if (!authHeader.startsWith("Bearer ")) {
-    throw new HTTPException(401, { message: "Invalid Authorization header format" });
+  // Local-dev / e2e fallback. Never active in production. Lets test scripts and
+  // local tooling authenticate as a seeded user without the Google OAuth flow.
+  if (process.env.NODE_ENV !== "production") {
+    const devUserId = c.req.header("x-dev-user-id");
+    if (devUserId) {
+      c.set("userId", devUserId);
+      return next();
+    }
   }
 
-  const token = authHeader.slice(7);
-
-  if (!token) {
-    throw new HTTPException(401, { message: "Missing token" });
-  }
-
-  try {
-    if (!supabase) {
-      throw new HTTPException(500, { message: "Supabase not configured" });
-    }
-
-    // Verify the JWT and get user
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-
-    if (error) {
-      console.error("Auth error:", error.message);
-      throw new HTTPException(401, { message: "Invalid or expired token" });
-    }
-
-    if (!user || !user.email) {
-      throw new HTTPException(401, { message: "User not found" });
-    }
-
-    // Look up the user by email in our database to get the correct userId
-    // This supports both Supabase Auth (UUID) and NextAuth (CUID) users
-    let userId = user.id;
-    
-    const [dbUser] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, user.email))
-      .limit(1);
-
-    if (dbUser) {
-      // Use the existing user's ID (CUID from NextAuth)
-      userId = dbUser.id;
-    } else {
-      // Create a new user record with Supabase's UUID
-      const [newUser] = await db
-        .insert(users)
-        .values({
-          id: user.id,
-          email: user.email,
-          name: user.user_metadata?.full_name || user.user_metadata?.name || null,
-          image: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
-          updatedAt: new Date(),
-        })
-        .returning({ id: users.id });
-      
-      if (newUser) {
-        userId = newUser.id;
-      }
-    }
-
-    // Set user in context for route handlers
-    c.set("user", user);
-    c.set("userId", userId);
-
-    await next();
-  } catch (err) {
-    if (err instanceof HTTPException) {
-      throw err;
-    }
-    console.error("Auth middleware error:", err);
-    throw new HTTPException(500, { message: "Authentication failed" });
-  }
+  throw new HTTPException(401, { message: "Invalid or expired session" });
 });
 
 /**
- * Optional auth middleware - doesn't throw if no token
- * Useful for routes that work with or without auth
+ * Optional auth middleware - doesn't throw if there is no session.
+ * Useful for routes that work with or without auth.
  */
 export const optionalAuthMiddleware = createMiddleware(async (c, next) => {
-  const authHeader = c.req.header("Authorization");
-
-  if (authHeader?.startsWith("Bearer ")) {
-    const token = authHeader.slice(7);
-
-    if (token && supabase) {
-      try {
-        const { data: { user } } = await supabase.auth.getUser(token);
-
-        if (user) {
-          c.set("user", user);
-          c.set("userId", user.id);
-        }
-      } catch {
-        // Silently ignore auth errors for optional auth
-      }
+  try {
+    const session = await auth.api.getSession({ headers: c.req.raw.headers });
+    if (session?.user) {
+      c.set("user", session.user);
+      c.set("userId", session.user.id);
     }
+  } catch {
+    // Silently ignore auth errors for optional auth
   }
 
   await next();

@@ -64,12 +64,14 @@ All profiles connect to the same backend. The difference is build type only.
 ### API (`apps/api/.env`)
 
 Copy from `apps/api/.env.example`. Required:
-- `DATABASE_URL` - Supabase PostgreSQL connection pooler URL
-- `SUPABASE_URL` - Supabase project URL
-- `SUPABASE_ANON_KEY` - Supabase anonymous key
+- `DATABASE_URL` - Neon Postgres connection string (pooled, `?sslmode=require`)
+- `BETTER_AUTH_SECRET` - Session signing secret (`openssl rand -base64 32`)
+- `BETTER_AUTH_URL` - Public API base URL (OAuth callback + image URLs)
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - Google OAuth (sign-in + Contacts import)
 
 Optional:
 - `GOOGLE_GENERATIVE_AI_API_KEY` - For AI assistant
+- `CORS_ALLOWED_ORIGINS` - Comma-separated allowed origins
 - `PORT` - Default 3001
 
 ### Mobile (`apps/mobile/.env`)
@@ -95,6 +97,6 @@ Development:
 ### Fly.io Production Variables
 
 Set via `fly secrets set`:
-- `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`
+- `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_GENERATIVE_AI_API_KEY`
 
 Build args in `fly.toml` provide Expo public vars at Docker build time.

@@ -2,7 +2,7 @@
 /**
  * Automated Assistant E2E Test Harness
  *
- * Authenticates via Supabase Admin API (creates a temp test user),
+ * Seeds a temp user row and authenticates via the dev-only x-dev-user-id header,
  * runs declarative test scenarios against a running local API,
  * captures the full multi-turn conversation flow, generates an
  * HTML report, and cleans up all test-created entities afterward.
@@ -12,7 +12,8 @@
  *   bun run test:assistant:e2e
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { eq } from "drizzle-orm";
+import { db, users } from "../src/db";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -120,7 +121,6 @@ type ScenarioResult = {
 const API_BASE = process.env.API_BASE_URL || "http://localhost:3001";
 const MAX_TURNS = 10;
 const TEST_EMAIL = `orbit-test-harness-${Date.now()}@test.local`;
-const TEST_PASSWORD = `TestPass!${crypto.randomUUID().slice(0, 12)}`;
 
 // ── Setup Data ────────────────────────────────────────────────────
 // Pre-create contacts for disambiguation scenarios.
@@ -146,7 +146,7 @@ async function setupTestData(token: string): Promise<string[]> {
     try {
       const res = await fetch(`${API_BASE}/api/contacts`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { "x-dev-user-id": token, "Content-Type": "application/json" },
         body: JSON.stringify(contact),
       });
       if (res.ok) {
@@ -165,83 +165,33 @@ async function setupTestData(token: string): Promise<string[]> {
 // ── Auth ───────────────────────────────────────────────────────────
 
 async function authenticate(): Promise<{ token: string; userId: string; cleanup: () => Promise<void> }> {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // Google-only auth (Better Auth) has no password sign-in, so we seed a user
+  // row directly and authenticate via the dev-only `x-dev-user-id` header
+  // (enabled by the auth middleware when NODE_ENV !== "production").
+  // `token` here IS the userId — callers send it as `x-dev-user-id`.
+  const userId = crypto.randomUUID();
 
-  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
-    throw new Error(
-      "Missing required env vars: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY"
-    );
-  }
-
-  // Admin client to create/delete test user
-  const admin = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
-  // Create temp test user
-  const { data: createData, error: createError } = await admin.auth.admin.createUser({
+  await db.insert(users).values({
+    id: userId,
     email: TEST_EMAIL,
-    password: TEST_PASSWORD,
-    email_confirm: true,
+    name: "Orbit Test Harness",
+    emailVerified: true,
+    thirdPartyConsentGranted: true,
+    updatedAt: new Date(),
   });
 
-  if (createError || !createData.user) {
-    throw new Error(`Failed to create test user: ${createError?.message || "unknown"}`);
-  }
-
-  const supabaseUserId = createData.user.id;
-  console.log(`  Created test user: ${TEST_EMAIL} (${supabaseUserId})`);
-
-  // Sign in as that user to get JWT
-  const anonClient = createClient(supabaseUrl, supabaseAnonKey);
-  const { data: signInData, error: signInError } = await anonClient.auth.signInWithPassword({
-    email: TEST_EMAIL,
-    password: TEST_PASSWORD,
-  });
-
-  if (signInError || !signInData.session) {
-    throw new Error(`Failed to sign in test user: ${signInError?.message || "no session"}`);
-  }
-
-  const token = signInData.session.access_token;
-
-  // The auth middleware will auto-create the user row in our DB.
-  // We need to make a test call to trigger that, then update consent.
-  // First, make a simple call to create the DB user row
-  await fetch(`${API_BASE}/api/contacts?limit=1`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  // Set thirdPartyConsentGranted = true via the consent endpoint
-  const consentRes = await fetch(`${API_BASE}/api/users/me/consent`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ aiConsent: true }),
-  });
-
-  if (!consentRes.ok) {
-    console.warn(`  Warning: Could not set consent flag (${consentRes.status}). Assistant calls may fail.`);
-  }
-
-  // The auth middleware auto-created the DB user (or found existing).
-  // We don't have a GET /me endpoint, but the userId is resolved internally.
-  console.log(`  Authenticated. Supabase userId: ${supabaseUserId}`);
+  console.log(`  Created test user: ${TEST_EMAIL} (${userId})`);
 
   const cleanup = async () => {
-    const { error } = await admin.auth.admin.deleteUser(supabaseUserId);
-    if (error) {
-      console.warn(`  Warning: Failed to delete test user: ${error.message}`);
-    } else {
+    try {
+      await db.delete(users).where(eq(users.id, userId));
       console.log(`  Deleted test user: ${TEST_EMAIL}`);
+    } catch (err) {
+      console.warn(`  Warning: Failed to delete test user: ${err}`);
     }
   };
 
-  return { token, userId: supabaseUserId, cleanup };
+  return { token: userId, userId, cleanup };
 }
 
 // ── API Caller ─────────────────────────────────────────────────────
@@ -257,7 +207,7 @@ async function callAssistant(
   const res = await fetch(`${API_BASE}/api/assistant`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
+      "x-dev-user-id": token,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -851,7 +801,7 @@ async function fetchAllIds(
       }
     }
     const res = await fetch(`${API_BASE}/api/${endpoint}?${params}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { "x-dev-user-id": token },
     });
     if (!res.ok) break;
     const data = (await res.json()) as any;
@@ -873,7 +823,7 @@ async function fetchAllAssistantConversationIds(token: string): Promise<string[]
     const params = new URLSearchParams({ limit: "50" });
     if (cursor) params.set("cursor", cursor);
     const res = await fetch(`${API_BASE}/api/assistant/conversations?${params}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { "x-dev-user-id": token },
     });
     if (!res.ok) break;
     const data = (await res.json()) as any;
@@ -901,7 +851,7 @@ async function cleanupAllTestData(token: string): Promise<CleanupStats> {
     try {
       const res = await fetch(`${API_BASE}/api/${endpoint}/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { "x-dev-user-id": token },
       });
       if (res.ok || res.status === 404) {
         stats.deleted[kind] = (stats.deleted[kind] || 0) + 1;
@@ -1297,7 +1247,7 @@ async function main() {
 
   // 1. Authenticate
   console.log("🔐 Authenticating...");
-  const { token, userId, cleanup: cleanupUser } = await authenticate();
+  const { token, cleanup: cleanupUser } = await authenticate();
 
   const allResults: ScenarioResult[] = [];
 

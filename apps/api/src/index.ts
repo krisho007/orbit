@@ -18,7 +18,9 @@ import assistantRouter from "./routes/assistant";
 import remindersRouter from "./routes/reminders";
 import usersRouter from "./routes/users";
 import speechRouter from "./routes/speech";
+import imagesRouter from "./routes/images";
 import { rateLimiter, strictRateLimiter } from "./middleware/rate-limit";
+import { auth } from "./lib/auth";
 
 const app = new Hono();
 
@@ -32,7 +34,7 @@ app.use(
       scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://*.supabase.co", "https://api.sarvam.ai"],
+      connectSrc: ["'self'", "https://api.sarvam.ai"],
       fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
       frameAncestors: ["'none'"],
     },
@@ -79,6 +81,12 @@ app.get("/api", (c) => {
   });
 });
 
+// Better Auth owns everything under /api/auth/* — sign-in, OAuth callback,
+// session, sign-out. Mounted BEFORE the rate limiter and the auth-gated routes
+// so unauthenticated users can complete sign-in (Better Auth has its own rate
+// limiting, so we deliberately don't apply orbit's limiter here).
+app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+
 // Rate limiting
 app.use("/api/*", rateLimiter); // 200 req/min general
 app.use("/api/assistant/*", strictRateLimiter); // 20 req/min for LLM endpoints
@@ -94,6 +102,8 @@ app.route("/api/assistant", assistantRouter);
 app.route("/api/reminders", remindersRouter);
 app.route("/api/users", usersRouter);
 app.route("/api/speech", speechRouter);
+// Public image bytes (no auth — capability URL by unguessable id)
+app.route("/api/images", imagesRouter);
 
 // Global error handler
 app.onError((err, c) => {

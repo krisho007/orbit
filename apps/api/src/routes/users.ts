@@ -2,7 +2,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { eq, and, inArray, gte, sql } from "drizzle-orm";
-import { createClient } from "@supabase/supabase-js";
 import {
   db,
   users,
@@ -29,19 +28,6 @@ import { formatValidationErrors } from "../utils/validation";
 const app = new Hono();
 
 app.use("/*", authMiddleware);
-
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "orbit";
-
-function getAdminClient() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return null;
-  }
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 // GET /api/users/me/plan - Get plan info and usage
 app.get("/me/plan", async (c) => {
@@ -386,42 +372,9 @@ app.get("/me/export", async (c) => {
   }
 });
 
-// PUT /api/users/me/google-tokens - Store Google OAuth tokens
-app.put("/me/google-tokens", async (c) => {
-  const userId = c.get("userId");
-  const body = await c.req.json();
-
-  const schema = z.object({
-    providerToken: z.string().min(1, "Provider token is required"),
-    providerRefreshToken: z.string().optional(),
-  });
-
-  const validation = schema.safeParse(body);
-  if (!validation.success) {
-    return c.json({ error: formatValidationErrors(validation.error) }, 400);
-  }
-
-  const { providerToken, providerRefreshToken } = validation.data;
-
-  try {
-    const updateData: Record<string, unknown> = {
-      googleProviderToken: providerToken,
-      googleTokenExpiresAt: new Date(Date.now() + 55 * 60 * 1000), // ~55 min
-      updatedAt: new Date(),
-    };
-
-    // Only overwrite refresh token if a new one is provided
-    if (providerRefreshToken) {
-      updateData.googleProviderRefreshToken = providerRefreshToken;
-    }
-
-    await db.update(users).set(updateData).where(eq(users.id, userId));
-    return c.json({ success: true });
-  } catch (error) {
-    console.error("Error storing Google tokens:", error);
-    return c.json({ error: "Failed to store Google tokens" }, 500);
-  }
-});
+// Note: Google OAuth tokens are now captured and refreshed by Better Auth
+// (stored in the `accounts` table) — there is no client-side token push, so the
+// former PUT /me/google-tokens route has been removed.
 
 // DELETE /api/users/me - Delete account and all data (GDPR Article 17)
 app.delete("/me", async (c) => {
@@ -438,12 +391,6 @@ app.delete("/me", async (c) => {
     const conversationIds = userConversationRows.map((r) => r.id);
     const eventIds = userEventRows.map((r) => r.id);
     const reminderIds = userReminderRows.map((r) => r.id);
-
-    // Get images for storage cleanup
-    const imageRows = contactIds.length > 0
-      ? await db.select({ publicId: contactImages.publicId }).from(contactImages).where(inArray(contactImages.contactId, contactIds))
-      : [];
-    const storagePublicIds = imageRows.map((r) => r.publicId).filter((id): id is string => !!id);
 
     // Delete all data in a transaction
     await db.transaction(async (tx) => {
@@ -471,31 +418,11 @@ app.delete("/me", async (c) => {
       await tx.delete(events).where(eq(events.userId, userId));
       await tx.delete(contacts).where(eq(contacts.userId, userId));
       await tx.delete(tags).where(eq(tags.userId, userId));
+      // Deleting the user cascades to the Better Auth `sessions` and `accounts`
+      // rows (FK onDelete: cascade), removing the stored Google tokens too.
+      // Contact image bytes live in Neon and are removed with contactImages above.
       await tx.delete(users).where(eq(users.id, userId));
     });
-
-    // Delete images from Supabase Storage (after transaction)
-    if (storagePublicIds.length > 0) {
-      const adminClient = getAdminClient();
-      if (adminClient) {
-        const { error: storageError } = await adminClient.storage
-          .from(SUPABASE_STORAGE_BUCKET)
-          .remove(storagePublicIds);
-        if (storageError) {
-          console.error("Failed to delete storage files:", storageError);
-        }
-      }
-    }
-
-    // Delete Supabase Auth user
-    const adminClient = getAdminClient();
-    if (adminClient) {
-      const { error: authError } = await adminClient.auth.admin.deleteUser(userId);
-      if (authError) {
-        console.error("Failed to delete auth user:", authError);
-        // Don't fail the request — DB data is already gone
-      }
-    }
 
     return c.json({ success: true });
   } catch (error) {

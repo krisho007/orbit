@@ -21,7 +21,6 @@ import {
   reminders,
   reminderParticipants,
   assistantConversations,
-  assistantMessages,
 } from "../src/db/schema";
 
 const EMAIL = "kkammaje@gmail.com";

@@ -21,15 +21,15 @@ ENV EXPO_PUBLIC_SUPABASE_URL=$EXPO_PUBLIC_SUPABASE_URL
 ENV EXPO_PUBLIC_SUPABASE_ANON_KEY=$EXPO_PUBLIC_SUPABASE_ANON_KEY
 ENV EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL
 
-# Copy mobile app package files and patches
-COPY apps/mobile/package.json apps/mobile/bun.lock* ./
-COPY apps/mobile/patches/ ./patches/
+# Copy web app package files and patches
+COPY apps/app/package.json apps/app/bun.lock* ./
+COPY apps/app/patches/ ./patches/
 
 # Install dependencies with Bun (resolves peer deps properly)
 RUN bun install --frozen-lockfile
 
-# Copy mobile app source
-COPY apps/mobile/ ./
+# Copy web app source
+COPY apps/app/ ./
 
 # Build Expo Web (static export using Node/Metro), then generate the PWA
 # service worker with Workbox (precache manifest of the content-hashed assets).

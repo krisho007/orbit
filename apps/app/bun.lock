@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "@orbit/mobile",
+      "name": "@orbit/app",
       "dependencies": {
         "@ai-sdk/react": "^3.0.170",
         "@expo-google-fonts/inter": "^0.4.2",

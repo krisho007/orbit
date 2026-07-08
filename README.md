@@ -56,17 +56,16 @@ bun install
 bun run dev             # starts on http://localhost:3001 with hot reload
 ```
 
-### Mobile
+### Web app
 
 ```bash
-cd apps/mobile
+cd apps/app
 cp .env.example .env    # then fill in EXPO_PUBLIC_API_URL, EXPO_PUBLIC_SUPABASE_URL, etc.
 bun install
-bun run start           # starts Expo dev server
+bun run dev             # starts the web dev server against the local API
 ```
 
-> **Note:** OAuth is not supported in Expo Go. For local OAuth testing, use
-> `bun run android` (or `bun run ios` for an iOS simulator build) instead of Expo Go.
+Orbit ships as a web app only (installable PWA); there are no native builds.
 
 ---
 

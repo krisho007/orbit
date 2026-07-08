@@ -76,14 +76,14 @@ User input → buildStructuredSystemPrompt() (schema docs + 9 few-shot examples)
 - `SearchInstruction`: `{ id, entity_type, search_type, query, purpose }`
 - `ActionInstruction`: `{ operation, entity_type, params, participant_refs?, target_ref? }`
 
-## Mobile Side (`apps/mobile/app/(tabs)/assistant.tsx`)
+## Mobile Side (`apps/app/app/(tabs)/assistant.tsx`)
 
 - Chat UI with FlatList message bubbles
 - Speech-to-text via `expo-audio` + Sarvam AI transcription
 - Renders 7 interactive card types from `AssistantUi` objects
 - Confirmation action buttons ("Go ahead" / "I need changes")
 - Conversation persistence and history modal
-- API client: `assistantApi.chat()` in `apps/mobile/lib/api.ts`
+- API client: `assistantApi.chat()` in `apps/app/lib/api.ts`
 
 ## Key Patterns
 

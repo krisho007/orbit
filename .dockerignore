@@ -28,11 +28,9 @@ capacitor/
 *.md
 **/*.md
 
-# Ignore mobile-specific build artifacts
-apps/mobile/.expo
-apps/mobile/android
-apps/mobile/ios
-apps/mobile/dist
+# Ignore web app build artifacts (dist is rebuilt inside the image)
+apps/app/.expo
+apps/app/dist
 
 # Ignore API build artifacts
 apps/api/drizzle

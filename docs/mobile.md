@@ -2,7 +2,7 @@
 
 ## Navigation Structure
 
-The app uses Expo Router (file-based routing) in `apps/mobile/app/`:
+The app uses Expo Router (file-based routing) in `apps/app/app/`:
 
 ```
 app/
@@ -52,9 +52,9 @@ The assistant tab is the default/home tab (`initialRouteName="assistant"` in tab
 ## Styling
 
 - **NativeWind** (Tailwind CSS for React Native) - `className` props on RN components
-- **Tailwind config**: `apps/mobile/tailwind.config.js`
-- **Global CSS**: `apps/mobile/global.css`
-- **Gluestack UI**: Component library with theme-aware primitives in `apps/mobile/components/ui/`
+- **Tailwind config**: `apps/app/tailwind.config.js`
+- **Global CSS**: `apps/app/global.css`
+- **Gluestack UI**: Component library with theme-aware primitives in `apps/app/components/ui/`
   - `box`, `card`, `input`, `heading`, `spinner`, `hstack`, `button`, `divider`, `text`, `vstack`
 - **Icons**: `lucide-react-native`
 - **Theme colors**: Access via `useThemeColors()` and `getThemeColor(colors, tokenName)`
@@ -77,7 +77,7 @@ The assistant tab is the default/home tab (`initialRouteName="assistant"` in tab
 
 ## API Communication Pattern
 
-All API calls go through `apps/mobile/lib/api.ts`:
+All API calls go through `apps/app/lib/api.ts`:
 
 ```typescript
 import { contactsApi } from '../lib/api';

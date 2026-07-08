@@ -1,5 +1,4 @@
 import { Platform } from "react-native";
-import { supabase } from "./supabase";
 
 // Prefer explicit env for native builds; on web use relative URLs by default
 const API_URL =
@@ -19,20 +18,10 @@ class ApiClient {
     this.baseUrl = baseUrl;
   }
 
+  // Auth is cookie-based (Better Auth). The session cookie is attached via
+  // `credentials: "include"` on each fetch, so no Authorization header is set.
   private async getAuthHeaders(): Promise<HeadersInit> {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    const headers: HeadersInit = {
-      "Content-Type": "application/json",
-    };
-
-    if (session?.access_token) {
-      headers["Authorization"] = `Bearer ${session.access_token}`;
-    }
-
-    return headers;
+    return { "Content-Type": "application/json" };
   }
 
   private buildUrl(
@@ -64,6 +53,7 @@ class ApiClient {
     const response = await fetch(url, {
       method,
       headers,
+      credentials: "include",
       body: body ? JSON.stringify(body) : undefined,
     });
 
@@ -109,6 +99,7 @@ class ApiClient {
     const response = await fetch(url, {
       method: "POST",
       headers,
+      credentials: "include",
       body: body ? JSON.stringify(body) : undefined,
     });
 
@@ -441,11 +432,6 @@ export const userApi = {
 
   deleteAccount: () => api.delete<{ success: true }>("/api/users/me"),
 
-  storeGoogleTokens: (data: {
-    providerToken: string;
-    providerRefreshToken?: string;
-  }) => api.put<{ success: true }>("/api/users/me/google-tokens", data),
-
   getPlan: () => api.get<PlanInfo>("/api/users/me/plan"),
 };
 
@@ -482,14 +468,10 @@ export const assistantApi = {
   /** URL of the chat endpoint — useChat consumes this directly via its transport. */
   chatUrl: () => `${API_URL}/api/assistant/chat`,
 
-  /** Fresh auth headers — callers that use useChat should invoke this on every send. */
+  /** Content-Type header for useChat. Auth rides the session cookie (the
+   *  useChat transport must be configured with credentials: "include"). */
   chatHeaders: async (): Promise<Record<string, string>> => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-    return headers;
+    return { "Content-Type": "application/json" };
   },
 
   listConversations: () =>
@@ -516,9 +498,6 @@ export const speechApi = {
    */
   transcribe: async (uri: string): Promise<string> => {
     console.log("[speechApi] transcribe called with uri:", uri);
-
-    const { data: { session } } = await supabase.auth.getSession();
-    console.log("[speechApi] auth session exists:", !!session?.access_token);
 
     const formData = new FormData();
     const normalizedUri = uri.split("?")[0];
@@ -576,12 +555,9 @@ export const speechApi = {
 
     const response = await fetch(url, {
       method: "POST",
-      headers: {
-        ...(session?.access_token
-          ? { Authorization: `Bearer ${session.access_token}` }
-          : {}),
-        // Let fetch set Content-Type with boundary for multipart/form-data
-      },
+      credentials: "include",
+      // Let fetch set Content-Type with boundary for multipart/form-data.
+      // Auth rides the Better Auth session cookie.
       body: formData,
     });
 

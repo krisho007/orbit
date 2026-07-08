@@ -6,10 +6,16 @@ import { getThemeColor, useThemeColors } from "../lib/theme";
 
 const THIRD_PARTY_SERVICES = [
   {
-    name: "Supabase",
-    purpose: "Database, authentication, and file storage",
-    dataShared: "Account info, all CRM data, uploaded photos",
-    policyUrl: "https://supabase.com/privacy",
+    name: "Neon",
+    purpose: "Database and file storage",
+    dataShared: "All CRM data and uploaded photos",
+    policyUrl: "https://neon.com/privacy-policy",
+  },
+  {
+    name: "Google Sign-In",
+    purpose: "Authentication and Google Contacts import (with consent)",
+    dataShared: "Your email, name, profile photo; Google Contacts on import",
+    policyUrl: "https://policies.google.com/privacy",
   },
   {
     name: "Google Gemini",

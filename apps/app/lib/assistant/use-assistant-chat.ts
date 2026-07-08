@@ -19,6 +19,8 @@ export function useAssistantChat({ conversationId, initialMessages, onFinish, on
       // expo/fetch supports streaming response bodies on iOS / Android / Web.
       // React Native's built-in fetch does not — passing it here would break tool-call streaming.
       fetch: expoFetch as unknown as typeof fetch,
+      // Send the Better Auth session cookie with the streamed chat request.
+      credentials: "include",
       headers: async () => assistantApi.chatHeaders(),
       body: () => ({ conversationId, timezone }),
     });

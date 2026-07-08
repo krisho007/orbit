@@ -269,7 +269,7 @@ export default function SettingsScreen() {
           </Text>
         </View>
         <Text className="text-typography-900 text-xl font-body-semibold">
-          {user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}
+          {user?.name || user?.email?.split("@")[0] || "User"}
         </Text>
         <Text className="text-typography-500">{user?.email}</Text>
       </View>

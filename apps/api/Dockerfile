@@ -12,13 +12,9 @@ WORKDIR /build
 RUN npm install -g bun
 
 # Build arguments for Expo (needed at build time for static rendering)
-ARG EXPO_PUBLIC_SUPABASE_URL
-ARG EXPO_PUBLIC_SUPABASE_ANON_KEY
 ARG EXPO_PUBLIC_API_URL
 
-# Set them as environment variables for the build
-ENV EXPO_PUBLIC_SUPABASE_URL=$EXPO_PUBLIC_SUPABASE_URL
-ENV EXPO_PUBLIC_SUPABASE_ANON_KEY=$EXPO_PUBLIC_SUPABASE_ANON_KEY
+# Set as environment variable for the build
 ENV EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL
 
 # Copy web app package files and patches

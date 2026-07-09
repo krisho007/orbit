@@ -447,6 +447,12 @@ export const contactImages = pgTable(
     imageUrl: text("imageUrl").notNull(),
     publicId: text("publicId"),
     order: integer("order").default(0).notNull(),
+    // How this image got here: 'manual' (user upload / URL attach) or 'google'
+    // (Contacts import). Manual photos are never overwritten by an import.
+    source: text("source").notNull().default("manual"),
+    // SHA-256 hex of the image bytes, used to detect whether a Google photo has
+    // actually changed since the last import. Null for URL-only / legacy rows.
+    contentHash: text("contentHash"),
     createdAt: timestamp("createdAt", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("contact_images_contactId_idx").on(table.contactId)]

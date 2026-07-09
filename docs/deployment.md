@@ -38,6 +38,31 @@ fly deploy
 
 **Always run migrations BEFORE deploying** new API code that depends on schema changes.
 
+### Required Postgres Extensions
+
+Orbit depends on two Postgres extensions. **If you ever move the database to a new
+provider (or spin up a fresh Neon branch/project), these must be enabled or parts of
+the app will 500 at runtime** — a plain `CREATE DATABASE` does not include them.
+
+| Extension | Enabled by | Used for | Symptom if missing |
+|---|---|---|---|
+| `pg_trgm` | `drizzle/0019_enable_pg_trgm.sql` | Fuzzy contact search (`similarity()` / `word_similarity()`) in `GET /api/contacts?search=` and the assistant contact tools | `function similarity(text, text) does not exist` → every contact search returns **500** |
+| `vector` (pgvector) | `drizzle/0005_conversation_embeddings.sql` | Semantic search over conversation & event embeddings (cosine `<=>`) | `type "vector" does not exist` → embedding writes/queries fail |
+
+Both are turned on via `CREATE EXTENSION IF NOT EXISTS ...` inside normal migrations,
+so **running `bun run db:migrate` against the new database enables them automatically**.
+On a brand-new database, run the full migration set (not just the latest) so the
+`CREATE EXTENSION` statements execute. To verify afterwards:
+
+```bash
+psql "$DATABASE_URL" -c "SELECT extname FROM pg_extension;"
+# expect: plpgsql, pg_trgm, vector
+```
+
+If a managed provider blocks `CREATE EXTENSION` (some do for non-superusers), enable
+`pg_trgm` and `vector` from the provider console/allowlist before migrating. Neon
+allows both without extra steps.
+
 ### Web build & PWA (local)
 
 The web build runs inside the Docker image, but you can reproduce it locally:

@@ -230,13 +230,9 @@ export const contactsApi = {
   fetchGoogleContacts: (data: { accessToken?: string; includePhotos?: boolean }) =>
     api.post<{ contacts: GoogleImportContact[] }>("/api/contacts/google/fetch", data),
 
-  importGoogleContactsBatch: (
-    contacts: GoogleImportContact[],
-    overrideExisting: boolean = false
-  ) =>
+  importGoogleContactsBatch: (contacts: GoogleImportContact[]) =>
     api.post<GoogleImportBatchResult>("/api/contacts/google/import/batch", {
       contacts,
-      overrideExisting,
     }),
 
   searchByPhone: (params: {

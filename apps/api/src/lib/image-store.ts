@@ -4,8 +4,14 @@
 // unguessable capability URL `/api/images/:id` (see routes/images.ts) — the same
 // "hard-to-guess URL, no auth header needed" model the old Supabase signed URLs
 // provided, so <Image> tags on native/web can load them directly.
+import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db, imageBlobs } from "../db";
+
+/** SHA-256 hex of image bytes, used to detect whether a photo has changed. */
+export function imageContentHash(data: Buffer): string {
+  return createHash("sha256").update(data).digest("hex");
+}
 
 export async function storeImageBlob(params: {
   data: Buffer;

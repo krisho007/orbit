@@ -2,13 +2,19 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { eq, and, desc, asc, sql, ilike, or, inArray } from "drizzle-orm";
-import { storeImageBlob, deleteImageBlob, imageBlobUrl } from "../lib/image-store";
+import {
+  storeImageBlob,
+  deleteImageBlob,
+  imageBlobUrl,
+  imageContentHash,
+} from "../lib/image-store";
 import {
   db,
   contacts,
   contactTags,
   tags,
   contactImages,
+  imageBlobs,
   socialLinks,
   conversations,
   conversationParticipants,
@@ -107,7 +113,6 @@ const googleImportContactSchema = z.object({
 });
 const importGoogleContactsBatchSchema = z.object({
   contacts: z.array(googleImportContactSchema),
-  overrideExisting: z.boolean().optional().default(false),
 });
 
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -153,18 +158,24 @@ function parseOptionalDate(value?: string | null): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function isIncomingNameMoreDetailed(
-  incomingName?: string | null,
-  existingName?: string | null
-): boolean {
-  const incoming = normalizeName(incomingName);
-  const existing = normalizeName(existingName);
+// Smart-merge rule for a single text field during a Google import:
+//   - incoming empty        → keep Orbit's value (never blank an existing value)
+//   - existing empty        → take Google's value (fill the gap)
+//   - both present          → take whichever string is longer ("more complete")
+// Returns the chosen value and whether it differs from the existing one.
+function pickLongerText(
+  existing?: string | null,
+  incoming?: string | null
+): { value: string | null; changed: boolean } {
+  const existingValue = existing ?? null;
+  const incomingValue = incoming && incoming.trim().length > 0 ? incoming : null;
 
-  if (!incoming) return false;
-  if (!existing) return true;
-  if (incoming.toLowerCase() === existing.toLowerCase()) return false;
-
-  return incoming.length > existing.length;
+  if (!incomingValue) return { value: existingValue, changed: false };
+  if (!existingValue) return { value: incomingValue, changed: true };
+  if (incomingValue.length > existingValue.length && incomingValue !== existingValue) {
+    return { value: incomingValue, changed: true };
+  }
+  return { value: existingValue, changed: false };
 }
 
 async function getOrCreateGoogleImportTagId(userId: string): Promise<string> {
@@ -196,49 +207,83 @@ async function getOrCreateGoogleImportTagId(userId: string): Promise<string> {
   return existing.id;
 }
 
-async function uploadImportedContactPhoto(
-  contactId: string,
-  photoBase64: string,
-  photoContentType: string,
-  replacePrimary: boolean
-) {
-  const imageBuffer = Buffer.from(photoBase64, "base64");
-  if (imageBuffer.length === 0 || imageBuffer.length > MAX_IMAGE_SIZE_BYTES) {
-    return;
+type PrimaryImageInfo = {
+  id: string;
+  publicId: string | null;
+  source: string;
+  contentHash: string | null;
+};
+
+// Sync a Google photo onto a matched existing contact. Returns true when it made a
+// visible change (added or replaced the primary photo). Rules:
+//   - manual primary photo → never touched (the user's choice wins)
+//   - google primary, unchanged bytes → left alone
+//   - google primary, changed bytes → replaced
+//   - no primary photo → the Google photo is added
+// The caller passes an already-decoded, size-checked buffer and its content hash,
+// plus the preloaded primary image row (avoids a per-contact SELECT).
+async function syncGooglePhoto(params: {
+  contactId: string;
+  buffer: Buffer;
+  contentType: string;
+  incomingHash: string;
+  existingPrimary: PrimaryImageInfo | undefined;
+}): Promise<boolean> {
+  const { contactId, buffer, contentType, incomingHash, existingPrimary } = params;
+
+  const insertGooglePrimary = async () => {
+    const blobId = await storeImageBlob({ data: buffer, contentType, contactId });
+    await db.insert(contactImages).values({
+      contactId,
+      imageUrl: imageBlobUrl(blobId),
+      publicId: blobId,
+      order: 0,
+      source: "google",
+      contentHash: incomingHash,
+    });
+  };
+
+  if (!existingPrimary) {
+    await insertGooglePrimary();
+    return true;
   }
 
-  const [existingPrimary] = await db
-    .select()
-    .from(contactImages)
-    .where(and(eq(contactImages.contactId, contactId), eq(contactImages.order, 0)))
-    .orderBy(asc(contactImages.createdAt))
-    .limit(1);
-
-  if (existingPrimary && !replacePrimary) {
-    return;
+  // Never overwrite a manually-managed photo.
+  if (existingPrimary.source !== "google") {
+    return false;
   }
 
-  if (existingPrimary) {
-    if (existingPrimary.publicId) {
-      await deleteImageBlob(existingPrimary.publicId).catch((err) =>
-        console.error("Error deleting old imported image blob:", err)
-      );
+  // Known hash that matches — the photo hasn't changed.
+  if (existingPrimary.contentHash && existingPrimary.contentHash === incomingHash) {
+    return false;
+  }
+
+  // Legacy/backfilled google row with no stored hash: reconcile against the actual
+  // stored bytes so an identical photo isn't needlessly re-stored.
+  if (!existingPrimary.contentHash && existingPrimary.publicId) {
+    const [blob] = await db
+      .select({ data: imageBlobs.data })
+      .from(imageBlobs)
+      .where(eq(imageBlobs.id, existingPrimary.publicId))
+      .limit(1);
+    if (blob && imageContentHash(blob.data) === incomingHash) {
+      await db
+        .update(contactImages)
+        .set({ contentHash: incomingHash })
+        .where(eq(contactImages.id, existingPrimary.id));
+      return false;
     }
-    await db.delete(contactImages).where(eq(contactImages.id, existingPrimary.id));
   }
 
-  const blobId = await storeImageBlob({
-    data: imageBuffer,
-    contentType: photoContentType,
-    contactId,
-  });
-
-  await db.insert(contactImages).values({
-    contactId,
-    imageUrl: imageBlobUrl(blobId),
-    publicId: blobId,
-    order: 0,
-  });
+  // Bytes differ (or couldn't be confirmed identical): replace the primary photo.
+  if (existingPrimary.publicId) {
+    await deleteImageBlob(existingPrimary.publicId).catch((err) =>
+      console.error("Error deleting old imported image blob:", err)
+    );
+  }
+  await db.delete(contactImages).where(eq(contactImages.id, existingPrimary.id));
+  await insertGooglePrimary();
+  return true;
 }
 
 // GET /api/contacts - List contacts with pagination and search
@@ -810,7 +855,7 @@ app.post("/google/import/batch", async (c) => {
     return c.json({ error: formatValidationErrors(validation.error) }, 400);
   }
 
-  const { contacts: incomingContacts, overrideExisting } = validation.data;
+  const { contacts: incomingContacts } = validation.data;
 
   if (incomingContacts.length === 0) {
     return c.json({ imported: 0, updated: 0, skipped: 0, errors: 0 });
@@ -897,10 +942,78 @@ app.post("/google/import/batch", async (c) => {
       indexExistingContact(existing);
     }
 
+    // Preload each contact's primary photo (order 0) in one query so the photo-sync
+    // decisions below need no per-contact SELECT.
+    const primaryImageByContactId = new Map<string, PrimaryImageInfo>();
+    const existingContactIds = existingContacts.map((contact) => contact.id);
+    if (existingContactIds.length > 0) {
+      const primaryImages = await db
+        .select({
+          id: contactImages.id,
+          contactId: contactImages.contactId,
+          publicId: contactImages.publicId,
+          source: contactImages.source,
+          contentHash: contactImages.contentHash,
+        })
+        .from(contactImages)
+        .where(
+          and(inArray(contactImages.contactId, existingContactIds), eq(contactImages.order, 0))
+        );
+      for (const image of primaryImages) {
+        if (!primaryImageByContactId.has(image.contactId)) {
+          primaryImageByContactId.set(image.contactId, {
+            id: image.id,
+            publicId: image.publicId,
+            source: image.source,
+            contentHash: image.contentHash,
+          });
+        }
+      }
+    }
+
+    // Decode + size-check an incoming Google photo, returning its bytes and hash.
+    const decodeIncomingPhoto = (
+      photoBase64?: string | null,
+      photoContentType?: string | null
+    ): { buffer: Buffer; contentType: string; hash: string } | null => {
+      if (!photoBase64 || !photoContentType) return null;
+      const buffer = Buffer.from(photoBase64, "base64");
+      if (buffer.length === 0 || buffer.length > MAX_IMAGE_SIZE_BYTES) return null;
+      return { buffer, contentType: photoContentType, hash: imageContentHash(buffer) };
+    };
+
     let imported = 0;
     let updated = 0;
     let skipped = 0;
     let errors = 0;
+
+    // --- Phase 1: classify every incoming contact in memory (no DB writes) ---
+    // The previous implementation ran an INSERT + tag INSERT + photo SELECT/INSERT
+    // per contact inside this loop. With the database in a different region than the
+    // API each round-trip costs a fair bit, so a 200-contact batch (with photos)
+    // took ~7 minutes and the client timed out — every batch then surfaced to the
+    // user as "errors". We now collect the work here and flush it below with a
+    // handful of bulk statements.
+    type DecodedPhoto = { buffer: Buffer; contentType: string; hash: string };
+    type PendingCreate = {
+      values: typeof contacts.$inferInsert;
+      photo: DecodedPhoto | null;
+    };
+    type PendingUpdate = {
+      id: string;
+      updateData: Record<string, unknown>;
+      photo: DecodedPhoto | null;
+      existingPrimary: PrimaryImageInfo | undefined;
+    };
+
+    const pendingCreates: PendingCreate[] = [];
+    const pendingUpdates: PendingUpdate[] = [];
+
+    // Keys already claimed by a create in THIS batch, so a duplicate row inside a
+    // single import (e.g. the same number listed twice) doesn't create two contacts.
+    const claimedPhoneKeys = new Set<string>();
+    const claimedEmailKeys = new Set<string>();
+    const claimedNameKeys = new Set<string>();
 
     for (const incoming of incomingContacts) {
       try {
@@ -931,135 +1044,223 @@ app.post("/google/import/batch", async (c) => {
           existing = existingByNormalizedNameWithoutPhone.get(normalizedIncomingName) || null;
         }
 
-        if (!existing) {
-          const [createdContact] = await db
-            .insert(contacts)
-            .values({
-              userId,
-              displayName: incomingName,
-              googleContactName: incomingName,
-              primaryPhone: incoming.primaryPhone || null,
-              primaryEmail: incoming.primaryEmail || null,
-              dateOfBirth: parseOptionalDate(incoming.dateOfBirth),
-              company: incoming.company || null,
-              jobTitle: incoming.jobTitle || null,
-              location: incoming.location || null,
-              notes: incoming.notes || null,
-            })
-            .returning({
-              id: contacts.id,
-              displayName: contacts.displayName,
-              primaryPhone: contacts.primaryPhone,
-              primaryEmail: contacts.primaryEmail,
-              company: contacts.company,
-              jobTitle: contacts.jobTitle,
-              location: contacts.location,
-              notes: contacts.notes,
-              dateOfBirth: contacts.dateOfBirth,
-              googleContactName: contacts.googleContactName,
-            });
+        if (existing) {
+          // Smart merge: fill empty Orbit fields from Google, and take Google's value
+          // when it is longer ("more complete"). Never blank an existing value.
+          const updateData: Record<string, unknown> = {};
 
-          if (!createdContact) {
-            errors += 1;
+          const mergedName = pickLongerText(existing.displayName, incomingName);
+          if (mergedName.changed) {
+            updateData.displayName = mergedName.value;
+            updateData.googleContactName = mergedName.value;
+          }
+
+          const textFields: {
+            column: "primaryPhone" | "primaryEmail" | "company" | "jobTitle" | "location" | "notes";
+            incoming: string | null | undefined;
+          }[] = [
+            { column: "primaryPhone", incoming: incoming.primaryPhone },
+            { column: "primaryEmail", incoming: incoming.primaryEmail },
+            { column: "company", incoming: incoming.company },
+            { column: "jobTitle", incoming: incoming.jobTitle },
+            { column: "location", incoming: incoming.location },
+            { column: "notes", incoming: incoming.notes },
+          ];
+          for (const field of textFields) {
+            const merged = pickLongerText(existing[field.column], field.incoming);
+            if (merged.changed) updateData[field.column] = merged.value;
+          }
+
+          // dateOfBirth is a date, not text — only fill it when Orbit has none.
+          if (!existing.dateOfBirth) {
+            const incomingDob = parseOptionalDate(incoming.dateOfBirth);
+            if (incomingDob) updateData.dateOfBirth = incomingDob;
+          }
+
+          const photo = decodeIncomingPhoto(incoming.photoBase64, incoming.photoContentType);
+
+          const hasFieldChanges = Object.keys(updateData).length > 0;
+          if (!hasFieldChanges && !photo) {
+            skipped += 1;
             continue;
           }
 
-          imported += 1;
-
-          await db
-            .insert(contactTags)
-            .values({
-              contactId: createdContact.id,
-              tagId: googleImportTagId,
-            })
-            .onConflictDoNothing();
-
-          if (incoming.photoBase64 && incoming.photoContentType) {
-            try {
-              await uploadImportedContactPhoto(
-                createdContact.id,
-                incoming.photoBase64,
-                incoming.photoContentType,
-                false
-              );
-            } catch (photoError) {
-              console.error("Error uploading imported photo for new contact:", photoError);
-            }
+          if (hasFieldChanges) {
+            updateData.updatedAt = new Date();
           }
 
-          indexExistingContact(createdContact);
-
-          continue;
-        }
-
-        const shouldUpgradeName = isIncomingNameMoreDetailed(incomingName, existing.displayName);
-        const updateData: Record<string, unknown> = {};
-
-        if (shouldUpgradeName) {
-          updateData.displayName = incomingName;
-          updateData.googleContactName = incomingName;
-        }
-
-        if (overrideExisting) {
-          updateData.googleContactName = incomingName;
-          updateData.primaryPhone = incoming.primaryPhone || null;
-          updateData.primaryEmail = incoming.primaryEmail || null;
-          updateData.dateOfBirth = parseOptionalDate(incoming.dateOfBirth);
-          updateData.company = incoming.company || null;
-          updateData.jobTitle = incoming.jobTitle || null;
-          updateData.location = incoming.location || null;
-          updateData.notes = incoming.notes || null;
-        }
-
-        if (Object.keys(updateData).length === 0) {
-          skipped += 1;
-          continue;
-        }
-
-        updateData.updatedAt = new Date();
-
-        const [updatedContact] = await db
-          .update(contacts)
-          .set(updateData)
-          .where(eq(contacts.id, existing.id))
-          .returning({
-            id: contacts.id,
-            displayName: contacts.displayName,
-            primaryPhone: contacts.primaryPhone,
-            primaryEmail: contacts.primaryEmail,
-            company: contacts.company,
-            jobTitle: contacts.jobTitle,
-            location: contacts.location,
-            notes: contacts.notes,
-            dateOfBirth: contacts.dateOfBirth,
-            googleContactName: contacts.googleContactName,
+          pendingUpdates.push({
+            id: existing.id,
+            updateData,
+            photo,
+            existingPrimary: primaryImageByContactId.get(existing.id),
           });
 
-        if (!updatedContact) {
+          // Keep the in-memory indexes consistent so a later row in this batch that
+          // matches the same contact (or its merged phone/email) resolves here.
+          removeExistingContactIndexes(existing);
+          if (updateData.displayName) existing.displayName = updateData.displayName as string;
+          if (updateData.primaryPhone !== undefined) {
+            existing.primaryPhone = updateData.primaryPhone as string | null;
+          }
+          if (updateData.primaryEmail !== undefined) {
+            existing.primaryEmail = updateData.primaryEmail as string | null;
+          }
+          indexExistingContact(existing);
+          continue;
+        }
+
+        // No existing match — guard against duplicates within this same batch.
+        const claimedInBatch =
+          (!!normalizedIncomingPhone && claimedPhoneKeys.has(normalizedIncomingPhone)) ||
+          (!normalizedIncomingPhone &&
+            !!normalizedIncomingEmail &&
+            claimedEmailKeys.has(normalizedIncomingEmail)) ||
+          (!normalizedIncomingPhone &&
+            !!normalizedIncomingName &&
+            claimedNameKeys.has(normalizedIncomingName));
+        if (claimedInBatch) {
           skipped += 1;
           continue;
         }
 
-        removeExistingContactIndexes(existing);
-        indexExistingContact(updatedContact);
+        pendingCreates.push({
+          values: {
+            userId,
+            displayName: incomingName,
+            googleContactName: incomingName,
+            primaryPhone: incoming.primaryPhone || null,
+            primaryEmail: incoming.primaryEmail || null,
+            dateOfBirth: parseOptionalDate(incoming.dateOfBirth),
+            company: incoming.company || null,
+            jobTitle: incoming.jobTitle || null,
+            location: incoming.location || null,
+            notes: incoming.notes || null,
+          },
+          photo: decodeIncomingPhoto(incoming.photoBase64, incoming.photoContentType),
+        });
 
-        updated += 1;
+        if (normalizedIncomingPhone) claimedPhoneKeys.add(normalizedIncomingPhone);
+        else if (normalizedIncomingEmail) claimedEmailKeys.add(normalizedIncomingEmail);
+        else if (normalizedIncomingName) claimedNameKeys.add(normalizedIncomingName);
+      } catch (error) {
+        console.error("Error classifying imported contact:", incoming?.displayName, error);
+        errors += 1;
+      }
+    }
 
-        if (incoming.photoBase64 && incoming.photoContentType) {
+    // --- Phase 2: flush the classified work with bulk statements ---
+    const chunk = <T>(arr: T[], size: number): T[][] => {
+      const out: T[][] = [];
+      for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+      return out;
+    };
+
+    // 2a. Bulk-insert new contacts. A single multi-row INSERT ... RETURNING keeps
+    // VALUES order, so we can zip the returned ids back to their photos.
+    const createdWithPhotos: { id: string; photo: DecodedPhoto | null }[] = [];
+    for (const group of chunk(pendingCreates, 500)) {
+      try {
+        const rows = await db
+          .insert(contacts)
+          .values(group.map((p) => p.values))
+          .returning({ id: contacts.id });
+        rows.forEach((row, idx) => {
+          imported += 1;
+          createdWithPhotos.push({ id: row.id, photo: group[idx]?.photo ?? null });
+        });
+      } catch (error) {
+        console.error("Error bulk-inserting imported contacts:", error);
+        errors += group.length;
+      }
+    }
+
+    // 2b. Tag every new contact as a Google import (one INSERT per chunk).
+    for (const group of chunk(createdWithPhotos, 500)) {
+      try {
+        await db
+          .insert(contactTags)
+          .values(group.map((c) => ({ contactId: c.id, tagId: googleImportTagId })))
+          .onConflictDoNothing();
+      } catch (error) {
+        console.error("Error tagging imported contacts:", error);
+      }
+    }
+
+    // 2c. Photos for new contacts. New contacts have no existing primary image, so
+    // we skip the per-photo SELECT/DELETE and bulk-insert the blobs + image rows,
+    // tagging each as source 'google' with its content hash for later change checks.
+    const photoJobs = createdWithPhotos
+      .filter((c): c is { id: string; photo: DecodedPhoto } => c.photo !== null)
+      .map((c) => ({
+        contactId: c.id,
+        contentType: c.photo.contentType,
+        buffer: c.photo.buffer,
+        hash: c.photo.hash,
+      }));
+
+    for (const group of chunk(photoJobs, 25)) {
+      try {
+        const blobRows = await db
+          .insert(imageBlobs)
+          .values(
+            group.map((job) => ({
+              data: job.buffer,
+              contentType: job.contentType,
+              contactId: job.contactId,
+            }))
+          )
+          .returning({ id: imageBlobs.id });
+        await db.insert(contactImages).values(
+          group.map((job, idx) => ({
+            contactId: job.contactId,
+            imageUrl: imageBlobUrl(blobRows[idx]!.id),
+            publicId: blobRows[idx]!.id,
+            order: 0,
+            source: "google",
+            contentHash: job.hash,
+          }))
+        );
+      } catch (error) {
+        console.error("Error importing contact photos:", error);
+      }
+    }
+
+    // 2d. Apply merges to matched existing contacts: field changes (when any) plus a
+    // photo sync that only touches Google-sourced photos whose bytes actually changed.
+    // Bounded by the client batch size, so no single request runs a huge update set.
+    for (const update of pendingUpdates) {
+      try {
+        let didChange = false;
+
+        if (Object.keys(update.updateData).length > 0) {
+          const [updatedContact] = await db
+            .update(contacts)
+            .set(update.updateData)
+            .where(eq(contacts.id, update.id))
+            .returning({ id: contacts.id });
+          if (updatedContact) didChange = true;
+        }
+
+        if (update.photo) {
           try {
-            await uploadImportedContactPhoto(
-              updatedContact.id,
-              incoming.photoBase64,
-              incoming.photoContentType,
-              overrideExisting
-            );
+            const photoChanged = await syncGooglePhoto({
+              contactId: update.id,
+              buffer: update.photo.buffer,
+              contentType: update.photo.contentType,
+              incomingHash: update.photo.hash,
+              existingPrimary: update.existingPrimary,
+            });
+            if (photoChanged) didChange = true;
           } catch (photoError) {
-            console.error("Error uploading imported photo for existing contact:", photoError);
+            console.error("Error syncing imported photo for existing contact:", photoError);
           }
         }
 
+        if (didChange) updated += 1;
+        else skipped += 1;
       } catch (error) {
-        console.error("Error importing contact:", incoming?.displayName, error);
+        console.error("Error updating imported contact:", update.id, error);
         errors += 1;
       }
     }
@@ -1518,6 +1719,7 @@ app.post("/:id/images", async (c) => {
         imageUrl: validation.data.imageUrl,
         publicId: validation.data.publicId || null,
         order: maxOrder + 1,
+        source: "manual",
       })
       .returning();
 
@@ -1569,6 +1771,7 @@ app.post("/:id/images/upload", async (c) => {
         imageUrl: imageBlobUrl(blobId),
         publicId: blobId,
         order: maxOrder + 1,
+        source: "manual",
       })
       .returning();
 

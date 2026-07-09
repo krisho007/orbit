@@ -33,7 +33,6 @@ export default function GoogleImportScreen() {
   const { markOnboardingComplete } = useOnboarding();
 
   const [includePhotos, setIncludePhotos] = useState(true);
-  const [overrideExisting, setOverrideExisting] = useState(false);
   const [contacts, setContacts] = useState<GoogleImportContact[]>([]);
   const [isFetching, setIsFetching] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -75,16 +74,17 @@ export default function GoogleImportScreen() {
     setResult(null);
     setProgress({ current: 0, total: contacts.length });
 
-    const batchSize = 200;
+    // Smaller batches keep each request short and let the N/M counter advance
+    // smoothly. With photos enabled a 200-contact batch is a large upload plus
+    // 200 serial blob writes, which makes the counter sit at 0 long enough to
+    // look stalled (and risks request timeouts).
+    const batchSize = includePhotos ? 40 : 100;
     const totals: ImportResult = { imported: 0, updated: 0, skipped: 0, errors: 0 };
 
     for (let i = 0; i < contacts.length; i += batchSize) {
       const batch = contacts.slice(i, i + batchSize);
       try {
-        const batchResult = await contactsApi.importGoogleContactsBatch(
-          batch,
-          overrideExisting
-        );
+        const batchResult = await contactsApi.importGoogleContactsBatch(batch);
         totals.imported += batchResult.imported;
         totals.updated += batchResult.updated;
         totals.skipped += batchResult.skipped;
@@ -187,24 +187,12 @@ export default function GoogleImportScreen() {
             />
           </View>
 
-          <View className="flex-row items-center justify-between mb-4">
-            <View className="flex-1 mr-3">
-              <Text className="text-typography-900 font-body-semibold text-base">
-                Override existing contacts
-              </Text>
-              <Text className="text-typography-500 text-sm">
-                Updates fields for matched contacts. Matching uses phone first, then email/name when phone is missing.
-              </Text>
-            </View>
-            <Switch
-              value={overrideExisting}
-              onValueChange={setOverrideExisting}
-              disabled={isFetching || isImporting}
-              trackColor={{
-                false: getThemeColor(colors, "border-300"),
-                true: getThemeColor(colors, "primary-500"),
-              }}
-            />
+          <View className="mb-4 p-3 rounded-xl bg-background-50 border border-border-100">
+            <Text className="text-typography-600 text-sm">
+              Existing contacts are enriched, never overwritten: empty fields are filled
+              from Google and more complete values are preferred. Your photos and edits are
+              kept. Matching uses phone first, then email or name.
+            </Text>
           </View>
 
           <Pressable
@@ -232,31 +220,58 @@ export default function GoogleImportScreen() {
                 {contacts.length} contacts ready to import
               </Text>
             </View>
-            <View className="max-h-56 mb-4">
-              {contacts.slice(0, 20).map((contact, index) => (
-                <View
-                  key={`${contact.displayName ?? "contact"}-${index}`}
-                  className="py-2 border-b border-border-100"
-                >
-                  <Text className="text-typography-800">
-                    {contact.displayName || "Unknown"}
-                  </Text>
-                  {!!contact.primaryPhone && (
-                    <Text className="text-typography-500 text-sm">{contact.primaryPhone}</Text>
-                  )}
-                </View>
-              ))}
+            <View className="mb-4">
+              {contacts.slice(0, 20).map((contact, index) => {
+                const name = contact.displayName || "Unknown";
+                const subtitle =
+                  contact.primaryPhone || contact.primaryEmail || contact.company || undefined;
+                return (
+                  <View
+                    key={`${contact.displayName ?? "contact"}-${index}`}
+                    className="flex-row items-center py-2"
+                  >
+                    <View className="w-9 h-9 rounded-xl bg-primary-100 items-center justify-center mr-3">
+                      <Text className="text-primary-700 font-body-semibold">
+                        {name.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View className="flex-1">
+                      <Text numberOfLines={1} className="text-typography-900 font-body-medium">
+                        {name}
+                      </Text>
+                      {!!subtitle && (
+                        <Text numberOfLines={1} className="text-typography-500 text-[13px] mt-0.5">
+                          {subtitle}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
               {contacts.length > 20 && (
-                <Text className="text-typography-500 text-sm mt-2">
-                  Showing first 20 contacts
+                <Text className="text-typography-500 text-sm mt-1">
+                  + {contacts.length - 20} more
                 </Text>
               )}
             </View>
 
+            {isImporting && progress.total > 0 && (
+              <View className="mb-3">
+                <View className="h-1.5 rounded-full bg-background-100 overflow-hidden">
+                  <View
+                    className="h-full rounded-full bg-primary-500"
+                    style={{
+                      width: `${Math.round((progress.current / progress.total) * 100)}%`,
+                    }}
+                  />
+                </View>
+              </View>
+            )}
+
             <Pressable
               onPress={handleImport}
               disabled={isImporting}
-              className="py-3 rounded-xl bg-secondary-600 items-center"
+              className="py-3.5 rounded-xl bg-primary-600 items-center"
               style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}
             >
               {isImporting ? (
@@ -269,7 +284,9 @@ export default function GoogleImportScreen() {
               ) : (
                 <View className="flex-row items-center">
                   <RefreshCw size={16} color={getThemeColor(colors, "typography-0")} />
-                  <Text className="text-typography-0 font-body-semibold ml-2">Import All</Text>
+                  <Text className="text-typography-0 font-body-semibold ml-2">
+                    Import {contacts.length} contacts
+                  </Text>
                 </View>
               )}
             </Pressable>

@@ -343,7 +343,7 @@ app.get("/", async (c) => {
     // Get tags and images for each contact
     const contactIds = results.map((c: any) => c.id);
     
-    const [contactTagsData, contactImagesData] = await Promise.all([
+    const [contactTagsData, contactImagesData, lastContactedData] = await Promise.all([
       contactIds.length > 0
         ? db
             .select()
@@ -358,6 +358,28 @@ app.get("/", async (c) => {
             .where(inArray(contactImages.contactId, contactIds))
             .orderBy(asc(contactImages.contactId), asc(contactImages.order))
         : [],
+      // Recency signal: most-recent conversation timestamp per contact.
+      // Conversations link to contacts via conversationParticipants (no direct
+      // contactId), so join through it and take MAX(happenedAt) per contact.
+      contactIds.length > 0
+        ? db
+            .select({
+              contactId: conversationParticipants.contactId,
+              lastContactedAt: sql<string | null>`MAX(${conversations.happenedAt})`,
+            })
+            .from(conversationParticipants)
+            .innerJoin(
+              conversations,
+              eq(conversationParticipants.conversationId, conversations.id)
+            )
+            .where(
+              and(
+                eq(conversations.userId, userId),
+                inArray(conversationParticipants.contactId, contactIds)
+              )
+            )
+            .groupBy(conversationParticipants.contactId)
+        : [],
     ]);
 
     const primaryImageByContactId = new Map<string, (typeof contactImagesData)[number]>();
@@ -367,7 +389,19 @@ app.get("/", async (c) => {
       }
     }
 
-    // Map tags and images to contacts
+    const lastContactedByContactId = new Map<string, string>();
+    for (const row of lastContactedData) {
+      if (row.contactId && row.lastContactedAt) {
+        // MAX(timestamp) comes back as a Date (or string); normalize to ISO.
+        const value = row.lastContactedAt as unknown as string | Date;
+        lastContactedByContactId.set(
+          row.contactId,
+          value instanceof Date ? value.toISOString() : value
+        );
+      }
+    }
+
+    // Map tags, images, and recency to contacts
     const enrichedContacts = results.map((contact: any) => {
       const primaryImage = primaryImageByContactId.get(contact.id);
       return {
@@ -376,6 +410,7 @@ app.get("/", async (c) => {
           .filter((ct: any) => ct.contact_tags.contactId === contact.id)
           .map((ct: any) => ct.tags),
         images: primaryImage ? [primaryImage] : [],
+        lastContactedAt: lastContactedByContactId.get(contact.id) ?? null,
       };
     });
 

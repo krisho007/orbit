@@ -42,6 +42,62 @@ import { useContacts } from "../../hooks/use-contacts";
 import { useEffect } from "react";
 import { HuskyLogo } from "../../components/HuskyLogo";
 
+type RecencyBucket = "in_touch" | "steady" | "drifting";
+
+// "Relationships have gravity" — bucket a contact by how long since we last
+// spoke. Teal = in touch, stone = steady, tangerine = drifting.
+function getRecency(
+  lastContactedAt?: string | null
+): { bucket: RecencyBucket; label: string } | null {
+  if (!lastContactedAt) return null;
+  const then = new Date(lastContactedAt).getTime();
+  if (Number.isNaN(then)) return null;
+
+  const days = Math.floor((Date.now() - then) / (1000 * 60 * 60 * 24));
+  const label =
+    days <= 0
+      ? "today"
+      : days === 1
+        ? "1d"
+        : days < 7
+          ? `${days}d`
+          : days < 30
+            ? `${Math.floor(days / 7)}w`
+            : days < 365
+              ? `${Math.floor(days / 30)}mo`
+              : `${Math.floor(days / 365)}y`;
+
+  const bucket: RecencyBucket = days <= 30 ? "in_touch" : days <= 180 ? "steady" : "drifting";
+  return { bucket, label };
+}
+
+const RECENCY_STYLES: Record<RecencyBucket, { pill: string; dot: string; text: string }> = {
+  in_touch: { pill: "bg-primary-100", dot: "bg-primary-600", text: "text-primary-700" },
+  steady: { pill: "bg-background-100", dot: "bg-typography-400", text: "text-typography-500" },
+  drifting: { pill: "bg-secondary-100", dot: "bg-secondary-500", text: "text-secondary-600" },
+};
+
+function RecencyChip({ bucket, label }: { bucket: RecencyBucket; label: string }) {
+  const s = RECENCY_STYLES[bucket];
+  return (
+    <View className={`flex-row items-center rounded-full px-2 py-0.5 ${s.pill}`}>
+      <View className={`w-1.5 h-1.5 rounded-full mr-1 ${s.dot}`} />
+      <Text className={`text-xs font-body-medium ${s.text}`}>{label}</Text>
+    </View>
+  );
+}
+
+// One-line descriptor under the name: role/company, else location, else how to reach them.
+function getContactSubtitle(item: Contact): string | null {
+  if (item.jobTitle && item.company) return `${item.jobTitle} · ${item.company}`;
+  if (item.company) return item.company;
+  if (item.jobTitle) return item.jobTitle;
+  if (item.location) return item.location;
+  if (item.primaryPhone) return item.primaryPhone;
+  if (item.primaryEmail) return item.primaryEmail;
+  return null;
+}
+
 function WhatsAppIcon({ size = 20, color = "#25D366" }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
@@ -160,6 +216,9 @@ function ContactRow({
   const leftSwipeProgress = useSharedValue(0);
   const rightSwipeProgress = useSharedValue(0);
 
+  const subtitle = getContactSubtitle(item);
+  const recency = getRecency(item.lastContactedAt);
+
   const cardStyle = useAnimatedStyle(() => {
     const swipeAmount = Math.max(leftSwipeProgress.value, rightSwipeProgress.value);
     return {
@@ -240,9 +299,21 @@ function ContactRow({
             </View>
           )}
 
-          <Text className="flex-1 text-typography-900 font-body-semibold text-[17px]">
-            {item.displayName}
-          </Text>
+          <View className="flex-1 mr-2">
+            <Text
+              numberOfLines={1}
+              className="text-typography-900 font-body-semibold text-[16px]"
+            >
+              {item.displayName}
+            </Text>
+            {subtitle ? (
+              <Text numberOfLines={1} className="text-typography-500 text-[13px] mt-0.5">
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+
+          {recency ? <RecencyChip bucket={recency.bucket} label={recency.label} /> : null}
 
           <Animated.View
             pointerEvents="none"

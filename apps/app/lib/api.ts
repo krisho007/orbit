@@ -592,6 +592,8 @@ export type Contact = {
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Most-recent conversation timestamp (recency signal); null if never contacted. */
+  lastContactedAt?: string | null;
   tags?: Tag[];
   images?: ContactImage[];
 };
